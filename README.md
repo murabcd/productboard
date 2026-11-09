@@ -1,4 +1,4 @@
-<h1 align="center">Jira Dashboard</h1>
+<h1 align="center">Boardbeat</h1>
 
 <p align="center">
   Browse team sprints, track your issues, and search Jira Cloud from your terminal.
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="Jira Dashboard in Rex Beta showing a fictional storefront sprint grouped by assignee" src="./preview/jira-sprint.png" width="760">
+  <img alt="Boardbeat showing a fictional storefront sprint grouped by assignee" src="./preview/boardbeat-sprint.png" width="760">
 </p>
 
 ---
@@ -30,12 +30,12 @@ bun run start
 Sign in with your Jira Cloud site, Atlassian account email, and an [unscoped API token](https://id.atlassian.com/manage-profile/security/api-tokens).
 The dashboard only reads Jira data and stores the token in macOS Keychain.
 
-To run it as `jira` from anywhere, link the launcher from the project directory.
+To run it as `boardbeat` from anywhere, link the launcher from the project directory.
 Make sure `~/.local/bin` is on your `PATH`.
 
 ```bash
 mkdir -p ~/.local/bin
-ln -s "$PWD/bin/jira" ~/.local/bin/jira
+ln -s "$PWD/bin/boardbeat" ~/.local/bin/boardbeat
 ```
 
 ## Features

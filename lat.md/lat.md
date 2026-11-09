@@ -1,7 +1,7 @@
-# Jira Knowledge Graph
+# Boardbeat Knowledge Graph
 
-Jira is a local read-only terminal workspace for product management. The
-[launcher](../bin/jira) runs [[src/main.ts]] with Bun. The entry point connects
+Boardbeat is a local read-only terminal workspace for product management. The
+[launcher](../bin/boardbeat) runs [[src/main.ts]] with Bun. The entry point connects
 local credentials, the Jira client, workspace state, and the terminal UI.
 
 - [[jira-api]] covers authentication, the read boundary, and issue queries.

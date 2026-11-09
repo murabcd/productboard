@@ -1,5 +1,5 @@
 {
-  "name": "jira-dashboard",
+  "name": "boardbeat",
   "private": true,
   "type": "module",
   "scripts": {

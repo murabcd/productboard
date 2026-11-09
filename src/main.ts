@@ -1,4 +1,4 @@
-/** jira: a read-only Jira workspace in the terminal. */
+/** Boardbeat: a read-only Jira workspace in the terminal. */
 
 import { createInterface } from "node:readline/promises";
 import { loadCredentials, readConfig, rememberBoard, saveCredentials, validate } from "./auth";
@@ -10,11 +10,11 @@ import { clean } from "./text";
 import { Dashboard, type Opener } from "./ui/dashboard";
 import { openScreen } from "./ui/screen";
 
-const USAGE = `Usage: jira [--login | --check | --help]
+const USAGE = `Usage: boardbeat [--login | --check | --help]
 
-  jira           Open the dashboard
-  jira --login   Save your Jira site, email and API token (token goes to Keychain)
-  jira --check   Check Jira access without opening the dashboard`;
+  boardbeat           Open the dashboard
+  boardbeat --login   Save your Jira site, email and API token (token goes to Keychain)
+  boardbeat --check   Check Jira access without opening the dashboard`;
 
 const TOKEN_PAGE = "https://id.atlassian.com/manage-profile/security/api-tokens";
 
@@ -28,7 +28,8 @@ async function main(args: string[]): Promise<number> {
   try {
     if (args.includes("--check")) return await check(client);
     if (args.length) return fail(`Unknown option ${args[0]}\n\n${USAGE}`);
-    if (!process.stdin.isTTY || !process.stdout.isTTY) return fail("Run jira in a terminal, or use jira --check.");
+    if (!process.stdin.isTTY || !process.stdout.isTTY)
+      return fail("Run boardbeat in a terminal, or use boardbeat --check.");
     await dashboard(client, readConfig()?.board);
     return 0;
   } catch (error) {
@@ -82,7 +83,7 @@ async function run(command: string[], input?: string): Promise<void> {
 }
 
 async function login(): Promise<number> {
-  if (!process.stdin.isTTY) return fail("Run jira --login in a terminal.");
+  if (!process.stdin.isTTY) return fail("Run boardbeat --login in a terminal.");
   const previous = readConfig();
   say("Sign in to Jira with an API token. The token is saved to your macOS Keychain.");
   const site = (await ask("Jira site", previous?.site)).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
@@ -147,7 +148,7 @@ function say(text: string): number {
 }
 
 function fail(text: string): number {
-  process.stderr.write(`jira: ${text}\n`);
+  process.stderr.write(`boardbeat: ${text}\n`);
   return 1;
 }
 

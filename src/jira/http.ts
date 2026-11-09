@@ -197,7 +197,7 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
 
 /** A short, readable reason for a failed Jira response. */
 async function failure(response: Response): Promise<string> {
-  if (response.status === 401) return "Jira rejected your API token. Run jira --login to set a new one.";
+  if (response.status === 401) return "Jira rejected your API token. Run boardbeat --login to set a new one.";
   if (response.status === 429) return "Jira is rate-limiting requests. Try again in a minute.";
   let detail = "";
   try {

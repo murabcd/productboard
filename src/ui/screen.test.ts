@@ -4,6 +4,7 @@ import { initialQuery, View } from "../jira/query";
 import { Workspace } from "../state/workspace";
 import { deferred, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
+import { MIN_WIDTH } from "./layout";
 import { mount, toKeys } from "./screen";
 
 /** A 1×1 red PNG. */
@@ -18,7 +19,7 @@ afterEach(async () => {
   setup = undefined;
 });
 
-async function start() {
+async function start(width = 100) {
   const source = {
     snapshot: mock(() => deferred<never>().promise),
     catalog: mock(() => deferred<never>().promise),
@@ -33,7 +34,7 @@ async function start() {
     attachment: mock(() => deferred<never>().promise),
   };
   const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {});
-  setup = await createTestRenderer({ width: 100, height: 30 });
+  setup = await createTestRenderer({ width, height: 30 });
   const quit = mock(() => {});
   mount(setup.renderer, dashboard, quit);
   await setup.renderOnce();
@@ -58,7 +59,9 @@ describe("OpenTUI shell", () => {
     await setup.mockMouse.scroll(10, 8, "up");
     await setup.renderOnce();
     expect(dashboard.selected()?.key).toBe("EX-1");
-    await setup.mockMouse.click(40, 1); // the "3 Assigned" tab
+    const assigned = setup.captureCharFrame().split("\n")[1]?.indexOf("3 Assigned") ?? -1;
+    expect(assigned).toBeGreaterThan(0);
+    await setup.mockMouse.click(assigned, 1);
     expect(dashboard.workspace.query.view).toBe(View.Mine);
   });
 
@@ -67,6 +70,14 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("/ex");
     await settle();
     expect(dashboard.search).toBe("ex");
+  });
+
+  test("the last tab stays visible and clickable at the minimum pane width", async () => {
+    const { setup, dashboard } = await start(MIN_WIDTH);
+    const search = setup.captureCharFrame().split("\n")[1]?.indexOf("7 Find") ?? -1;
+    expect(search).toBeGreaterThan(0);
+    await setup.mockMouse.click(search, 1);
+    expect(dashboard.workspace.query.view).toBe(View.Search);
   });
 
   test("a previewed image is shown in its area and hidden afterwards", async () => {

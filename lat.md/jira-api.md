@@ -7,10 +7,13 @@ normalizes them before they reach workspace state.
 
 ## Credentials and transport
 
-[[src/auth.ts]] keeps the API token in macOS Keychain and stores the site,
-email, and last board in local preferences. [[src/jira/http.ts#JiraHttp]] sends
-authorization to the configured Jira site and follows attachment redirects
-without forwarding it. Search uses POST as a read operation.
+[[src/auth.ts]] keeps the API token under the `boardbeat` service in macOS
+Keychain and stores the site, email, and last board in
+`~/.config/boardbeat/config.json`.
+
+[[src/jira/http.ts#JiraHttp]] sends authorization to the configured Jira site
+and follows attachment redirects without forwarding it. Search uses POST as a
+read operation.
 
 Transport owns timeouts, retries, rate limit handling, and request priority.
 Board, project, and sprint pagination runs at background priority so catalog

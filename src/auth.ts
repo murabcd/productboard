@@ -6,8 +6,8 @@ import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { Credentials } from "./jira/http";
 
-const KEYCHAIN_SERVICE = "jira-dashboard";
-const CONFIG_PATH = join(homedir(), ".config", "jira-dashboard", "config.json");
+const KEYCHAIN_SERVICE = "boardbeat";
+const CONFIG_PATH = join(homedir(), ".config", "boardbeat", "config.json");
 
 const Config = z.object({
   site: z.string(),
@@ -43,10 +43,10 @@ export function rememberBoard(board: string): void {
 /** The saved sign-in, or a sentence telling the user how to create one. */
 export function loadCredentials(): Credentials | string {
   const config = readConfig();
-  if (!config) return "Sign in first: jira --login";
+  if (!config) return "Sign in first: boardbeat --login";
   const read = Bun.spawnSync(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", config.email, "-w"]);
   const token = read.stdout.toString().trim();
-  if (read.exitCode !== 0 || !token) return "Your API token is missing from Keychain. Run jira --login.";
+  if (read.exitCode !== 0 || !token) return "Your API token is missing from Keychain. Run boardbeat --login.";
   return { site: config.site, email: config.email, token };
 }
 
@@ -60,7 +60,7 @@ export function validate(credentials: Credentials): string | undefined {
 /** Save settings, and the token to Keychain without putting it on a command line. */
 export function saveCredentials(credentials: Credentials): void {
   const { site, email, token } = credentials;
-  const command = `add-generic-password -U -s ${KEYCHAIN_SERVICE} -a "${email}" -l "Jira dashboard (${site})" -w "${token}"\n`;
+  const command = `add-generic-password -U -s ${KEYCHAIN_SERVICE} -a "${email}" -l "Boardbeat (${site})" -w "${token}"\n`;
   const result = Bun.spawnSync(["security", "-i"], { stdin: Buffer.from(command) });
   const check = Bun.spawnSync(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", email]);
   if (result.exitCode !== 0 || check.exitCode !== 0) {
