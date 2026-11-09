@@ -1,3 +1,7 @@
+<p align="center">
+  <img alt="Boardbeat showing a fictional storefront sprint grouped by assignee" src="./preview/boardbeat-sprint.png" width="760">
+</p>
+
 <h1 align="center">Boardbeat</h1>
 
 <p align="center">
@@ -9,10 +13,6 @@
   <a href="#features">Features</a> |
   <a href="#built-with">Built with</a> |
   <a href="#development">Development</a>
-</p>
-
-<p align="center">
-  <img alt="Boardbeat showing a fictional storefront sprint grouped by assignee" src="./preview/boardbeat-sprint.png" width="760">
 </p>
 
 ---
