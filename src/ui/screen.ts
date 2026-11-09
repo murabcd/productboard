@@ -35,6 +35,8 @@ const STYLES: Record<Style, { fg: RGBA; bg: RGBA; attributes: number }> = {
   link: { fg: hex("#87afd7"), bg: NONE, attributes: TextAttributes.UNDERLINE },
   strike: { fg: hex("#8a8a8a"), bg: NONE, attributes: TextAttributes.STRIKETHROUGH },
   status: { fg: hex("#1c1c1c"), bg: hex("#87afd7"), attributes: TextAttributes.BOLD },
+  review: { fg: hex("#d787d7"), bg: NONE, attributes: TextAttributes.NONE },
+  ship: { fg: hex("#5fd7d7"), bg: NONE, attributes: TextAttributes.NONE },
   warning: { fg: hex("#d7af5f"), bg: NONE, attributes: TextAttributes.NONE },
   mention: { fg: hex("#d7af5f"), bg: NONE, attributes: TextAttributes.BOLD },
   error: { fg: hex("#d75f5f"), bg: NONE, attributes: TextAttributes.NONE },

@@ -11,6 +11,7 @@ import { BODY_TOP, BOX_ROWS, LIST_TOP, listRows, MIN_HEIGHT, MIN_WIDTH, modalRow
 import type { Panel } from "./panel";
 import type { Picker } from "./picker";
 import { currentImage, type Preview } from "./preview";
+import { statusStyle } from "./status";
 
 export function frame(d: Dashboard, width: number, height: number): Canvas {
   const canvas = new Canvas(width, height);
@@ -99,11 +100,12 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
     canvas.mark(LIST_TOP, 2, width - 4, { kind: "box" });
   }
   const top = box ? LIST_TOP + BOX_ROWS : LIST_TOP;
-  const rows: [string, Issue | null][] = [];
-  for (const [label, issues] of d.groups()) {
-    rows.push([`${label}  ${issues.length}`, null]);
-    for (const issue of issues) rows.push(["", issue]);
-    rows.push(["", null]);
+  type Row = { issue: Issue } | { text: string; style: Style };
+  const rows: Row[] = [];
+  for (const [label, issues, heading] of d.groups()) {
+    rows.push({ text: `${label}  ${issues.length}`, style: heading });
+    for (const issue of issues) rows.push({ issue });
+    rows.push({ text: "", style: "muted" });
   }
   if (rows.length === 0) {
     let text = d.search ? "No matching issues" : "No issues in this scope";
@@ -117,12 +119,12 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
     } else if (work.error) {
       text = "Could not load tasks · r retry";
     }
-    rows.push([text, null]);
+    rows.push({ text, style: "mutedBold" });
   }
   const available = listRows(height, box !== null);
   const selectedRow = Math.max(
     0,
-    rows.findIndex(([, issue]) => issue && selected && issue.key === selected.key),
+    rows.findIndex((row) => "issue" in row && row.issue.key === selected?.key),
   );
   if (selectedRow < d.offset) d.offset = Math.max(0, selectedRow - 1);
   if (selectedRow >= d.offset + available) d.offset = selectedRow - available + 1;
@@ -130,12 +132,13 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
   // Narrow panes drop the person and status columns.
   const statusWidth = width >= 115 ? 23 : width >= 75 && d.grouping === "assignee" ? 18 : 0;
   const personWidth = width >= 115 ? 22 : width >= 75 && d.grouping !== "assignee" ? 18 : 0;
-  rows.slice(d.offset, d.offset + available).forEach(([label, issue], i) => {
+  rows.slice(d.offset, d.offset + available).forEach((row, i) => {
     const y = top + i;
-    if (!issue) {
-      canvas.put(y, 4, label, "mutedBold");
+    if (!("issue" in row)) {
+      canvas.put(y, 4, row.text, row.style);
       return;
     }
+    const { issue } = row;
     canvas.mark(y, 2, width - 4, { kind: "issue", key: issue.key });
     const active = issue.key === selected?.key;
     const style: Style = active ? "selectedBold" : "text";
@@ -153,8 +156,7 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
       );
     }
     if (statusWidth) {
-      const statusStyle: Style = active ? "selection" : issue.category === "done" ? "done" : "muted";
-      canvas.put(y, width - statusWidth - 2, issue.status, statusStyle, statusWidth);
+      canvas.put(y, width - statusWidth - 2, issue.status, active ? "selection" : statusStyle(issue), statusWidth);
     }
   });
 

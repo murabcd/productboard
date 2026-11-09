@@ -16,6 +16,8 @@ export type Style =
   | "link"
   | "strike"
   | "status"
+  | "review"
+  | "ship"
   | "warning"
   | "mention"
   | "error"
