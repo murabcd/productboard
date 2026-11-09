@@ -239,7 +239,7 @@ describe("dashboard", () => {
     const blocks = detailBlocks(detail("Spec", { comments }));
     const text = plainText(blocks);
     expect(text).toContain("Comments · 1 · 1 mention you · newest first");
-    expect(text).toContain("● Charlie · 2026-11-05 13:08 · mentions you");
+    expect(text).toContain("● Charlie · 11/05/2026 1:08 PM · mentions you");
     expect(blocks).toContainEqual(
       expect.objectContaining({ keep: true, spans: [expect.objectContaining({ style: "mention" })] }),
     );

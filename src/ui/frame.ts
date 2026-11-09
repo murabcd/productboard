@@ -1,5 +1,6 @@
 /** Draw one full screen of the dashboard onto a Canvas. */
 
+import { usDateTime, usTime } from "../dates";
 import { textBlock } from "../jira/adf";
 import { MENTION_DAYS, PAGE, VIEW_LABELS, VIEW_SHORT_LABELS, VIEWS, View } from "../jira/query";
 import { describeAttachment, type Issue } from "../jira/types";
@@ -174,7 +175,7 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
     const { mention } = selected;
     if (mention) {
       const said = mention.text.split(/\s+/).join(" ");
-      canvas.put(height - 6, 2, `${mention.author} · ${mention.created} · ${said}`, "warning");
+      canvas.put(height - 6, 2, `${mention.author} · ${usDateTime(mention.created)} · ${said}`, "warning");
     } else {
       const meta = [selected.key, selected.status, selected.assignee, selected.priority, selected.reason].filter(
         Boolean,
@@ -203,7 +204,7 @@ function drawStatus(canvas: Canvas, d: Dashboard, y: number): void {
   } else if (d.notice) {
     canvas.put(y, 2, d.notice, "accent");
   } else if (work.updated && work.current) {
-    const time = work.updated.toTimeString().slice(0, 8);
+    const time = usTime(work.updated);
     canvas.put(y, 2, `Updated ${time} · ${d.site} · refreshes every 60s`, "muted");
   } else if (work.catalogPending || work.sprintsPending) {
     canvas.put(y, 2, "Loading boards and sprints…", "warning");

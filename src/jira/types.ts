@@ -1,5 +1,6 @@
 /** Domain types the dashboard works with, decoded from Jira responses. */
 
+import { usDate } from "../dates";
 import type { DocBlock } from "./adf";
 
 export type Category = "new" | "indeterminate" | "done";
@@ -71,7 +72,7 @@ export interface Sprint {
 }
 
 export function sprintChoice(sprint: Sprint): Choice {
-  const dates = sprint.start ? `${sprint.start.slice(0, 10)} → ${sprint.end.slice(0, 10)}` : "No dates";
+  const dates = sprint.start ? `${usDate(sprint.start)} → ${usDate(sprint.end)}` : "No dates";
   return {
     value: String(sprint.id),
     label: sprint.name,
@@ -90,5 +91,5 @@ export function humanSize(size: number): string {
 }
 
 export function describeAttachment(item: Attachment): string {
-  return `${humanSize(item.size)} · ${item.author} · ${item.created.slice(0, 10)}`;
+  return `${humanSize(item.size)} · ${item.author} · ${usDate(item.created)}`;
 }

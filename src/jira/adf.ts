@@ -1,5 +1,6 @@
 /** Jira's rich text (ADF) as a small document model the terminal can lay out. */
 
+import { usDate } from "../dates";
 import { clean } from "../text";
 
 export type SpanStyle =
@@ -92,7 +93,7 @@ function inline(node: unknown): Span[] {
       return [{ text: ` ${str(attrs.text).toUpperCase()} `, style: "status" }];
     case "date": {
       const ms = Number(attrs.timestamp);
-      return Number.isFinite(ms) ? [{ text: new Date(ms).toISOString().slice(0, 10), style: "plain" }] : [];
+      return Number.isFinite(ms) ? [{ text: usDate(new Date(ms).toISOString()), style: "plain" }] : [];
     }
     case "inlineCard":
       return [{ text: str(attrs.url), style: "link" }];

@@ -1,5 +1,6 @@
 /** Today: what needs a product manager's attention, most urgent first. */
 
+import { usDate } from "../dates";
 import type { JiraClient } from "./client";
 import { jiraTime, LIST_FIELDS, openBlocker, type RawIssue, toIssue } from "./parse";
 import type { IssueQuery } from "./query";
@@ -41,7 +42,7 @@ function attention(raw: RawIssue, flagged: Set<string>, now: number): [Section, 
   if (issue.category === "indeterminate" && idle >= STUCK_DAYS) return ["Stuck", `${idle}d no update`];
   if (!issue.assigneeId) return ["Needs an owner", "No assignee"];
   const due = raw.fields.duedate;
-  if (due && due < localDate(now)) return ["Overdue", `due ${due}`];
+  if (due && due < localDate(now)) return ["Overdue", `due ${usDate(due)}`];
   return undefined;
 }
 

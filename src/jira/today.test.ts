@@ -94,7 +94,7 @@ describe("Today", () => {
       ["Stuck", "EX-5", "10d no update"], // oldest first
       ["Stuck", "EX-4", "8d no update"], // its blocker is done
       ["Needs an owner", "EX-6", "No assignee"],
-      ["Overdue", "EX-7", "due 2026-11-05"],
+      ["Overdue", "EX-7", "due 11/05/2026"],
       ["Mentioned you", "EX-50", "Charlie mentioned you"],
       ["Forgotten in active sprints", "EX-9", "677d no update"],
       ["Forgotten in active sprints", "EX-11", "69d no update"],

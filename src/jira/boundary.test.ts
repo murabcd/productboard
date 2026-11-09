@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { usDate, usDateTime } from "../dates";
 import { rawComment, rawIssue, textDoc } from "../testing";
 import { clean, clip } from "../text";
 import { plainText, toDoc } from "./adf";
@@ -100,7 +101,7 @@ describe("Jira payloads", () => {
       ["Older note", false],
     ]);
     expect(detail.comments[1]?.created).toBe("2026-11-05 13:08");
-    expect(detail.attachments.map(describeAttachment)).toEqual(["240 KB · Cameron · 2026-11-05"]);
+    expect(detail.attachments.map(describeAttachment)).toEqual(["240 KB · Cameron · 11/05/2026"]);
   });
 });
 
@@ -151,5 +152,15 @@ describe("scopes", () => {
     expect(withView(team, View.Mine)).toMatchObject({ assignee: "", limit: 200 });
     expect(withView(team, View.Created).assignee).toBe("someone");
     expect(withAssignee({ ...initialQuery, view: View.Mine }, "other").view).toBe(View.All);
+  });
+});
+
+describe("dates on screen", () => {
+  test("are US style; anything unexpected is shown as Jira sent it", () => {
+    expect(usDate("2026-11-05T13:08:14.000+0300")).toBe("11/05/2026");
+    expect(usDateTime("2026-11-05 13:08")).toBe("11/05/2026 1:08 PM");
+    expect(usDateTime("2026-11-05 00:30")).toBe("11/05/2026 12:30 AM");
+    expect(usDateTime("2026-11-05 12:00")).toBe("11/05/2026 12:00 PM");
+    expect(usDate("")).toBe("");
   });
 });

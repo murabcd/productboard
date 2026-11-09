@@ -1,5 +1,6 @@
 /** Full-screen text panels: help, a sprint goal, or one issue's details. */
 
+import { usDate, usDateTime } from "../dates";
 import { type DocBlock, textBlock } from "../jira/adf";
 import { type Attachment, type Detail, describeAttachment, type Issue, type Sprint } from "../jira/types";
 import { HELP } from "./help";
@@ -31,7 +32,7 @@ const panel = (title: string, body: DocBlock[], extra: Partial<Panel> = {}): Pan
 export const helpPanel = (): Panel => panel("Keyboard shortcuts", [{ kind: "pre", text: HELP }]);
 
 export function sprintPanel(sprint: Sprint): Panel {
-  const dates = `${sprint.start.slice(0, 10) || "No start date"} → ${sprint.end.slice(0, 10) || "No end date"}`;
+  const dates = `${usDate(sprint.start) || "No start date"} → ${usDate(sprint.end) || "No end date"}`;
   return panel(sprint.name, [
     textBlock(`${sprint.state} · ${dates}`, "muted"),
     textBlock(sprint.goal || "No sprint goal."),
@@ -60,7 +61,7 @@ export function detailBlocks(detail: Detail): DocBlock[] {
     if (mentioned) heading += ` · ${mentioned} mention${mentioned > 1 ? "s" : ""} you`;
     blocks.push({ kind: "heading", level: 2, spans: [{ text: `${heading} · newest first`, style: "strong" }] });
     for (const comment of detail.comments) {
-      const byline = `${comment.author} · ${comment.created}`;
+      const byline = `${comment.author} · ${usDateTime(comment.created)}`;
       blocks.push(
         comment.mentionsMe
           ? textBlock(`● ${byline} · mentions you`, "mention", { keep: true })
