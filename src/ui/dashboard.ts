@@ -8,6 +8,7 @@ import {
   describeAttachment,
   type Issue,
   isImage,
+  mentionNote,
   SPRINT_STATES,
   sprintChoice,
 } from "../jira/types";
@@ -561,9 +562,9 @@ export class Dashboard {
     n: () => this.workspace.loadMore(),
   });
 
-  /** The side column for an issue: why Today lists it, who mentioned you, or its assignee. */
+  /** Why a row is listed: Today's reason, or who mentioned you and when. Empty otherwise. */
   note(issue: Issue): string {
-    return issue.reason ?? issue.mention?.author ?? issue.assignee;
+    return issue.reason ?? (issue.mention ? mentionNote(issue.mention) : "");
   }
 
   personScope(): string {

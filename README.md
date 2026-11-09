@@ -29,7 +29,7 @@ run `jira --login` again when Jira says it was rejected. Your site, email and la
 | `3` | Assigned: tasks assigned to you |
 | `4` | Created: tasks you created, regardless of who owns them now |
 | `5` | Today: what needs attention across active sprints (see below) |
-| `6` | Mentions: comments that @-mention you, newest first |
+| `6` | Mentions: comments that @-mention you, newest first, grouped by Today, Yesterday, This week, Earlier this month, then month and year |
 | `7` | Search: issues anywhere in Jira that match your words, or one issue key |
 
 ## Keys
@@ -58,16 +58,24 @@ run `jira --login` again when Jira says it was rejected. Your site, email and la
 - Project, person and status filters run on Jira and apply across views.
   Assigned always targets you; choosing another person there switches to All
   tasks. Created uses Jira's creator, not the editable reporter field.
+- Each row reads like Linear: priority mark (`!` highest, `↑` high, `↓` low;
+  blank for medium), issue key, a status icon colored by stage (`○` to do, `◌` backlog,
+  `◐` in progress, `◑` review or QA, `◕` ready for release, `⊘` blocked, `●`
+  done), then the title with its breadcrumb prefix (`Storefront - `) dimmed.
+  Side columns show the reason a row is listed, the assignee and the status.
+  A column is left out when the headings already say it, e.g. status under
+  status groups, and the narrowest panes drop the side columns.
 - Today groups what needs attention, most urgent first. Each issue appears once,
-  in the first section that fits, with the reason in the side column:
-  **Blocked** (a status with "Blocked" in its name, flagged as an impediment, or
-  blocked by an issue that is still open), **Stuck** (in progress with no update
+  in the first section that fits, with the reason in its own column:
+  **Blocked** (flagged as an impediment, blocked by an issue that is still open,
+  or a status with "Blocked" in its name), **Stuck** (in progress with no update
   for 5+ days, oldest first), **Needs an owner** (unassigned), **Overdue** (past
   the due date) — all in active sprints — then **Mentioned you** (since
   yesterday), **Your issues, changed since yesterday** (created or reported by
-  you), **Assigned to you** (still open) and **Forgotten in active sprints**
-  (untouched for 30+ days, usually a sprint nobody closed). The project filter
-  applies.
+  you), **Assigned to you** (still open; work under way first, backlog last),
+  **Waiting for release** (ready for release for 5+ days, which waits on a
+  release rather than on you) and **Forgotten in active sprints** (untouched
+  for 30+ days, usually a sprint nobody closed). The project filter applies.
 - Lists load the 200 most recently updated matching issues; counts, groups and
   the `/` filter cover the loaded set. `f` searches Jira itself, with the
   project, person and status filters applied.

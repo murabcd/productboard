@@ -292,8 +292,28 @@ describe("frame", () => {
     const { dashboard } = setup();
     const canvas = frame(dashboard, 80, 24);
     for (let y = 0; y < 24; y++) expect(canvas.text(y).length).toBeLessThanOrEqual(80);
-    expect(canvas.text(7)).toContain("› EX-1");
+    expect(canvas.text(7)).toMatch(/› . EX-1/);
     expect(canvas.text(1)).toContain("2 All");
+  });
+
+  test("Today rows say each thing once: reason, owner, then status", () => {
+    const { dashboard, work } = setup();
+    work.query = { ...initialQuery, view: View.Today };
+    const base = snapshot(work.query, ["EX-1", "EX-2"]);
+    const [stuck, mine] = base.issues;
+    if (!stuck || !mine) throw new Error("fixture");
+    work.snapshot = {
+      ...base,
+      issues: [
+        { ...stuck, status: "IN REVIEW", assignee: "Cameron", section: "Stuck", reason: "7d no update" },
+        { ...mine, status: "Ready for dev", assignee: "Avery", section: "Assigned to you", reason: "updated 3h ago" },
+      ],
+    };
+    const canvas = frame(dashboard, 120, 24);
+    const rows = [7, 10].map((y) => canvas.text(y));
+    expect(rows[0]).toMatch(/EX-1 +◑ Рабочая задача +7d no update +Cameron +In review/);
+    expect(rows[1]).toMatch(/EX-2 +○ Рабочая задача +updated 3h ago +Ready for dev/);
+    expect(rows[1]).not.toContain("Avery");
   });
 
   test("a small pane asks to be resized", () => {

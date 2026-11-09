@@ -25,4 +25,7 @@ assignee and creator fields, respectively. The local filter searches loaded rows
 Mentions scans comments on recently updated issues for the current account ID.
 It requests full threads when the issue search response lacks a complete one.
 [[src/jira/today.ts#today]] groups issues by urgency, with each issue appearing
-in the first applicable section.
+in the first applicable section. Each reason adds something the row's status
+does not already show: a blocker's cause, idle days, who mentioned you, or when
+your issue last changed. Ready-for-release work waits on a release, so it gets
+its own late section instead of counting as stuck.

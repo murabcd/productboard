@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { usDate, usDateTime } from "../dates";
+import { period, shortDate, usDate, usDateTime, when } from "../dates";
 import { rawComment, rawIssue, textDoc } from "../testing";
 import { clean, clip } from "../text";
 import { plainText, toDoc } from "./adf";
@@ -162,5 +162,24 @@ describe("dates on screen", () => {
     expect(usDateTime("2026-11-05 00:30")).toBe("11/05/2026 12:30 AM");
     expect(usDateTime("2026-11-05 12:00")).toBe("11/05/2026 12:00 PM");
     expect(usDate("")).toBe("");
+  });
+
+  test("mention dates: short this year, with the year before it, a time today", () => {
+    // Monday, November 9 2026, at noon in this computer's timezone.
+    const now = new Date(2026, 10, 9, 12).getTime();
+    expect(shortDate("2026-10-30 14:00", now)).toBe("Oct 30");
+    expect(shortDate("2025-03-05 14:00", now)).toBe("Mar 5, 2025");
+    expect(when("2026-11-09 14:14", now)).toBe("2:14 PM");
+    expect(when("2026-11-08 14:14", now)).toBe("Nov 8");
+  });
+
+  test("mention headings group by period", () => {
+    const thursday = new Date(2026, 10, 12, 12).getTime();
+    expect(period("2026-11-12 09:00", thursday)).toBe("Today");
+    expect(period("2026-11-11 09:00", thursday)).toBe("Yesterday");
+    expect(period("2026-11-09 09:00", thursday)).toBe("This week");
+    expect(period("2026-11-08 09:00", thursday)).toBe("Earlier this month");
+    expect(period("2026-10-30 09:00", thursday)).toBe("October");
+    expect(period("2025-12-30 09:00", thursday)).toBe("2025");
   });
 });

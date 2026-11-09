@@ -43,11 +43,11 @@ async function start() {
 describe("OpenTUI shell", () => {
   test("draws the list and moves the selection with keys", async () => {
     const { setup, dashboard } = await start();
-    expect(setup.captureCharFrame()).toContain("› EX-1");
+    expect(setup.captureCharFrame()).toMatch(/› . EX-1/);
     await setup.mockInput.pressArrow("down");
     await setup.renderOnce();
     expect(dashboard.selected()?.key).toBe("EX-2");
-    expect(setup.captureCharFrame()).toContain("› EX-2");
+    expect(setup.captureCharFrame()).toMatch(/› . EX-2/);
   });
 
   test("clicking a row selects it and the wheel moves the selection", async () => {

@@ -18,5 +18,7 @@ selection, and panels. [[src/ui/frame.ts#frame]] computes what to draw, and
 point restores the terminal on exit.
 
 Use [[src/text.ts]] for remote text sanitization, grapheme handling, and cell
-widths. [[src/jira/adf.ts]] converts Jira documents to typed blocks, and
+widths. Issue rows follow Linear's order: priority mark, key, a status icon
+from [[src/ui/status.ts#statusGlyph]], then the title. Side columns are left
+out when the view or headings already say the same thing. [[src/jira/adf.ts]] converts Jira documents to typed blocks, and
 [[src/ui/document.ts]] lays those blocks out for the available terminal width.

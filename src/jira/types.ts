@@ -1,6 +1,6 @@
 /** Domain types the dashboard works with, decoded from Jira responses. */
 
-import { usDate } from "../dates";
+import { usDate, when } from "../dates";
 import type { DocBlock } from "./adf";
 
 export type Category = "new" | "indeterminate" | "done";
@@ -23,6 +23,10 @@ export interface Issue {
 export function issueProject(issue: Issue): string {
   return issue.key.slice(0, issue.key.lastIndexOf("-"));
 }
+
+/** Who mentioned you and when, e.g. "Jordan Ellis · Oct 30". */
+export const mentionNote = (mention: Comment, now = Date.now()): string =>
+  `${mention.author} · ${when(mention.created, now)}`;
 
 export interface Comment {
   author: string;

@@ -3,6 +3,7 @@
 import { usDateTime, usTime } from "../dates";
 import { textBlock } from "../jira/adf";
 import { MENTION_DAYS, PAGE, VIEW_LABELS, VIEW_SHORT_LABELS, VIEWS, View } from "../jira/query";
+import { YOURS } from "../jira/today";
 import { describeAttachment, type Issue } from "../jira/types";
 import { cells } from "../text";
 import { Canvas, type Style } from "./canvas";
@@ -12,7 +13,7 @@ import { BODY_TOP, BOX_ROWS, LIST_TOP, listRows, MIN_HEIGHT, MIN_WIDTH, modalRow
 import type { Panel } from "./panel";
 import type { Picker } from "./picker";
 import { currentImage, type Preview } from "./preview";
-import { statusStyle } from "./status";
+import { priorityMark, statusGlyph, statusLabel, statusStyle } from "./status";
 
 export function frame(d: Dashboard, width: number, height: number): Canvas {
   const canvas = new Canvas(width, height);
@@ -130,10 +131,10 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
   if (selectedRow < d.offset) d.offset = Math.max(0, selectedRow - 1);
   if (selectedRow >= d.offset + available) d.offset = selectedRow - available + 1;
   d.offset = Math.min(d.offset, Math.max(0, rows.length - available));
-  // Narrow panes drop the person and status columns.
-  const statusWidth = width >= 115 ? 23 : width >= 75 && d.grouping === "assignee" ? 18 : 0;
-  const personWidth = width >= 115 ? 22 : width >= 75 && d.grouping !== "assignee" ? 18 : 0;
-  rows.slice(d.offset, d.offset + available).forEach((row, i) => {
+  const shownRows = rows.slice(d.offset, d.offset + available);
+  const shownIssues = shownRows.flatMap((row) => ("issue" in row ? [row.issue] : []));
+  const columns = rowColumns(d, shownIssues, width);
+  shownRows.forEach((row, i) => {
     const y = top + i;
     if (!("issue" in row)) {
       canvas.put(y, 4, row.text, row.style);
@@ -143,21 +144,26 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
     canvas.mark(y, 2, width - 4, { kind: "issue", key: issue.key });
     const active = issue.key === selected?.key;
     const style: Style = active ? "selectedBold" : "text";
+    const quiet: Style = active ? "selection" : "muted";
     if (active) canvas.put(y, 2, " ".repeat(width - 4), "selection");
     canvas.put(y, 2, active ? "›" : " ", style);
-    canvas.put(y, 4, issue.key, style, 12);
-    canvas.put(y, 18, issue.summary, style, width - 21 - statusWidth - personWidth);
-    if (personWidth) {
-      canvas.put(
-        y,
-        width - personWidth - statusWidth - 2,
-        d.note(issue),
-        active ? "selection" : "muted",
-        personWidth - 1,
-      );
+    const [mark, markStyle] = priorityMark(issue.priority);
+    canvas.put(y, 4, mark, active ? "selection" : markStyle);
+    canvas.put(y, 6, issue.key, quiet, columns.key);
+    const glyphX = 6 + columns.key + 2;
+    canvas.put(y, glyphX, statusGlyph(issue), active ? "selection" : statusStyle(issue));
+    drawSummary(canvas, y, glyphX + 2, issue.summary, columns.title, active);
+    let x = glyphX + 2 + columns.title + 2;
+    if (columns.reason) {
+      canvas.put(y, x, d.note(issue), quiet, columns.reason - 1);
+      x += columns.reason;
     }
-    if (statusWidth) {
-      canvas.put(y, width - statusWidth - 2, issue.status, active ? "selection" : statusStyle(issue), statusWidth);
+    if (columns.person) {
+      if (issue.section !== YOURS) canvas.put(y, x, issue.assignee, quiet, columns.person - 1);
+      x += columns.person;
+    }
+    if (columns.status) {
+      canvas.put(y, x, statusLabel(issue.status), active ? "selection" : statusStyle(issue), columns.status);
     }
   });
 
@@ -177,9 +183,13 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
       const said = mention.text.split(/\s+/).join(" ");
       canvas.put(height - 6, 2, `${mention.author} · ${usDateTime(mention.created)} · ${said}`, "warning");
     } else {
-      const meta = [selected.key, selected.status, selected.assignee, selected.priority, selected.reason].filter(
-        Boolean,
-      );
+      const meta = [
+        selected.key,
+        statusLabel(selected.status),
+        selected.assignee,
+        selected.priority,
+        selected.reason,
+      ].filter(Boolean);
       canvas.put(height - 6, 2, meta.join(" · "), "muted");
     }
   }
@@ -190,6 +200,43 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
   else if (d.search) hint = "↑↓ select   Enter details   / edit filter   Esc clear";
   canvas.put(height - 3, 2, hint, "muted");
   canvas.put(height - 2, 2, "1–7 views   o open   y copy   r refresh   ? help   q quit", "muted");
+}
+
+/** Column widths for issue rows. The title takes what is left; side columns
+ * drop away on narrow panes, least useful first, and a column repeating what
+ * the headings or view already say is left out. */
+function rowColumns(d: Dashboard, issues: Issue[], width: number) {
+  const key = Math.max(7, ...issues.map((issue) => cells(issue.key)));
+  const view = d.workspace.query.view;
+  // Status headings already name each row's status.
+  const statusHeadings = d.grouping === "status" && view !== View.Today && view !== View.Mentions;
+  const wanted = {
+    status: statusHeadings ? 0 : Math.min(18, Math.max(...issues.map((i) => cells(statusLabel(i.status))), 0) + 1),
+    reason: Math.min(30, Math.max(0, ...issues.map((issue) => cells(d.note(issue)) + 2))),
+    // Assigned is all yours; assignee grouping puts names in the headings.
+    person: view === View.Mine || d.grouping === "assignee" ? 0 : 18,
+  };
+  const fixed = 6 + key + 2 + 2 + 2;
+  const room = (c: typeof wanted) => width - 2 - fixed - c.status - c.reason - c.person;
+  const MIN_TITLE = 36;
+  // The status icon still shows the stage once the status text is gone.
+  for (const drop of ["person", "status", "reason"] as const) if (room(wanted) < MIN_TITLE) wanted[drop] = 0;
+  return { key, ...wanted, title: Math.max(10, room(wanted)) };
+}
+
+/** Separators that end a breadcrumb prefix such as "Storefront - " or "ЛК / Рассылки - ". */
+const CRUMB = /^(.{2,48}?\s[-–—|]\s)/;
+
+/** A summary with its breadcrumb prefix dimmed, so the words that differ stand out. */
+function drawSummary(canvas: Canvas, y: number, x: number, summary: string, width: number, active: boolean): void {
+  const crumb = CRUMB.exec(summary)?.[1] ?? "";
+  const rest = summary.slice(crumb.length);
+  if (!crumb || !rest.trim() || cells(crumb) >= width - 8) {
+    canvas.put(y, x, summary, active ? "selectedBold" : "text", width);
+    return;
+  }
+  canvas.put(y, x, crumb, active ? "selection" : "muted", width);
+  canvas.put(y, x + cells(crumb), rest, active ? "selectedBold" : "text", width - cells(crumb));
 }
 
 function drawStatus(canvas: Canvas, d: Dashboard, y: number): void {

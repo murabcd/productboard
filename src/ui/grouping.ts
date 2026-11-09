@@ -1,6 +1,6 @@
 /** How each view groups and orders the loaded issues. */
 
-import { usDate } from "../dates";
+import { period } from "../dates";
 import { View } from "../jira/query";
 import { type Issue, issueProject } from "../jira/types";
 import type { Style } from "./canvas";
@@ -39,8 +39,8 @@ export function groupIssues(issues: Issue[], view: View, grouping: Grouping, sea
     return group(byCategory(issues), search, (i) => i.assignee).sort(([a], [b]) => a.localeCompare(b));
   }
   if (view === View.Mentions) {
-    // Already newest mention first; group by the day you were mentioned.
-    return group(issues, search, (i) => `Mentioned ${usDate(i.mention?.created ?? "")}`);
+    // Already newest mention first; group by when you were mentioned.
+    return group(issues, search, (i) => period(i.mention?.created ?? ""));
   }
   // Today arrives in section order, most urgent first.
   if (view === View.Today) return group(issues, search, (i) => i.section ?? "");
