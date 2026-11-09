@@ -52,7 +52,13 @@ export class JiraHttp {
     private readonly sleep = pause,
   ) {}
 
-  get<T>(path: string, params: Params, schema: z.ZodType<T>, what: string, priority: Priority = "foreground"): Promise<T> {
+  get<T>(
+    path: string,
+    params: Params,
+    schema: z.ZodType<T>,
+    what: string,
+    priority: Priority = "foreground",
+  ): Promise<T> {
     const query = new URLSearchParams();
     for (const [name, value] of Object.entries(params)) {
       if (value !== undefined) query.set(name, String(value));
@@ -128,7 +134,9 @@ export class JiraHttp {
         if (this.closing.signal.aborted) throw new JiraError("Dashboard closed");
         if (attempt >= RETRY_DELAYS.length) {
           const timedOut = error instanceof DOMException && error.name === "TimeoutError";
-          throw new JiraError(timedOut ? "Jira timed out. Press r to retry." : "Could not reach Jira. Press r to retry.");
+          throw new JiraError(
+            timedOut ? "Jira timed out. Press r to retry." : "Could not reach Jira. Press r to retry.",
+          );
         }
         await this.sleep((RETRY_DELAYS[attempt] ?? 0) * 1000, this.closing.signal);
         continue;

@@ -96,8 +96,7 @@ export function sameScope(a: IssueQuery, b: IssueQuery): boolean {
   );
 }
 
-export const sameQuery = (a: IssueQuery, b: IssueQuery): boolean =>
-  sameScope(a, b) && a.limit === b.limit;
+export const sameQuery = (a: IssueQuery, b: IssueQuery): boolean => sameScope(a, b) && a.limit === b.limit;
 
 /** This scope as JQL; `extra` terms narrow it further. */
 export function jql(query: IssueQuery, ...extra: string[]): string {
@@ -112,11 +111,7 @@ export function jql(query: IssueQuery, ...extra: string[]): string {
   if (query.view === View.Search) terms.push(textTerm(query.text));
   if (query.project) terms.push(`project = ${JSON.stringify(query.project)}`);
   if (query.assignee) {
-    terms.push(
-      query.assignee === "unassigned"
-        ? "assignee IS EMPTY"
-        : `assignee = ${JSON.stringify(query.assignee)}`,
-    );
+    terms.push(query.assignee === "unassigned" ? "assignee IS EMPTY" : `assignee = ${JSON.stringify(query.assignee)}`);
   }
   if (query.status === "open") terms.push("statusCategory != Done");
   if (query.status === "done") terms.push("statusCategory = Done");
@@ -127,7 +122,7 @@ export function jql(query: IssueQuery, ...extra: string[]): string {
 
 const ISSUE_KEY = /^[A-Z][A-Z0-9_]*-\d+$/i;
 /** Characters Jira's text search treats as operators. */
-const TEXT_OPERATORS = /[+\-&|!(){}[\]^~*?\\:"\/]/g;
+const TEXT_OPERATORS = /[+\-&|!(){}[\]^~*?\\:"/]/g;
 
 /** An issue key finds that issue; other words search summaries, descriptions and comments. */
 function textTerm(text: string): string {

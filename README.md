@@ -91,6 +91,9 @@ run `jira --login` again when Jira says it was rejected. Your site, email and la
 ## Development
 
 ```sh
+bun run check      # everything below: lint, types and tests
 bun test           # unit tests
 bun run typecheck  # tsc --noEmit
+bun run lint       # Biome lint, format and import order
+bun run format     # apply Biome's formatting and safe fixes
 ```

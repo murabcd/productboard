@@ -116,7 +116,8 @@ function layoutBlock(block: DocBlock, width: number): Line[] {
   switch (block.kind) {
     case "text": {
       const pad = " ".repeat((block.indent ?? 0) * INDENT);
-      if (block.marker === undefined) return wrapSpans(block.spans, width, [{ text: pad, style: "text" }], [{ text: pad, style: "text" }]);
+      if (block.marker === undefined)
+        return wrapSpans(block.spans, width, [{ text: pad, style: "text" }], [{ text: pad, style: "text" }]);
       const marker = `${block.marker} `;
       return wrapSpans(
         block.spans,
@@ -127,7 +128,10 @@ function layoutBlock(block: DocBlock, width: number): Line[] {
     }
     case "heading": {
       const style: SpanStyle = "strong";
-      const lines = wrapSpans(block.spans.map((span) => ({ ...span, style })), width);
+      const lines = wrapSpans(
+        block.spans.map((span) => ({ ...span, style })),
+        width,
+      );
       // Top-level headings use the accent color, smaller ones stay bold.
       if (block.level <= 2) for (const line of lines) for (const run of line) run.style = "accentBold";
       return lines;
@@ -182,7 +186,10 @@ function layoutTable(rows: Span[][][], header: boolean, width: number): Line[] {
   rows.forEach((row, r) => {
     const isHeader = header && r === 0;
     const wrapped = widths.map((w, c) =>
-      wrapSpans((row[c] ?? []).map((span) => (isHeader ? { ...span, style: "strong" } : span)), w),
+      wrapSpans(
+        (row[c] ?? []).map((span) => (isHeader ? { ...span, style: "strong" } : span)),
+        w,
+      ),
     );
     const height = Math.max(1, ...wrapped.map((cell) => cell.length));
     for (let i = 0; i < height; i++) {

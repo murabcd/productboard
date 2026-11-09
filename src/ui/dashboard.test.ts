@@ -1,16 +1,16 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { Snapshot } from "../jira/client";
 import { plainText, toDoc } from "../jira/adf";
+import type { Snapshot } from "../jira/client";
 import { toComments } from "../jira/parse";
 import { initialQuery, View } from "../jira/query";
 import type { Detail } from "../jira/types";
 import { Workspace } from "../state/workspace";
 import { deferred, rawComment, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
-import type { Key } from "./input";
-import { detailBlocks } from "./panel";
 import { frame } from "./frame";
+import type { Key } from "./input";
 import { pickerRows } from "./layout";
+import { detailBlocks } from "./panel";
 import { Picker } from "./picker";
 
 const text = (value: string): Key[] => [...value].map((ch) => ({ text: ch }));
@@ -178,9 +178,7 @@ describe("dashboard", () => {
   test("the attachment picker opens other files in Helium and returns to details", async () => {
     const { dashboard, pending, opener } = setup();
     dashboard.handle(ENTER);
-    pending[0]?.resolve(
-      detail("", { attachments: [file("42", "flow chart.pdf", "application/pdf")] }),
-    );
+    pending[0]?.resolve(detail("", { attachments: [file("42", "flow chart.pdf", "application/pdf")] }));
     await settle();
     dashboard.handle({ text: "i" });
     expect(dashboard.picker?.kind).toBe("attachment");
@@ -195,7 +193,11 @@ describe("dashboard", () => {
     dashboard.handle(ENTER);
     pending[0]?.resolve(
       detail("", {
-        attachments: [file("1", "a.png", "image/png"), file("2", "notes.pdf", "application/pdf"), file("3", "b.jpg", "image/jpeg")],
+        attachments: [
+          file("1", "a.png", "image/png"),
+          file("2", "notes.pdf", "application/pdf"),
+          file("3", "b.jpg", "image/jpeg"),
+        ],
       }),
     );
     await settle();
@@ -238,7 +240,9 @@ describe("dashboard", () => {
     const text = plainText(blocks);
     expect(text).toContain("Comments · 1 · 1 mention you · newest first");
     expect(text).toContain("● Charlie · 2026-11-05 13:08 · mentions you");
-    expect(blocks).toContainEqual(expect.objectContaining({ keep: true, spans: [expect.objectContaining({ style: "mention" })] }));
+    expect(blocks).toContainEqual(
+      expect.objectContaining({ keep: true, spans: [expect.objectContaining({ style: "mention" })] }),
+    );
   });
 });
 
@@ -271,7 +275,12 @@ describe("picker", () => {
   });
 
   test("page keys move exactly one visible page", () => {
-    const choices = Array.from({ length: 100 }, (_, n) => ({ value: `${n}`, label: `Board ${n}`, detail: "", state: "" }));
+    const choices = Array.from({ length: 100 }, (_, n) => ({
+      value: `${n}`,
+      label: `Board ${n}`,
+      detail: "",
+      state: "",
+    }));
     const picker = new Picker("board", "Choose board", choices);
     picker.handle({ name: "pagedown" }, pickerRows(40));
     expect(picker.index).toBe(pickerRows(40));

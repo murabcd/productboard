@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { rawComment, rawIssue } from "../testing";
-import { toComments, toIssue, type RawIssue } from "./parse";
+import { type RawIssue, toComments, toIssue } from "./parse";
 import { initialQuery, View } from "./query";
 import { today } from "./today";
 
@@ -19,7 +19,9 @@ function sprintIssue(
     blockedBy?: [string, "done" | "indeterminate"];
   } = {},
 ): RawIssue {
-  const base = rawIssue(key, options.category ?? "indeterminate", { person: options.assigned === false ? null : person });
+  const base = rawIssue(key, options.category ?? "indeterminate", {
+    person: options.assigned === false ? null : person,
+  });
   return {
     key,
     fields: {
@@ -31,7 +33,10 @@ function sprintIssue(
         ? [
             {
               type: { name: "Blocks" },
-              inwardIssue: { key: options.blockedBy[0], fields: { status: { statusCategory: { key: options.blockedBy[1] } } } },
+              inwardIssue: {
+                key: options.blockedBy[0],
+                fields: { status: { statusCategory: { key: options.blockedBy[1] } } },
+              },
             },
           ]
         : [],
@@ -97,7 +102,14 @@ describe("Today", () => {
   });
 
   test("an issue appears once, in its most urgent section", async () => {
-    const result = await today(source([sprintIssue("EX-1", { status: "Dev Blocked" })], { created: ["EX-1", "EX-9"], assigned: ["EX-9", "EX-10"] }), query, NOW);
+    const result = await today(
+      source([sprintIssue("EX-1", { status: "Dev Blocked" })], {
+        created: ["EX-1", "EX-9"],
+        assigned: ["EX-9", "EX-10"],
+      }),
+      query,
+      NOW,
+    );
     expect(rows(result.issues)).toEqual([
       ["Blocked", "EX-1", undefined],
       ["Mentioned you", "EX-50", "Charlie mentioned you"],

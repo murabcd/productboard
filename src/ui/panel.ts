@@ -32,7 +32,10 @@ export const helpPanel = (): Panel => panel("Keyboard shortcuts", [{ kind: "pre"
 
 export function sprintPanel(sprint: Sprint): Panel {
   const dates = `${sprint.start.slice(0, 10) || "No start date"} → ${sprint.end.slice(0, 10) || "No end date"}`;
-  return panel(sprint.name, [textBlock(`${sprint.state} · ${dates}`, "muted"), textBlock(sprint.goal || "No sprint goal.")]);
+  return panel(sprint.name, [
+    textBlock(`${sprint.state} · ${dates}`, "muted"),
+    textBlock(sprint.goal || "No sprint goal."),
+  ]);
 }
 
 /** An issue panel; its body arrives with `showDetail`. */
@@ -70,7 +73,11 @@ export function detailBlocks(detail: Detail): DocBlock[] {
   }
   if (detail.attachments.length) {
     blocks.push(
-      { kind: "heading", level: 2, spans: [{ text: `Attachments · ${detail.attachments.length} · i to open`, style: "strong" }] },
+      {
+        kind: "heading",
+        level: 2,
+        spans: [{ text: `Attachments · ${detail.attachments.length} · i to open`, style: "strong" }],
+      },
       textBlock(detail.attachments.map((item) => `${item.filename} · ${describeAttachment(item)}`).join("\n"), "muted"),
     );
   }

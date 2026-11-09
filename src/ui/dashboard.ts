@@ -1,7 +1,7 @@
 /** Dashboard state and keyboard interaction, independent of the terminal. */
 
 import type { JiraClient } from "../jira/client";
-import { isPersonal, scoped, STATUSES, VIEWS, View, withAssignee, withView } from "../jira/query";
+import { isPersonal, STATUSES, scoped, VIEWS, View, withAssignee, withView } from "../jira/query";
 import {
   type Attachment,
   type Choice,
@@ -116,7 +116,13 @@ export class Dashboard {
     }
     if (this.picker) this.picker.choices = this.choices(this.picker.kind);
     const { sprints, query } = this.workspace;
-    if (this.autoSprintPicker && sprints.length && query.view === View.Sprint && query.sprint === null && !this.picker) {
+    if (
+      this.autoSprintPicker &&
+      sprints.length &&
+      query.view === View.Sprint &&
+      query.sprint === null &&
+      !this.picker
+    ) {
       this.openPicker("sprint");
       this.autoSprintPicker = false;
     }
@@ -137,7 +143,11 @@ export class Dashboard {
       case "assignee": {
         const people = new Map(work.issues.filter((i) => i.assigneeId).map((i) => [i.assigneeId, i.assignee]));
         const sorted = [...people].sort(([, a], [, b]) => a.localeCompare(b));
-        return [choice("", "All people"), choice("unassigned", "Unassigned"), ...sorted.map(([id, name]) => choice(id, name))];
+        return [
+          choice("", "All people"),
+          choice("unassigned", "Unassigned"),
+          ...sorted.map(([id, name]) => choice(id, name)),
+        ];
       }
     }
   }
@@ -147,7 +157,11 @@ export class Dashboard {
     const kind = requested === "sprint" && !work.board ? "board" : requested;
     const tabs = kind === "sprint" ? [...SPRINT_STATES, "all"] : [];
     // Start on the first tab that has sprints: active, then planned, then closed.
-    const tab = Math.max(0, SPRINT_STATES.findIndex((state) => work.sprints.some((s) => s.state === state)));
+    const present = new Set(work.sprints.map((s) => s.state));
+    const tab = Math.max(
+      0,
+      SPRINT_STATES.findIndex((state) => present.has(state)),
+    );
     this.picker = new Picker(kind, PICKER_TITLES[kind], this.choices(kind), tabs, kind === "sprint" ? tab : 0);
     if (kind === "sprint" && work.sprints.length === 0 && !work.sprintsPending) work.loadSprints();
     else if ((kind === "board" || kind === "project") && work.boards.length === 0) work.loadCatalog();
@@ -288,7 +302,8 @@ export class Dashboard {
   searchBox(): SearchBox | null {
     if (this.finding !== null) return { kind: "jira", text: this.finding, editing: true };
     if (this.searching || this.search) return { kind: "filter", text: this.search, editing: this.searching };
-    if (this.workspace.query.view === View.Search) return { kind: "jira", text: this.workspace.query.text, editing: false };
+    if (this.workspace.query.view === View.Search)
+      return { kind: "jira", text: this.workspace.query.text, editing: false };
     return null;
   }
 

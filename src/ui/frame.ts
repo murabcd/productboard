@@ -1,13 +1,13 @@
 /** Draw one full screen of the dashboard onto a Canvas. */
 
+import { textBlock } from "../jira/adf";
 import { MENTION_DAYS, PAGE, VIEW_LABELS, VIEW_SHORT_LABELS, VIEWS, View } from "../jira/query";
 import { describeAttachment, type Issue } from "../jira/types";
-import { textBlock } from "../jira/adf";
 import { cells } from "../text";
 import { Canvas, type Style } from "./canvas";
 import type { Dashboard } from "./dashboard";
-import { BODY_TOP, BOX_ROWS, LIST_TOP, listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, pickerRows } from "./layout";
 import { layout, layoutCached } from "./document";
+import { BODY_TOP, BOX_ROWS, LIST_TOP, listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, pickerRows } from "./layout";
 import type { Panel } from "./panel";
 import type { Picker } from "./picker";
 import { currentImage, type Preview } from "./preview";
@@ -82,13 +82,7 @@ function drawPicker(
   canvas.put(height - 2, 2, `${choices.length} ${noun} · r retry after Esc`, "muted");
 }
 
-function drawList(
-  canvas: Canvas,
-  d: Dashboard,
-  width: number,
-  height: number,
-  line: (y: number) => void,
-): void {
+function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, line: (y: number) => void): void {
   const work = d.workspace;
   const selected = d.selected();
   const box = d.searchBox();
@@ -116,7 +110,8 @@ function drawList(
     if (work.query.view === View.Sprint && work.query.sprint === null) {
       text = "Press s to choose a sprint, or 2 for everyone's tasks";
     } else if (work.query.view === View.Search && !work.query.text) {
-      text = d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
+      text =
+        d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
     } else if (!work.current && work.pending) {
       text = work.query.view === View.Mentions ? "Looking for mentions…" : "Loading tasks…";
     } else if (work.error) {
@@ -149,7 +144,13 @@ function drawList(
     canvas.put(y, 4, issue.key, style, 12);
     canvas.put(y, 18, issue.summary, style, width - 21 - statusWidth - personWidth);
     if (personWidth) {
-      canvas.put(y, width - personWidth - statusWidth - 2, d.note(issue), active ? "selection" : "muted", personWidth - 1);
+      canvas.put(
+        y,
+        width - personWidth - statusWidth - 2,
+        d.note(issue),
+        active ? "selection" : "muted",
+        personWidth - 1,
+      );
     }
     if (statusWidth) {
       const statusStyle: Style = active ? "selection" : issue.category === "done" ? "done" : "muted";
@@ -173,7 +174,9 @@ function drawList(
       const said = mention.text.split(/\s+/).join(" ");
       canvas.put(height - 6, 2, `${mention.author} · ${mention.created} · ${said}`, "warning");
     } else {
-      const meta = [selected.key, selected.status, selected.assignee, selected.priority, selected.reason].filter(Boolean);
+      const meta = [selected.key, selected.status, selected.assignee, selected.priority, selected.reason].filter(
+        Boolean,
+      );
       canvas.put(height - 6, 2, meta.join(" · "), "muted");
     }
   }
@@ -213,7 +216,8 @@ function drawModal(canvas: Canvas, panel: Panel, width: number, height: number, 
   if (panel.body.length === 0) {
     lines = layout([textBlock(panel.loading ? "Loading details and comments…" : "No details.", "muted")], textWidth);
   }
-  if (panel.error) lines = [...layout([textBlock(`Could not load details: ${panel.error}`, "error")], textWidth), [], ...lines];
+  if (panel.error)
+    lines = [...layout([textBlock(`Could not load details: ${panel.error}`, "error")], textWidth), [], ...lines];
   const size = modalRows(height);
   panel.scroll = Math.max(0, Math.min(panel.scroll, lines.length - size));
   lines.slice(panel.scroll, panel.scroll + size).forEach((runs, i) => {

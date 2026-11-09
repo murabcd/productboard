@@ -1,8 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { Catalog, Snapshot } from "../jira/client";
-import type { Sprint } from "../jira/types";
 import { type IssueQuery, initialQuery, VIEWS, View } from "../jira/query";
-import { deferred, type Deferred, settle, snapshot } from "../testing";
+import type { Sprint } from "../jira/types";
+import { type Deferred, deferred, settle, snapshot } from "../testing";
 import { REFRESH_MS, Workspace } from "./workspace";
 
 /** A workspace whose requests stay pending until the test answers them. */
@@ -101,7 +101,14 @@ describe("workspace", () => {
 
   test("without a remembered board, the one with the most active sprints opens", async () => {
     const { source } = setup();
-    const sprint = (id: number, state: "active" | "closed") => ({ id, name: `S${id}`, state, start: "", end: "", goal: "" });
+    const sprint = (id: number, state: "active" | "closed") => ({
+      id,
+      name: `S${id}`,
+      state,
+      start: "",
+      end: "",
+      goal: "",
+    });
     const board = (value: string, label: string) => ({ value, label, detail: "", state: "" });
     source.catalog.mockImplementation(() =>
       Promise.resolve({ boards: [board("13", "BT board"), board("2", "FLOM board")], projects: [] }),

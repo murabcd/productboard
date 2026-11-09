@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { toDoc } from "../jira/adf";
 import { cells } from "../text";
-import { layout, type Line, wrapSpans } from "./document";
+import { type Line, layout, wrapSpans } from "./document";
 
-const text = (value: string, marks: string[] = []) => ({ type: "text", text: value, marks: marks.map((type) => ({ type })) });
+const text = (value: string, marks: string[] = []) => ({
+  type: "text",
+  text: value,
+  marks: marks.map((type) => ({ type })),
+});
 const p = (...content: unknown[]) => ({ type: "paragraph", content });
 const doc = (...content: unknown[]) => ({ type: "doc", version: 1, content });
 const item = (...content: unknown[]) => ({ type: "listItem", content });
@@ -60,7 +64,13 @@ describe("rich text layout", () => {
     const content = toDoc(
       doc(
         { type: "heading", attrs: { level: 2 }, content: [text("План")] },
-        { type: "taskList", content: [{ type: "taskItem", attrs: { state: "DONE" }, content: [text("API")] }, { type: "taskItem", attrs: { state: "TODO" }, content: [text("UI")] }] },
+        {
+          type: "taskList",
+          content: [
+            { type: "taskItem", attrs: { state: "DONE" }, content: [text("API")] },
+            { type: "taskItem", attrs: { state: "TODO" }, content: [text("UI")] },
+          ],
+        },
         { type: "codeBlock", content: [text("const a = 1;\nconst b = 2;")] },
         { type: "panel", attrs: { panelType: "warning" }, content: [p(text("Осторожно"))] },
         { type: "rule" },
@@ -111,7 +121,9 @@ describe("rich text layout", () => {
   });
 
   test("long words split across lines and nothing exceeds the width", () => {
-    const lines = show(wrapSpans([{ text: "https://example.com/a/very/long/path/that/never/breaks", style: "link" }], 16));
+    const lines = show(
+      wrapSpans([{ text: "https://example.com/a/very/long/path/that/never/breaks", style: "link" }], 16),
+    );
     for (const line of lines) expect(cells(line)).toBeLessThanOrEqual(16);
     expect(lines.join("")).toBe("https://example.com/a/very/long/path/that/never/breaks");
   });

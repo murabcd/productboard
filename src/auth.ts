@@ -44,15 +44,7 @@ export function rememberBoard(board: string): void {
 export function loadCredentials(): Credentials | string {
   const config = readConfig();
   if (!config) return "Sign in first: jira --login";
-  const read = Bun.spawnSync([
-    "security",
-    "find-generic-password",
-    "-s",
-    KEYCHAIN_SERVICE,
-    "-a",
-    config.email,
-    "-w",
-  ]);
+  const read = Bun.spawnSync(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", config.email, "-w"]);
   const token = read.stdout.toString().trim();
   if (read.exitCode !== 0 || !token) return "Your API token is missing from Keychain. Run jira --login.";
   return { site: config.site, email: config.email, token };

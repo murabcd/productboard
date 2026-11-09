@@ -25,9 +25,7 @@ export const keyId = (key: Key): string => ("name" in key ? key.name : key.text)
 
 /** A binding table from space-separated key ids, e.g. "j down", to actions. */
 export function bindings<T>(table: Record<string, T>): Map<string, T> {
-  return new Map(
-    Object.entries(table).flatMap(([ids, action]) => ids.split(" ").map((id) => [id, action] as const)),
-  );
+  return new Map(Object.entries(table).flatMap(([ids, action]) => ids.split(" ").map((id) => [id, action] as const)));
 }
 
 /** Apply a typing key to a one-line input. Returns the new text, or

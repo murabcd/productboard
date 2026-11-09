@@ -5,13 +5,17 @@
   "scripts": {
     "start": "bun src/main.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check",
+    "format": "biome check --write",
+    "check": "biome check && tsc --noEmit && bun test"
   },
   "dependencies": {
     "@opentui/core": "0.8.3",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.6",
     "@types/bun": "1.4.4",
     "typescript": "7.0.2"
   }

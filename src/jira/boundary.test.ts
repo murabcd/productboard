@@ -19,7 +19,6 @@ describe("terminal text", () => {
     expect(clip("Привет", 5)).toBe("Прив…");
     expect(clip("short", 10)).toBe("short");
   });
-
 });
 
 describe("Jira payloads", () => {
@@ -46,7 +45,11 @@ describe("Jira payloads", () => {
                 {
                   type: "paragraph",
                   content: [
-                    { type: "text", text: "Design", marks: [{ type: "link", attrs: { href: "https://example.com/d" } }] },
+                    {
+                      type: "text",
+                      text: "Design",
+                      marks: [{ type: "link", attrs: { href: "https://example.com/d" } }],
+                    },
                   ],
                 },
               ],
@@ -77,7 +80,13 @@ describe("Jira payloads", () => {
           description: textDoc({ type: "text", text: "Spec" }),
           project: { name: "Example" },
           attachment: [
-            { id: "42", filename: "flow.png", size: 245760, author: { displayName: "Cameron" }, created: "2026-11-05T13:08:14.000+0300" },
+            {
+              id: "42",
+              filename: "flow.png",
+              size: 245760,
+              author: { displayName: "Cameron" },
+              created: "2026-11-05T13:08:14.000+0300",
+            },
             { filename: "no id is skipped" },
           ],
         },
@@ -110,7 +119,13 @@ describe("scopes", () => {
   });
 
   test("filters run on Jira and values are quoted", () => {
-    const query = jql({ ...initialQuery, view: View.All, project: "EX", assignee: 'id" OR project=SECRET', status: "open" });
+    const query = jql({
+      ...initialQuery,
+      view: View.All,
+      project: "EX",
+      assignee: 'id" OR project=SECRET',
+      status: "open",
+    });
     expect(query).toContain('project = "EX"');
     expect(query).toContain('assignee = "id\\" OR project=SECRET"');
     expect(query).toContain("statusCategory != Done");

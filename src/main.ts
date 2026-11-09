@@ -42,7 +42,9 @@ async function check(client: JiraClient): Promise<number> {
   const me = await client.myself();
   const snapshot = await client.snapshot({ ...initialQuery, view: View.All });
   const more = snapshot.more ? " · more available" : "";
-  return say(`Connected to ${client.site} as ${clean(me.displayName)} · ${snapshot.issues.length} issues loaded${more}`);
+  return say(
+    `Connected to ${client.site} as ${clean(me.displayName)} · ${snapshot.issues.length} issues loaded${more}`,
+  );
 }
 
 async function dashboard(client: JiraClient, preferredBoard: string | undefined): Promise<void> {

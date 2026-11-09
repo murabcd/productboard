@@ -41,8 +41,7 @@ export const textBlock = (text: string, style: SpanStyle = "plain", extra: Parti
 
 type Node = Record<string, unknown>;
 
-const isNode = (value: unknown): value is Node =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const isNode = (value: unknown): value is Node => typeof value === "object" && value !== null && !Array.isArray(value);
 const contentOf = (node: Node): unknown[] => (Array.isArray(node.content) ? node.content : []);
 const attrsOf = (node: Node): Node => (isNode(node.attrs) ? node.attrs : {});
 const str = (value: unknown): string => (typeof value === "string" ? clean(value) : "");
@@ -76,7 +75,12 @@ function inline(node: unknown): Span[] {
       const style = MARKS.find(([mark]) => kinds.has(mark))?.[1] ?? "plain";
       const link = marks.find((mark) => mark.type === "link");
       const url = link ? str(attrsOf(link).href) : "";
-      return url && url !== text ? [{ text, style }, { text: ` (${url})`, style: "muted" }] : [{ text, style }];
+      return url && url !== text
+        ? [
+            { text, style },
+            { text: ` (${url})`, style: "muted" },
+          ]
+        : [{ text, style }];
     }
     case "hardBreak":
       return [{ text: "\n", style: "plain" }];
@@ -129,7 +133,15 @@ function block(node: unknown, indent: number): DocBlock[] {
         return [{ kind: "text", spans: contentOf(item).flatMap(inline), indent, marker }];
       });
     case "codeBlock":
-      return [{ kind: "code", lines: spans().map((span) => span.text).join("").split("\n") }];
+      return [
+        {
+          kind: "code",
+          lines: spans()
+            .map((span) => span.text)
+            .join("")
+            .split("\n"),
+        },
+      ];
     case "blockquote":
       return [{ kind: "box", tone: "quote", blocks: blocks(contentOf(node), 0) }];
     case "panel":
@@ -200,26 +212,25 @@ export function toDoc(value: unknown): DocBlock[] {
 
 /** The document as plain text, for one-line previews. */
 export function plainText(doc: DocBlock[]): string {
-  return doc
-    .map((item) => {
-      switch (item.kind) {
-        case "text":
-        case "heading":
-          return (item.kind === "text" && item.marker ? `${item.marker} ` : "") + item.spans.map((s) => s.text).join("");
-        case "code":
-          return item.lines.join("\n");
-        case "box":
-          return plainText(item.blocks);
-        case "table":
-          return item.rows.map((row) => row.map((cell) => cell.map((s) => s.text).join("")).join(" | ")).join("\n");
-        case "pre":
-          return item.text;
-        case "rule":
-          return "";
-      }
-    })
-    .filter(Boolean)
-    .join("\n");
+  return doc.map(blockText).filter(Boolean).join("\n");
+}
+
+function blockText(item: DocBlock): string {
+  switch (item.kind) {
+    case "text":
+    case "heading":
+      return (item.kind === "text" && item.marker ? `${item.marker} ` : "") + item.spans.map((s) => s.text).join("");
+    case "code":
+      return item.lines.join("\n");
+    case "box":
+      return plainText(item.blocks);
+    case "table":
+      return item.rows.map((row) => row.map((cell) => cell.map((s) => s.text).join("")).join(" | ")).join("\n");
+    case "pre":
+      return item.text;
+    case "rule":
+      return "";
+  }
 }
 
 /** Whether an ADF document @-mentions this account. */

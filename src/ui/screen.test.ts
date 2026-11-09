@@ -92,8 +92,10 @@ describe("OpenTUI shell", () => {
   });
 
   test("key mapping covers navigation and ignores modifier combos", () => {
-    const key = (name: string, extra: Partial<{ ctrl: boolean; meta: boolean; shift: boolean; sequence: string }> = {}) =>
-      toKeys({ name, ctrl: false, meta: false, shift: false, sequence: name, ...extra });
+    const key = (
+      name: string,
+      extra: Partial<{ ctrl: boolean; meta: boolean; shift: boolean; sequence: string }> = {},
+    ) => toKeys({ name, ctrl: false, meta: false, shift: false, sequence: name, ...extra });
     expect(key("pagedown")).toEqual([{ name: "pagedown" }]);
     expect(key("return")).toEqual([{ name: "enter" }]);
     expect(key("c", { ctrl: true })).toEqual([{ name: "ctrl-c" }]);

@@ -87,11 +87,13 @@ export async function today(
   }
   // Idle work reads oldest first; every other section keeps the newest first.
   const age = (issue: Issue) => jiraTime(updated.get(issue.key) || "1970-01-01T00:00:00.000+0000");
-  for (const name of ["Stuck", "Forgotten in active sprints"] as const) sections.get(name)?.sort((a, b) => age(a) - age(b));
+  for (const name of ["Stuck", "Forgotten in active sprints"] as const)
+    sections.get(name)?.sort((a, b) => age(a) - age(b));
 
   const yesterday = localDate(now - DAY_MS);
   for (const issue of mentioned.issues) {
-    if (issue.mention && issue.mention.created >= yesterday) place("Mentioned you", issue, `${issue.mention.author} mentioned you`);
+    if (issue.mention && issue.mention.created >= yesterday)
+      place("Mentioned you", issue, `${issue.mention.author} mentioned you`);
   }
   for (const raw of created) place("Your issues, changed since yesterday", toIssue(raw), `now ${toIssue(raw).status}`);
   for (const raw of assigned) place("Assigned to you", toIssue(raw), toIssue(raw).status);

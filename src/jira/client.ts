@@ -183,7 +183,13 @@ export class JiraClient {
   private async pages<T>(path: string, item: z.ZodType<T>, what: string): Promise<T[]> {
     const items: T[] = [];
     for (;;) {
-      const page = await this.http.get(path, { startAt: items.length, maxResults: 50 }, pageOf(item), what, "background");
+      const page = await this.http.get(
+        path,
+        { startAt: items.length, maxResults: 50 },
+        pageOf(item),
+        what,
+        "background",
+      );
       items.push(...page.values);
       const done = page.isLast ?? (page.total === undefined || items.length >= page.total);
       if (done || page.values.length === 0) return items;

@@ -67,7 +67,9 @@ describe("HTTP", () => {
       calls++;
       if (calls === 1) {
         // The first connection hangs until it is abandoned.
-        return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new Error("aborted"))));
+        return new Promise<Response>((_, reject) =>
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted"))),
+        );
       }
       return json({ accountId: "me-id", displayName: "Avery" });
     }) as typeof fetch;
@@ -103,7 +105,10 @@ describe("attachments", () => {
       seen.push({ url, auth: new Headers(init?.headers).get("Authorization") });
       if (url.includes("example.atlassian.net")) {
         expect(init?.redirect).toBe("manual");
-        return new Response(null, { status: 303, headers: { Location: "https://api.media.atlassian.com/file/x?token=signed" } });
+        return new Response(null, {
+          status: 303,
+          headers: { Location: "https://api.media.atlassian.com/file/x?token=signed" },
+        });
       }
       return new Response(new Uint8Array([137, 80, 78, 71]));
     }) as typeof fetch;

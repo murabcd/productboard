@@ -232,7 +232,5 @@ export function toSprint(sprint: z.infer<typeof RawSprint>): Sprint {
 
 /** Active first, then planned, then closed; newest first within each. */
 export function sortSprints(sprints: Sprint[]): Sprint[] {
-  return [...sprints].sort(
-    (a, b) => SPRINT_STATES.indexOf(a.state) - SPRINT_STATES.indexOf(b.state) || b.id - a.id,
-  );
+  return [...sprints].sort((a, b) => SPRINT_STATES.indexOf(a.state) - SPRINT_STATES.indexOf(b.state) || b.id - a.id);
 }

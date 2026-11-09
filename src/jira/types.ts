@@ -71,9 +71,7 @@ export interface Sprint {
 }
 
 export function sprintChoice(sprint: Sprint): Choice {
-  const dates = sprint.start
-    ? `${sprint.start.slice(0, 10)} → ${sprint.end.slice(0, 10)}`
-    : "No dates";
+  const dates = sprint.start ? `${sprint.start.slice(0, 10)} → ${sprint.end.slice(0, 10)}` : "No dates";
   return {
     value: String(sprint.id),
     label: sprint.name,

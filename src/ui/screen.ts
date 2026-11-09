@@ -6,16 +6,16 @@ import {
   ImageRenderable,
   type KeyEvent,
   type OptimizedBuffer,
-  type RenderContext,
   Renderable,
+  type RenderContext,
   RGBA,
   TextAttributes,
 } from "@opentui/core";
 import { cells, splitGraphemes } from "../text";
 import type { Canvas, Style } from "./canvas";
 import type { Dashboard } from "./dashboard";
-import type { Key, KeyName } from "./input";
 import { frame } from "./frame";
+import type { Key, KeyName } from "./input";
 import { previewArea } from "./layout";
 
 const NONE = RGBA.fromValues(0, 0, 0, 0);
@@ -100,7 +100,12 @@ class DashboardView extends Renderable {
     if (!bytes) return;
     if (this.image.source !== bytes) this.image.source = bytes;
     const area = previewArea(width, height);
-    if (this.image.x !== area.left || this.image.y !== area.top || this.image.width !== area.width || this.image.height !== area.height) {
+    if (
+      this.image.x !== area.left ||
+      this.image.y !== area.top ||
+      this.image.width !== area.width ||
+      this.image.height !== area.height
+    ) {
       Object.assign(this.image, area);
       this.requestRender();
     }

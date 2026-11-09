@@ -1,16 +1,7 @@
 /** Async view state: keep successful results and reject responses for old scopes. */
 
 import type { Catalog, Snapshot } from "../jira/client";
-import {
-  type IssueQuery,
-  initialQuery,
-  isReady,
-  PAGE,
-  sameQuery,
-  sameScope,
-  scoped,
-  View,
-} from "../jira/query";
+import { type IssueQuery, initialQuery, isReady, PAGE, sameQuery, sameScope, scoped, View } from "../jira/query";
 import type { Choice, Issue, Sprint } from "../jira/types";
 import { clean } from "../text";
 
@@ -24,8 +15,7 @@ export const REFRESH_MS = 60_000;
 /** Boards checked for active sprints when no board is remembered. */
 const DEFAULT_BOARD_CANDIDATES = 20;
 
-export const message = (error: unknown): string =>
-  clean(error instanceof Error ? error.message : String(error), true);
+export const message = (error: unknown): string => clean(error instanceof Error ? error.message : String(error), true);
 
 const SCOPE_LABELS: Record<Exclude<View, typeof View.Sprint | typeof View.Search>, string> = {
   [View.All]: "Everyone's tasks",
@@ -119,15 +109,17 @@ export class Workspace {
     this.error = "";
     this.pendingQuery = requested;
     this.source.snapshot(requested).then(
-      (snapshot) => this.settle(id, requested, () => {
-        if (sameQuery(snapshot.query, this.query)) {
-          this.snapshot = snapshot;
-          this.updated = new Date(this.now());
-        }
-      }),
-      (error: unknown) => this.settle(id, requested, () => {
-        if (sameQuery(requested, this.query)) this.error = message(error);
-      }),
+      (snapshot) =>
+        this.settle(id, requested, () => {
+          if (sameQuery(snapshot.query, this.query)) {
+            this.snapshot = snapshot;
+            this.updated = new Date(this.now());
+          }
+        }),
+      (error: unknown) =>
+        this.settle(id, requested, () => {
+          if (sameQuery(requested, this.query)) this.error = message(error);
+        }),
     );
   }
 
@@ -188,7 +180,10 @@ export class Workspace {
   /** Open the remembered board, else the one with the most active sprints. */
   private openDefaultBoard(): void {
     const remembered = this.boards.find((b) => b.value === this.options.preferredBoard);
-    if (remembered) return this.openBoard(remembered.value);
+    if (remembered) {
+      this.openBoard(remembered.value);
+      return;
+    }
     const candidates = this.boards.slice(0, DEFAULT_BOARD_CANDIDATES);
     void Promise.all(
       candidates.map((board) =>
