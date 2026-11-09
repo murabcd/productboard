@@ -43,7 +43,7 @@ run `jira --login` again when Jira says it was rejected. Your site, email and la
 | `g` | Group by Jira status or assignee |
 | `n` | Load the next 200 issues |
 | `/` | Filter the loaded tasks by title, key, status, project key or assignee |
-| `f` | Find in all of Jira: words in summaries, descriptions and comments, or an issue key like `EX-123` |
+| `f` | Find in all of Jira: words in summaries, descriptions and comments, or an issue key like `EX-123`; `Esc` clears it for a new search |
 | `↑/↓`, `j/k`, `Home/End`, `PgUp/PgDn` | Move the selection |
 | `Enter` / `v` | Read details and comments |
 | `i` | In details: choose an attachment; images preview in the terminal (`←/→` flip, `o` open in Helium), other files open in Helium |

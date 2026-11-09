@@ -43,4 +43,6 @@ export type Target =
   | { kind: "view"; view: View }
   | { kind: "issue"; key: string }
   /** A picker choice, by its index among the visible choices. */
-  | { kind: "choice"; index: number };
+  | { kind: "choice"; index: number }
+  /** The search box above the list. */
+  | { kind: "box" };

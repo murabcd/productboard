@@ -45,6 +45,14 @@ export type Layer =
   | { kind: "filter" }
   | { kind: "list" };
 
+/** The search box above the list: Jira search in the Search view, or the
+ * filter over loaded issues. `editing` shows the cursor. */
+export interface SearchBox {
+  kind: "jira" | "filter";
+  text: string;
+  editing: boolean;
+}
+
 const choice = (value: string, label: string, detail = ""): Choice => ({ value, label, detail, state: "" });
 
 export class Dashboard {
@@ -277,6 +285,13 @@ export class Dashboard {
     return { kind: "list" };
   }
 
+  searchBox(): SearchBox | null {
+    if (this.finding !== null) return { kind: "jira", text: this.finding, editing: true };
+    if (this.searching || this.search) return { kind: "filter", text: this.search, editing: this.searching };
+    if (this.workspace.query.view === View.Search) return { kind: "jira", text: this.workspace.query.text, editing: false };
+    return null;
+  }
+
   /** Back to the plain list, dropping any open picker, panel or prompt. */
   private closeLayers(): void {
     this.preview = null;
@@ -302,6 +317,13 @@ export class Dashboard {
     this.resetList();
     if (view === View.Sprint && work.query.sprint === null) this.openPicker("sprint");
     if (view === View.Search && !work.query.text) this.finding = "";
+  }
+
+  /** Esc on search results: clear them and type a new search, staying on the tab. */
+  private clearSearch(): void {
+    this.workspace.change(scoped(this.workspace.query, { text: "" }));
+    this.resetList();
+    this.finding = "";
   }
 
   private cycleStatus(): void {
@@ -390,6 +412,11 @@ export class Dashboard {
         this.selected();
         return;
       }
+      case "box":
+        // Edit whichever search the box shows.
+        if (this.searchBox()?.kind === "jira") this.finding ??= this.workspace.query.text;
+        else this.searching = true;
+        return;
       case "choice": {
         const picker = this.picker;
         const picked = picker?.visible()[target.index];
@@ -456,7 +483,11 @@ export class Dashboard {
   });
 
   private readonly listKeys = bindings<() => void>({
-    escape: () => this.resetList(),
+    // Esc steps back: first the filter, then the Jira search.
+    escape: () => {
+      if (!this.search && this.workspace.query.text && this.workspace.query.view === View.Search) this.clearSearch();
+      else this.resetList();
+    },
     "/": () => {
       this.searching = true;
     },
@@ -475,10 +506,10 @@ export class Dashboard {
       this.index -= 1;
     },
     pagedown: () => {
-      this.index += Math.max(1, listRows(this.height) - 1);
+      this.index += Math.max(1, listRows(this.height, this.searchBox() !== null) - 1);
     },
     pageup: () => {
-      this.index -= Math.max(1, listRows(this.height) - 1);
+      this.index -= Math.max(1, listRows(this.height, this.searchBox() !== null) - 1);
     },
     home: () => {
       this.index = 0;

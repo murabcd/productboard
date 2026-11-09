@@ -33,12 +33,12 @@ function attention(raw: RawIssue, flagged: Set<string>, now: number): [Section, 
   const issue = toIssue(raw);
   const idle = raw.fields.updated ? Math.floor((now - jiraTime(raw.fields.updated)) / DAY_MS) : 0;
   // Long-untouched work would bury live problems, so it is set aside first.
-  if (idle >= FORGOTTEN_DAYS) return ["Forgotten in active sprints", `${idle} days without update`];
+  if (idle >= FORGOTTEN_DAYS) return ["Forgotten in active sprints", `${idle}d no update`];
   if (/blocked/i.test(issue.status)) return ["Blocked", ""];
   if (flagged.has(issue.key)) return ["Blocked", "Flagged"];
   const blocker = openBlocker(raw);
   if (blocker) return ["Blocked", `blocked by ${blocker}`];
-  if (issue.category === "indeterminate" && idle >= STUCK_DAYS) return ["Stuck", `${idle} days without update`];
+  if (issue.category === "indeterminate" && idle >= STUCK_DAYS) return ["Stuck", `${idle}d no update`];
   if (!issue.assigneeId) return ["Needs an owner", "No assignee"];
   const due = raw.fields.duedate;
   if (due && due < localDate(now)) return ["Overdue", `due ${due}`];

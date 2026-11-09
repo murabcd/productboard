@@ -74,6 +74,39 @@ describe("dashboard", () => {
     expect(dashboard.finding).toBe("оплата"); // edits the last search
   });
 
+  test("searches type into a box above the list, like a picker", () => {
+    const { dashboard } = setup();
+    for (const key of text("fоплата")) dashboard.handle(key);
+    let canvas = frame(dashboard, 80, 24);
+    expect(canvas.text(6)).toContain("Search Jira  / оплата▏");
+    expect(canvas.text(24 - 3)).toContain("Enter search");
+    dashboard.handle(ESC);
+    dashboard.handle({ text: "/" });
+    canvas = frame(dashboard, 80, 24);
+    expect(canvas.text(6)).toContain("Filter loaded  / ▏");
+    expect(canvas.text(8)).toContain("Custom new  2"); // the list starts below the box
+    dashboard.handle(ENTER);
+    expect(dashboard.searching).toBe(false);
+    dashboard.click({ kind: "box" });
+    expect(dashboard.searching).toBe(true);
+  });
+
+  test("Esc clears a search and stays on the Search tab", () => {
+    const { dashboard, work } = setup();
+    for (const key of [...text("fоплата"), ENTER]) dashboard.handle(key);
+    expect(work.query).toMatchObject({ view: View.Search, text: "оплата" });
+    for (const key of [...text("/x"), ENTER]) dashboard.handle(key);
+    dashboard.handle(ESC); // clears the filter first
+    expect(dashboard.search).toBe("");
+    expect(work.query.text).toBe("оплата");
+    dashboard.handle(ESC); // then the search, ready for a new one
+    expect(work.query).toMatchObject({ view: View.Search, text: "" });
+    expect(dashboard.finding).toBe("");
+    dashboard.handle(ESC); // stop typing; still on the tab
+    expect(dashboard.finding).toBeNull();
+    expect(work.query.view).toBe(View.Search);
+  });
+
   test("an empty Search view asks for words", () => {
     const { dashboard } = setup();
     dashboard.handle({ text: "7" });

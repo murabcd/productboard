@@ -17,7 +17,8 @@ g           Group by actual Jira status / assignee
 n           Load 200 more issues when more results exist
 /           Filter the loaded issues, including assignee names
 f           Find in all of Jira: words in summaries, descriptions and
-            comments, or an issue key like EX-123; Enter runs the search
+            comments, or an issue key like EX-123; Enter runs the search,
+            Esc clears it for a new one
 ↑/↓  j/k    Select an issue; PgUp/PgDn moves a page
 Home / End  First / last issue
 Tab         Next view
@@ -27,7 +28,7 @@ t           Read selected sprint's goal and dates
 o           Open selected issue in Helium
 y           Copy issue URL
 r           Refresh; retry failed boards, projects or sprints
-Esc         Clear search / close picker or details
+Esc         Clear the filter or search; close a picker or details
 q / Ctrl-C  Quit, or close details
 Mouse       Click a tab or issue; click again to open; wheel scrolls
 

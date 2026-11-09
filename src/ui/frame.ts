@@ -6,7 +6,7 @@ import { textBlock } from "../jira/adf";
 import { cells } from "../text";
 import { Canvas, type Style } from "./canvas";
 import type { Dashboard } from "./dashboard";
-import { BODY_TOP, LIST_TOP, listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, pickerRows } from "./layout";
+import { BODY_TOP, BOX_ROWS, LIST_TOP, listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, pickerRows } from "./layout";
 import { layout, layoutCached } from "./document";
 import type { Panel } from "./panel";
 import type { Picker } from "./picker";
@@ -91,6 +91,20 @@ function drawList(
 ): void {
   const work = d.workspace;
   const selected = d.selected();
+  const box = d.searchBox();
+  if (box) {
+    // Like a picker's filter line: what is searched, then the words.
+    const prefix = `${box.kind === "jira" ? "Search Jira" : "Filter loaded"}  / `;
+    canvas.put(LIST_TOP, 2, prefix, "title");
+    const text = `${box.text}${box.editing ? "▏" : ""}`;
+    canvas.put(LIST_TOP, 2 + prefix.length, text, box.editing ? "accent" : "text");
+    if (!box.editing) {
+      const keys = box.kind === "jira" ? "f edit · Esc clear" : "/ edit · Esc clear";
+      canvas.put(LIST_TOP, 2 + prefix.length + cells(text) + 3, keys, "muted");
+    }
+    canvas.mark(LIST_TOP, 2, width - 4, { kind: "box" });
+  }
+  const top = box ? LIST_TOP + BOX_ROWS : LIST_TOP;
   const rows: [string, Issue | null][] = [];
   for (const [label, issues] of d.groups()) {
     rows.push([`${label}  ${issues.length}`, null]);
@@ -102,7 +116,7 @@ function drawList(
     if (work.query.view === View.Sprint && work.query.sprint === null) {
       text = "Press s to choose a sprint, or 2 for everyone's tasks";
     } else if (work.query.view === View.Search && !work.query.text) {
-      text = "Press f and type words or an issue key to search all of Jira";
+      text = d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
     } else if (!work.current && work.pending) {
       text = work.query.view === View.Mentions ? "Looking for mentions…" : "Loading tasks…";
     } else if (work.error) {
@@ -110,7 +124,7 @@ function drawList(
     }
     rows.push([text, null]);
   }
-  const available = listRows(height);
+  const available = listRows(height, box !== null);
   const selectedRow = Math.max(
     0,
     rows.findIndex(([, issue]) => issue && selected && issue.key === selected.key),
@@ -122,7 +136,7 @@ function drawList(
   const statusWidth = width >= 115 ? 23 : width >= 75 && d.grouping === "assignee" ? 18 : 0;
   const personWidth = width >= 115 ? 22 : width >= 75 && d.grouping !== "assignee" ? 18 : 0;
   rows.slice(d.offset, d.offset + available).forEach(([label, issue], i) => {
-    const y = LIST_TOP + i;
+    const y = top + i;
     if (!issue) {
       canvas.put(y, 4, label, "mutedBold");
       return;
@@ -164,10 +178,11 @@ function drawList(
     }
   }
   drawStatus(canvas, d, height - 5);
-  let hint = "↑↓ select   Enter details   / filter   f find in Jira";
-  if (d.finding !== null) hint = `Find in Jira: ${d.finding}▏   Enter search · Esc cancel`;
-  else if (d.searching || d.search) hint = `/ ${d.search}${d.searching ? "▏" : " · Esc clear"}`;
-  canvas.put(height - 3, 2, hint, d.finding !== null || d.searching ? "accent" : "muted");
+  let hint = "↑↓ select   Enter details   / filter   f search Jira";
+  if (d.finding !== null) hint = "Type words or an issue key   Enter search   Esc cancel";
+  else if (d.searching) hint = "Type to filter loaded issues   Enter keep   Esc done";
+  else if (d.search) hint = "↑↓ select   Enter details   / edit filter   Esc clear";
+  canvas.put(height - 3, 2, hint, "muted");
   canvas.put(height - 2, 2, "1–7 views   o open   y copy   r refresh   ? help   q quit", "muted");
 }
 

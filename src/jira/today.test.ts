@@ -86,13 +86,13 @@ describe("Today", () => {
       ["Blocked", "EX-1", undefined], // the status column already says "QA Blocked"
       ["Blocked", "EX-2", "Flagged"],
       ["Blocked", "EX-3", "blocked by EX-90"],
-      ["Stuck", "EX-5", "10 days without update"], // oldest first
-      ["Stuck", "EX-4", "8 days without update"], // its blocker is done
+      ["Stuck", "EX-5", "10d no update"], // oldest first
+      ["Stuck", "EX-4", "8d no update"], // its blocker is done
       ["Needs an owner", "EX-6", "No assignee"],
       ["Overdue", "EX-7", "due 2026-11-05"],
       ["Mentioned you", "EX-50", "Charlie mentioned you"],
-      ["Forgotten in active sprints", "EX-9", "677 days without update"],
-      ["Forgotten in active sprints", "EX-11", "69 days without update"],
+      ["Forgotten in active sprints", "EX-9", "677d no update"],
+      ["Forgotten in active sprints", "EX-11", "69d no update"],
     ]);
   });
 

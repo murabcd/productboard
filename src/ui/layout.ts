@@ -3,12 +3,14 @@
 
 export const MIN_WIDTH = 60;
 export const MIN_HEIGHT = 18;
-/** Issues start on this row. */
+/** Issues start on this row, or two rows lower under a search box. */
 export const LIST_TOP = 6;
+/** Rows a search box takes above the list: the box and a gap. */
+export const BOX_ROWS = 2;
 /** Picker choices and modal text start on this row. */
 export const BODY_TOP = 9;
 
-export const listRows = (height: number): number => height - 15;
+export const listRows = (height: number, boxed = false): number => height - 15 - (boxed ? BOX_ROWS : 0);
 export const modalRows = (height: number): number => height - 14;
 /** Each picker choice takes two lines. */
 export const pickerRows = (height: number): number => Math.max(1, Math.floor((height - 13) / 2));
