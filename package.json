@@ -8,7 +8,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
     "format": "biome check --write",
-    "check": "biome check && tsc --noEmit && bun test"
+    "check": "bun run check:lat && bun run check:konsistent && biome check && tsc --noEmit && bun test",
+    "check:lat": "lat check",
+    "check:konsistent": "bun run konsistent",
+    "konsistent": "konsistent"
   },
   "dependencies": {
     "@opentui/core": "0.8.3",
@@ -17,6 +20,8 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
     "@types/bun": "1.4.4",
+    "konsistent": "1.0.0-beta.9",
+    "lat.md": "0.12.2",
     "typescript": "7.0.2"
   }
 }

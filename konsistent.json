@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/konsistent/konsistent.schema.json",
+  "version": "v1",
+  "conventions": [
+    {
+      "name": "bun-test-runner",
+      "description": "Colocated test files register their cases with the Bun test runner.",
+      "paths": "src/**/*.test.ts",
+      "must": {
+        "importValues": [{ "name": "test", "from": "bun:test" }]
+      }
+    },
+    {
+      "name": "opentui-import-boundary",
+      "description": "OpenTUI imports belong to the terminal UI and its tests.",
+      "paths": "src/**/*.ts",
+      "excludeFiles": ["src/ui/**"],
+      "mustNot": {
+        "importValuesFrom": ["@opentui/core", "@opentui/core/*"],
+        "importTypesFrom": ["@opentui/core", "@opentui/core/*"]
+      }
+    }
+  ]
+}

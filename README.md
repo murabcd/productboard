@@ -91,9 +91,15 @@ run `jira --login` again when Jira says it was rejected. Your site, email and la
 ## Development
 
 ```sh
-bun run check      # everything below: lint, types and tests
-bun test           # unit tests
-bun run typecheck  # tsc --noEmit
-bun run lint       # Biome lint, format and import order
-bun run format     # apply Biome's formatting and safe fixes
+bun run check             # run all validation and tests
+bun run check:lat         # validate the knowledge graph
+bun run check:konsistent  # check cross-file conventions
+bun test                  # unit tests
+bun run typecheck         # tsc --noEmit
+bun run lint              # Biome lint, format and import order
+bun run format            # apply Biome's formatting and safe fixes
 ```
+
+The [knowledge graph](lat.md/lat.md) describes runtime boundaries and links to
+their implementation. [Konsistent](konsistent.json) checks the test runner and
+the OpenTUI import boundary.
