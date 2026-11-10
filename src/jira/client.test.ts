@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fakeFetch, rawComment, rawIssue } from "../testing";
+import { deferred, fakeFetch, rawComment, rawIssue, settle } from "../testing";
 import { JiraClient } from "./client";
 import { JiraError, JiraHttp } from "./http";
 import { initialQuery, View, withView } from "./query";
@@ -96,6 +96,32 @@ describe("HTTP", () => {
     expect(me.accountId).toBe("me-id");
     expect(calls).toBe(2);
     expect(performance.now() - started).toBeLessThan(3000);
+  });
+
+  test("closing rejects queued catalog reads without waiting for active reads", async () => {
+    const held = deferred<void>();
+    let calls = 0;
+    const fetcher = fakeFetch(async () => {
+      calls++;
+      await held.promise;
+      return json({ values: [], isLast: true });
+    });
+    const http = new JiraHttp(credentials, fetcher, async () => {});
+    const client = new JiraClient(http);
+    const active = ["1", "2", "3", "4"].map((board) => client.sprints(board));
+    let queuedError = "";
+    const queued = client.sprints("5").catch((error: Error) => {
+      queuedError = error.message;
+    });
+    try {
+      http.close();
+      await settle();
+      expect(queuedError).toBe("Dashboard closed");
+      expect(calls).toBe(4);
+    } finally {
+      held.resolve();
+      await Promise.allSettled([...active, queued]);
+    }
   });
 
   test("a rejected token explains how to fix it and is not retried", async () => {

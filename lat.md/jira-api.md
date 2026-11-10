@@ -18,6 +18,8 @@ read operation.
 Transport owns timeouts, retries, rate limit handling, and request priority.
 Board, project, and sprint pagination runs at background priority so catalog
 loads leave room for issue reads.
+The timeout starts when a read receives a slot. Closing the transport rejects
+queued reads and aborts active requests.
 
 ## Issue queries
 

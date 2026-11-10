@@ -1,6 +1,7 @@
 /** Read-only HTTPS access to Jira Cloud with an API token. */
 
-import type { z } from "zod";
+import { setTimeout as delay } from "node:timers/promises";
+import { z } from "zod";
 import { clean } from "../text";
 import { decode } from "./parse";
 
@@ -37,6 +38,7 @@ const MAX_BACKGROUND = 4;
 const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
 type Params = Record<string, string | number | undefined>;
+type WaitingRead = PromiseWithResolvers<void>;
 
 /** Foreground reads are what the user is waiting for; they go first. */
 export type Priority = "foreground" | "background";
@@ -44,7 +46,7 @@ export type Priority = "foreground" | "background";
 export class JiraHttp {
   private readonly closing = new AbortController();
   private active = 0;
-  private readonly waiting: Record<Priority, (() => void)[]> = { foreground: [], background: [] };
+  private readonly waiting: Record<Priority, WaitingRead[]> = { foreground: [], background: [] };
 
   constructor(
     readonly credentials: Credentials,
@@ -74,6 +76,9 @@ export class JiraHttp {
 
   close(): void {
     this.closing.abort();
+    for (const queue of Object.values(this.waiting)) {
+      for (const read of queue.splice(0)) read.reject(new JiraError("Dashboard closed"));
+    }
   }
 
   /** Download a file. Jira redirects downloads to its media service; the
@@ -126,10 +131,12 @@ export class JiraHttp {
   private async send(url: string, priority: Priority, init: RequestInit): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
       if (this.closing.signal.aborted) throw new JiraError("Dashboard closed");
-      const signal = AbortSignal.any([this.closing.signal, AbortSignal.timeout(TIMEOUT_MS)]);
       let response: Response;
       try {
-        response = await this.slot(priority, () => this.hedged(url, init, signal));
+        response = await this.slot(priority, () => {
+          const signal = AbortSignal.any([this.closing.signal, AbortSignal.timeout(TIMEOUT_MS)]);
+          return this.hedged(url, init, signal);
+        });
       } catch (error) {
         if (this.closing.signal.aborted) throw new JiraError("Dashboard closed");
         if (attempt >= RETRY_DELAYS.length) {
@@ -173,42 +180,43 @@ export class JiraHttp {
   /** Run at most MAX_PARALLEL requests at once; waiting foreground requests go first. */
   private async slot<T>(priority: Priority, run: () => Promise<T>): Promise<T> {
     const limit = priority === "foreground" ? MAX_PARALLEL : MAX_BACKGROUND;
-    while (this.active >= limit) await new Promise<void>((resolve) => this.waiting[priority].push(resolve));
-    this.active++;
+    if (this.active >= limit) {
+      const waiting = Promise.withResolvers<void>();
+      this.waiting[priority].push(waiting);
+      await waiting.promise;
+    } else {
+      this.active++;
+    }
     try {
+      this.closing.signal.throwIfAborted();
       return await run();
     } finally {
       this.active--;
-      (this.waiting.foreground.shift() ?? this.waiting.background.shift())?.();
+      const next =
+        this.waiting.foreground.shift() ?? (this.active < MAX_BACKGROUND ? this.waiting.background.shift() : undefined);
+      if (next) {
+        this.active++;
+        next.resolve();
+      }
     }
   }
 }
 
 /** Wait `ms`; rejects early when `signal` aborts. */
-function pause(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer);
-      reject(new JiraError("Dashboard closed"));
-    });
-  });
-}
+const pause = (ms: number, signal: AbortSignal): Promise<void> => delay(ms, undefined, { signal });
+
+const ErrorPayload = z.object({
+  errorMessages: z.array(z.string().nullable().catch(null)).catch([]),
+  errors: z.record(z.string(), z.string().nullable().catch(null)).catch({}),
+});
 
 /** A short, readable reason for a failed Jira response. */
 async function failure(response: Response): Promise<string> {
   if (response.status === 401) return "Jira rejected your API token. Run board --login to set a new one.";
   if (response.status === 429) return "Jira is rate-limiting requests. Try again in a minute.";
-  let detail = "";
-  try {
-    const body = (await response.json()) as { errorMessages?: unknown; errors?: unknown };
-    const messages = Array.isArray(body.errorMessages) ? body.errorMessages : [];
-    const fields = body.errors && typeof body.errors === "object" ? Object.values(body.errors) : [];
-    detail = [...messages, ...fields].filter((m) => typeof m === "string").join(" · ");
-  } catch {
-    // Not JSON; the status line below still explains the failure.
-  }
-  const text = clean(detail).slice(0, 300);
+  const body = ErrorPayload.safeParse(await response.json().catch(() => undefined));
+  const detail = body.success ? [...body.data.errorMessages, ...Object.values(body.data.errors)] : [];
+  const text = clean(detail.filter((entry) => entry !== null).join(" · ")).slice(0, 300);
   if (response.status === 403) return text || "You don't have access to this in Jira.";
   return text || `Jira returned an error (${response.status}). Press r to retry.`;
 }
