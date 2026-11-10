@@ -118,9 +118,11 @@ conversation. Image reads settle only while their tokens are in that draft.
 text appear as numbered inline tokens that can be edited as a unit. Sending
 expands pasted text and passes staged images as separate parts. Typing `@` at the
 start of a word opens a centered context picker with grouped task and sprint
-results. The picker cancels its pending lookup when the query changes or it
-closes. [[src/jira/client.ts#JiraClient]] searches tasks across Jira projects.
-Sprints come from the current board. The composer inserts removable references at the cursor. Task keys are
+results. [[src/ui/context-picker.ts#ContextPicker]] owns lookup, result ordering
+and the selected reference. It cancels pending searches when the query changes
+or the picker closes. [[src/jira/client.ts#JiraClient]] searches across Jira
+projects and Jira matches appear before loaded tasks. Sprints come from the
+current board. The composer inserts the selected reference at the cursor. Task keys are
 passed in the prompt and a sprint scopes the next message.
 
 Eve's Jira search tool calls [[src/agent/jira-search.ts#openJiraSearch]]

@@ -50,6 +50,7 @@ class DashboardView extends Renderable {
         const target = this.canvas?.targetAt(event.x, event.y);
         if (event.button !== 0 || !target) return;
         dashboard.click(target);
+        this.applyContext();
         this.requestRender();
       },
       onMouseScroll: (event) => {
@@ -68,6 +69,11 @@ class DashboardView extends Renderable {
     });
     this.add(this.image);
     this.add(this.composer);
+  }
+
+  applyContext(): void {
+    const reference = this.dashboard.contextPicker.takeReference();
+    if (reference) this.composer.attachReference(reference);
   }
 
   protected override renderSelf(buffer: OptimizedBuffer): void {
@@ -202,13 +208,13 @@ export function textKeys(text: string): Key[] {
 export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => void): void {
   const view = new DashboardView(renderer, dashboard);
   renderer.root.add(view);
-  dashboard.agent.attachReference = (reference) => view.composer.attachReference(reference);
   const feed = (keys: Key[]) => {
     for (const next of keys) {
       if (!dashboard.handle(next)) {
         quit();
         return;
       }
+      view.applyContext();
     }
     renderer.requestRender();
   };

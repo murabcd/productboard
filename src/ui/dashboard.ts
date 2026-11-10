@@ -7,6 +7,7 @@ import { type Attachment, type Issue, isImage } from "../jira/types";
 import { message, type Workspace } from "../state/workspace";
 import { DEFAULT_THEME, type ThemeId } from "../theme";
 import { AgentPanel } from "./agent-panel";
+import { ContextPicker } from "./context-picker";
 import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
 import { IssueDetails, type IssueRead } from "./issue-details";
 import { IssueList } from "./issue-list";
@@ -66,6 +67,7 @@ export class Dashboard {
   peekOpen = false;
   peek: Peek | null = null;
   readonly agent: AgentPanel;
+  readonly contextPicker: ContextPicker;
   private selectedTheme: ThemeId;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly images: ImagePreviews;
@@ -82,11 +84,10 @@ export class Dashboard {
     this.selectedTheme = options.appearance?.initial ?? DEFAULT_THEME;
     this.list = new IssueList(workspace);
     this.images = new ImagePreviews((id) => client.attachment(id), redraw);
-    this.agent = new AgentPanel(
-      options.agent,
-      redraw,
-      () => this.update(),
+    this.agent = new AgentPanel(options.agent, redraw, () => this.update());
+    this.contextPicker = new ContextPicker(
       (text, signal) => client.findIssues(text, signal),
+      () => this.update(),
     );
     this.details = new IssueDetails(
       (key) => client.detail(key),

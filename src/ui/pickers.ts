@@ -171,48 +171,12 @@ const agentContext: PickerSource = {
     if (!workspace.board) workspace.loadCatalog();
     else if (!workspace.sprints.length) void workspace.loadSprints();
   },
-  queryChanged: ({ agent }, query) => void agent.searchContext(query),
-  close: ({ agent }) => agent.clearContextSearch(),
-  items: ({ workspace, agent }, query) => {
-    const needle = query.trim().toLocaleLowerCase();
-    const current = agent.chat.current.draft.sprint?.sprint.id;
-    const matches = (text: string) => text.toLocaleLowerCase().includes(needle);
-    const sprints = workspace.sprints.filter(({ name }) => matches(name)).slice(0, needle ? 12 : 4);
-    const issues = new Map(
-      workspace.issues.filter(({ key, summary }) => matches(`${key} ${summary}`)).map((issue) => [issue.key, issue]),
-    );
-    const search = agent.contextSearch;
-    if (search?.kind === "results") {
-      for (const issue of search.issues) issues.set(issue.key, issue);
-    }
-    const tasks = Array.from(issues.values()).slice(0, needle ? 12 : 4);
-    return [
-      ...sprints.map((sprint) => ({
-        ...sprintChoice(sprint),
-        group: "Sprints",
-        current: sprint.id === current,
-        run: () => agent.attachReference?.({ kind: "sprint", sprint: { id: sprint.id, name: sprint.name } }),
-      })),
-      ...tasks.map((issue) =>
-        item(
-          `${issue.key}  ${issue.summary}`,
-          issue.status,
-          () => agent.attachReference?.({ kind: "issue", key: issue.key }),
-          {
-            value: issue.key,
-            group: "Tasks",
-          },
-        ),
-      ),
-    ];
-  },
+  queryChanged: ({ contextPicker }, query) => void contextPicker.lookup(query),
+  close: ({ contextPicker }) => contextPicker.close(),
+  items: ({ workspace, agent, contextPicker }, query) =>
+    contextPicker.items(query, workspace.sprints, workspace.issues, agent.chat.current.draft.sprint?.sprint.id),
   empty: ({ workspace }) => catalogStatus(workspace.catalogError, workspace.sprintsPending || workspace.catalogPending),
-  status: ({ agent }) => {
-    const search = agent.contextSearch;
-    if (search?.kind === "pending") return "Searching Jira…";
-    if (search?.kind === "error") return `Jira search failed: ${search.message}`;
-    return "";
-  },
+  status: ({ contextPicker }) => contextPicker.status,
 };
 
 function commandItems(d: Dashboard): PickerItem[] {

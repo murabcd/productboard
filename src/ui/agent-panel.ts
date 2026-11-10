@@ -1,22 +1,13 @@
 /** Agent's place on screen: its page and conversation history.
  * The dashboard routes input here. */
 
-import { setTimeout } from "node:timers/promises";
 import { type AgentBackend, AgentChat } from "../agent/chat";
-import type { DraftReference } from "../agent/draft";
 import type { AgentModel } from "../agent/models";
 import type { AgentChoice, ModelRef, Reasoning } from "../auth";
-import type { JiraClient } from "../jira/client";
-import type { Issue } from "../jira/types";
 import { message } from "../state/workspace";
 import { type Key, keyId } from "./input";
 
 const WHEEL_LINES = 3;
-
-type ContextSearch =
-  | { kind: "pending"; controller: AbortController }
-  | { kind: "results"; issues: Issue[] }
-  | { kind: "error"; message: string };
 
 export class AgentPanel {
   tab = false;
@@ -27,8 +18,6 @@ export class AgentPanel {
   modelsPending = false;
   modelsError = "";
   readonly chat: AgentChat;
-  contextSearch?: ContextSearch;
-  attachReference?: (reference: DraftReference) => void;
 
   constructor(
     private readonly backend: AgentBackend | undefined,
@@ -36,37 +25,8 @@ export class AgentPanel {
     redraw: () => void,
     /** Refreshes open pickers when their data changes. */
     private readonly changed: () => void,
-    private readonly findIssues: JiraClient["findIssues"],
   ) {
     this.chat = new AgentChat(backend, redraw);
-  }
-
-  clearContextSearch(): void {
-    if (this.contextSearch?.kind === "pending") this.contextSearch.controller.abort();
-    this.contextSearch = undefined;
-  }
-
-  async searchContext(query: string): Promise<void> {
-    this.clearContextSearch();
-    const text = query.trim();
-    if (text.length < 2) {
-      this.changed();
-      return;
-    }
-    const controller = new AbortController();
-    this.contextSearch = { kind: "pending", controller };
-    const { signal } = controller;
-    this.changed();
-    try {
-      await setTimeout(180, undefined, { signal });
-      const issues = await this.findIssues(text, signal);
-      if (signal.aborted) return;
-      this.contextSearch = { kind: "results", issues };
-    } catch (error) {
-      if (signal.aborted) return;
-      this.contextSearch = { kind: "error", message: message(error) };
-    }
-    this.changed();
   }
 
   get current(): AgentChoice | undefined {

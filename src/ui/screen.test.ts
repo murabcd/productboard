@@ -7,10 +7,11 @@ import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testin
 import type { AgentBackend } from "../agent/chat";
 import { draftText } from "../agent/draft";
 import type { JiraClient } from "../jira/client";
+import { toIssue } from "../jira/parse";
 import { initialQuery, View } from "../jira/query";
 import type { Issue } from "../jira/types";
 import { Workspace } from "../state/workspace";
-import { deferred, fakeAgent, issues, settle, snapshot } from "../testing";
+import { deferred, fakeAgent, issues, rawIssue, settle, snapshot } from "../testing";
 import { Dashboard, type DashboardOptions } from "./dashboard";
 import { MIN_WIDTH } from "./layout";
 import { mount, toKeys } from "./screen";
@@ -311,6 +312,11 @@ describe("OpenTUI shell", () => {
         },
       },
     });
+    const local = Array.from({ length: 12 }, (_, index) => `EX-${index + 1}`);
+    dashboard.workspace.snapshot = {
+      ...snapshot(dashboard.workspace.query, local),
+      issues: local.map((key) => toIssue(rawIssue(key, "new", { title: "Local incident" }))),
+    };
     await setup.mockMouse.click(6, 6);
     await setup.renderOnce();
     await setup.mockInput.typeText("Review @reindex");
@@ -328,6 +334,7 @@ describe("OpenTUI shell", () => {
     const frame = setup.captureCharFrame();
     expect(frame).toContain("OPS-91");
     expect(frame).not.toContain("OLD-2");
+    setup.mockInput.pressArrow("up");
     setup.mockInput.pressEnter();
     await setup.renderOnce();
     expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Review @OPS-91");
@@ -339,7 +346,7 @@ describe("OpenTUI shell", () => {
       sprint: undefined,
     });
     expect(dashboard.workspace.query.view).toBe(View.All);
-    expect(dashboard.workspace.issues.map(({ key }) => key)).toEqual(["EX-1", "EX-2"]);
+    expect(dashboard.workspace.issues.map(({ key }) => key)).toEqual(local);
   });
 
   test("the Agent box takes all typing, grows with lines, sends on Enter; Esc interrupts", async () => {
