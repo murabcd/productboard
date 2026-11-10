@@ -47,8 +47,9 @@ ln -s "$PWD/bin/board" ~/.local/bin/board
 - Read comments and preview image attachments in the terminal.
 - Ask Agent about a sprint from its page in the sidebar.
 
-Press `1` for Search, `2` for Inbox, `3` for My issues, `4` for Agent,
-`5` for Team focus, `6` for Sprints, or `7` for All issues.
+The dashboard opens in Inbox. Press `1` for Search, `2` for Inbox,
+`3` for My issues, `4` for Agent, `5` for Team focus, `6` for Sprints, or
+`7` for All issues.
 
 To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel
 Light**, **Vercel Dark**, or **Default**. The choice is saved for the next

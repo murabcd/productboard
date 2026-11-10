@@ -12,7 +12,7 @@ import {
 } from "./auth";
 import { JiraClient } from "./jira/client";
 import { type Credentials, JiraHttp } from "./jira/http";
-import { initialQuery, View } from "./jira/query";
+import { initialQuery, View, withView } from "./jira/query";
 import { Workspace } from "./state/workspace";
 import { clean } from "./text";
 import { Dashboard, type Opener } from "./ui/dashboard";
@@ -20,7 +20,7 @@ import { openScreen } from "./ui/screen";
 
 const USAGE = `Usage: board [--login | --agent-login | --check | --help]
 
-  board           Open the dashboard
+  board           Open the Inbox
   board --login   Save your Jira site, email and API token (token goes to Keychain)
   board --agent-login   Save the Agent provider API key to Keychain
   board --check   Check Jira access without opening the dashboard`;
@@ -69,6 +69,7 @@ async function dashboard(client: JiraClient): Promise<void> {
     appearance: { initial: config?.theme, save: rememberTheme },
   });
   try {
+    workspace.change(withView(workspace.query, View.Mentions));
     workspace.loadCatalog();
     await screen.show(board);
   } finally {

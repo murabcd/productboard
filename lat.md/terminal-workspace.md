@@ -9,6 +9,7 @@ the terminal to draw.
 The current list stays visible during refresh and on refresh failure. Earlier
 results cannot replace a new scope.
 
+Startup opens Inbox and loads mentions alongside the board catalog.
 A scope starts loading as soon as it is ready. Clearing server filters applies
 one scope change. Board and project discovery and the selected board's sprint
 catalog track their own failures and retry independently of the issue list.
