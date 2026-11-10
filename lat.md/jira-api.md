@@ -25,6 +25,10 @@ loads leave room for issue reads.
 team-wide scope. Assigned and Created match the current user against the issue's
 assignee and creator fields, respectively. The local filter searches loaded rows.
 
+Each site stores sprints in its own custom field, so [[src/jira/client.ts#JiraClient]]
+looks up the field ID once per session and asks for it with every search. Lists
+still load without sprints when that lookup fails.
+
 Mentions scans comments on recently updated issues for the current account ID.
 It requests full threads when the issue search response lacks a complete one.
 [[src/jira/today.ts#today]] groups issues by urgency, with each issue appearing

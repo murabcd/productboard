@@ -43,6 +43,20 @@ const BlockLink = z.object({
     .optional(),
 });
 
+/** One sprint as Jira returns it inside an issue's sprint field. */
+const SprintRef = z.object({ name: z.string(), state: z.string().optional() });
+const SprintRefs = z.array(SprintRef);
+
+/** Jira's field catalog; the sprint field's ID differs between sites. */
+export const RawFields = z.array(
+  z.object({ id: z.string(), schema: z.object({ custom: z.string().optional() }).optional() }),
+);
+const SPRINT_FIELD_TYPE = "com.pyxis.greenhopper.jira:gh-sprint";
+
+/** The ID of the sprint field, e.g. "customfield_10020", when the site has one. */
+export const sprintFieldId = (fields: z.infer<typeof RawFields>): string | undefined =>
+  fields.find((field) => field.schema?.custom === SPRINT_FIELD_TYPE)?.id;
+
 export const RawIssue = z.object({
   key: z.string(),
   fields: z.object({
@@ -57,9 +71,27 @@ export const RawIssue = z.object({
     updated: z.string().optional(),
     duedate: z.string().nullish(),
     issuelinks: z.array(BlockLink).optional(),
+    /** Filled from the site's sprint field by `withSprints`. */
+    sprints: SprintRefs.optional(),
   }),
 });
 export type RawIssue = z.infer<typeof RawIssue>;
+
+/** An issue with the site's sprint field moved to `sprints`. The field is
+ * validated here; a value Jira shapes differently means no sprint, not an error. */
+export function withSprints(raw: RawIssue, value: unknown): RawIssue {
+  const sprints = SprintRefs.safeParse(value);
+  return sprints.success ? { ...raw, fields: { ...raw.fields, sprints: sprints.data } } : raw;
+}
+
+/** The sprint an issue is in now: the active one, else the next planned one,
+ * else the last it was in. */
+function currentSprint(sprints: z.infer<typeof SprintRefs> | undefined): string {
+  if (!sprints?.length) return "";
+  const sprint =
+    sprints.find((s) => s.state === "active") ?? sprints.find((s) => s.state === "future") ?? sprints.at(-1);
+  return clean(sprint?.name ?? "");
+}
 
 /** The first still-open issue that blocks this one, if any. */
 export function openBlocker(raw: RawIssue): string | undefined {
@@ -74,8 +106,12 @@ export function jiraTime(value: string): number {
   return Date.parse(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
 }
 
+/** Search results keep fields the schema doesn't name, such as the site's
+ * sprint field, until `withSprints` reads them. */
+const SearchIssue = RawIssue.extend({ fields: RawIssue.shape.fields.catchall(z.unknown()) });
+
 export const SearchPage = z.object({
-  issues: z.array(RawIssue),
+  issues: z.array(SearchIssue),
   nextPageToken: z.string().nullish(),
   isLast: z.boolean().optional(),
 });
@@ -146,6 +182,7 @@ export function toIssue(raw: RawIssue): Issue {
     priority: clean(fields.priority?.name ?? ""),
     assigneeId: fields.assignee?.accountId ?? "",
     assignee: fields.assignee ? clean(fields.assignee.displayName) : "Unassigned",
+    sprint: currentSprint(fields.sprints),
   };
 }
 

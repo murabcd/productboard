@@ -8,11 +8,20 @@ const credentials = { site: "example.atlassian.net", email: "me@example.com", to
 
 type Route = (url: URL, body: Record<string, unknown> | undefined) => Response | Promise<Response>;
 
-/** A fake Jira: records requests and answers them through `route`. */
+const SPRINT_FIELD = "customfield_10020";
+
+/** A fake Jira: records requests and answers them through `route`. The field
+ * catalog, read once for the sprint field, is answered here and not recorded. */
 function fakeJira(route: Route) {
   const requests: { path: string; body?: Record<string, unknown> }[] = [];
   const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
+    if (url.pathname === "/rest/api/3/field") {
+      return json([
+        { id: "summary" },
+        { id: SPRINT_FIELD, schema: { custom: "com.pyxis.greenhopper.jira:gh-sprint" } },
+      ]);
+    }
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
     requests.push({ path: url.pathname, body });
     return route(url, body);
@@ -55,9 +64,10 @@ describe("HTTP", () => {
     await Bun.sleep(0);
     void client.search("project = EX", [], 10);
     await Bun.sleep(0);
-    // Four sprint lists run; the search starts at once instead of queueing behind six more.
+    // Four sprint lists run; the search (first looking up the sprint field)
+    // starts at once instead of queueing behind six more.
     expect(started.filter((path) => path.includes("/sprint")).length).toBe(4);
-    expect(started.at(-1)).toBe("/rest/api/3/search/jql");
+    expect(started.at(-1)).toBe("/rest/api/3/field");
     for (const release of held.splice(0)) release();
   });
 
@@ -130,7 +140,10 @@ describe("search", () => {
     const snapshot = await client.snapshot({ ...initialQuery, view: View.All, limit: 2 });
     expect(snapshot.issues.map((i) => i.key)).toEqual(["EX-1", "EX-2"]);
     expect(snapshot.more).toBe(true);
-    expect(requests[0]?.body).toMatchObject({ maxResults: 3, fields: ["summary", "status", "priority", "assignee"] });
+    expect(requests[0]?.body).toMatchObject({
+      maxResults: 3,
+      fields: ["summary", "status", "priority", "assignee", SPRINT_FIELD],
+    });
   });
 
   test("a repeated page token cannot loop forever", async () => {
@@ -208,5 +221,43 @@ describe("boards and sprints", () => {
     ]);
     await expect(client.sprints("9")).rejects.toThrow(JiraError);
     await expect(client.sprints("9")).rejects.toThrow("doesn't use sprints");
+  });
+});
+
+describe("sprints", () => {
+  const issueIn = (key: string, sprints: unknown) => {
+    const raw = rawIssue(key);
+    return { ...raw, fields: { ...raw.fields, [SPRINT_FIELD]: sprints } };
+  };
+
+  test("each issue shows its active sprint, else the next one, else its last", async () => {
+    const { client, requests } = fakeJira(() =>
+      json({
+        issues: [
+          issueIn("EX-1", [
+            { name: "Sprint 1", state: "closed" },
+            { name: "Sprint 2", state: "active" },
+          ]),
+          issueIn("EX-2", [{ name: "Sprint 3", state: "future" }]),
+          issueIn("EX-3", [{ name: "Sprint 1", state: "closed" }]),
+          issueIn("EX-4", null),
+          issueIn("EX-5", "unexpected"),
+        ],
+        isLast: true,
+      }),
+    );
+    const snapshot = await client.snapshot(withView(initialQuery, View.All));
+    expect(snapshot.issues.map((issue) => issue.sprint)).toEqual(["Sprint 2", "Sprint 3", "Sprint 1", "", ""]);
+    expect(requests[0]?.body?.fields).toContain(SPRINT_FIELD);
+  });
+
+  test("a failed field lookup still loads the list, without sprints", async () => {
+    const fetcher = (async (input: string | URL | Request) => {
+      if (new URL(String(input)).pathname === "/rest/api/3/field") return json({}, { status: 403 });
+      return json({ issues: [rawIssue("EX-1")], isLast: true });
+    }) as typeof fetch;
+    const client = new JiraClient(new JiraHttp(credentials, fetcher, async () => {}));
+    const issues = await client.search("project = EX", [], 10);
+    expect(issues.map((issue) => issue.key)).toEqual(["EX-1"]);
   });
 });

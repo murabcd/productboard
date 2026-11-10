@@ -305,13 +305,21 @@ describe("frame", () => {
     work.snapshot = {
       ...base,
       issues: [
-        { ...stuck, status: "IN REVIEW", assignee: "Cameron", section: "Stuck", reason: "7d no update" },
+        {
+          ...stuck,
+          status: "IN REVIEW",
+          assignee: "Cameron",
+          sprint: "Platform Team - Sprint 2",
+          section: "Stuck",
+          reason: "7d no update",
+        },
         { ...mine, status: "Ready for dev", assignee: "Avery", section: "Assigned to you", reason: "updated 3h ago" },
       ],
     };
     const canvas = frame(dashboard, 120, 24);
     const rows = [7, 10].map((y) => canvas.text(y));
-    expect(rows[0]).toMatch(/EX-1 +◑ Рабочая задача +7d no update +Cameron +In review/);
+    expect(rows[0]).toMatch(/EX-1 +◑ Рабочая задача +7d no update +Cameron +Sprint 2 +In review/);
+    expect(rows[0]).not.toContain("Platform Team");
     expect(rows[1]).toMatch(/EX-2 +○ Рабочая задача +updated 3h ago +Ready for dev/);
     expect(rows[1]).not.toContain("Avery");
   });

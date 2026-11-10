@@ -11,17 +11,20 @@ import {
   pageOf,
   RawBoard,
   RawDetail,
+  RawFields,
   type RawIssue,
   RawProject,
   RawSprint,
   SearchPage,
   sortSprints,
+  sprintFieldId,
   toBoardChoice,
   toComments,
   toDetail,
   toIssue,
   toProjectChoice,
   toSprint,
+  withSprints,
 } from "./parse";
 import { type IssueQuery, jql, View } from "./query";
 import { today } from "./today";
@@ -46,6 +49,7 @@ const SEARCH_PAGE = 100;
 
 export class JiraClient {
   private me: Promise<Myself> | undefined;
+  private sprintField: Promise<string | undefined> | undefined;
 
   constructor(private readonly http: JiraHttp) {}
 
@@ -62,8 +66,20 @@ export class JiraClient {
     return this.me;
   }
 
-  /** Up to `limit` issues for JQL, following Jira's page tokens. */
+  /** The site's sprint field, looked up once per session. Lists still load
+   * without sprints when the lookup fails; the next search tries again. */
+  private sprintFieldId(): Promise<string | undefined> {
+    this.sprintField ??= this.http.get("/rest/api/3/field", {}, RawFields, "field list").then(sprintFieldId, () => {
+      this.sprintField = undefined;
+      return undefined;
+    });
+    return this.sprintField;
+  }
+
+  /** Up to `limit` issues for JQL, following Jira's page tokens. Each issue
+   * also carries its sprints. */
   async search(query: string, fields: string[], limit: number): Promise<RawIssue[]> {
+    const sprintField = await this.sprintFieldId();
     const issues: RawIssue[] = [];
     const seen = new Set<string>();
     let token: string | undefined;
@@ -72,14 +88,14 @@ export class JiraClient {
         "/rest/api/3/search/jql",
         {
           jql: query,
-          fields,
+          fields: sprintField ? [...fields, sprintField] : fields,
           maxResults: Math.min(SEARCH_PAGE, limit - issues.length),
           ...(token ? { nextPageToken: token } : {}),
         },
         SearchPage,
         "issue list",
       );
-      issues.push(...page.issues);
+      issues.push(...page.issues.map((raw) => (sprintField ? withSprints(raw, raw.fields[sprintField]) : raw)));
       const next = page.nextPageToken ?? undefined;
       if (!next || page.isLast || page.issues.length === 0 || seen.has(next)) break;
       seen.add(next);

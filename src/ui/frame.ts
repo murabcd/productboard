@@ -161,8 +161,12 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
       x += columns.reason;
     }
     if (columns.person) {
-      if (issue.section !== YOURS) canvas.put(y, x, issue.assignee, quiet, columns.person - 1);
+      if (issue.section !== YOURS) canvas.put(y, x, issue.assignee, quiet, columns.person - 2);
       x += columns.person;
+    }
+    if (columns.sprint) {
+      canvas.put(y, x, sprintLabel(issue.sprint), quiet, columns.sprint - 2);
+      x += columns.sprint;
     }
     if (columns.status) {
       canvas.put(y, x, statusLabel(issue.status), active ? "selection" : statusStyle(issue), columns.status);
@@ -189,6 +193,7 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
         selected.key,
         statusLabel(selected.status),
         selected.assignee,
+        selected.sprint,
         selected.priority,
         selected.reason,
       ].filter(Boolean);
@@ -212,19 +217,30 @@ function rowColumns(d: Dashboard, issues: Issue[], width: number) {
   const view = d.workspace.query.view;
   // Status headings already name each row's status.
   const statusHeadings = d.grouping === "status" && view !== View.Today && view !== View.Mentions;
+  // Each column is as wide as its longest value on screen, up to a cap, plus a gap.
+  const fit = (cap: number, text: (issue: Issue) => string) =>
+    Math.min(cap, Math.max(0, ...issues.map((issue) => cells(text(issue))))) + 2;
+  const fitOrNone = (cap: number, text: (issue: Issue) => string) =>
+    issues.some((issue) => text(issue)) ? fit(cap, text) : 0;
   const wanted = {
-    status: statusHeadings ? 0 : Math.min(18, Math.max(...issues.map((i) => cells(statusLabel(i.status))), 0) + 1),
-    reason: Math.min(30, Math.max(0, ...issues.map((issue) => cells(d.note(issue)) + 2))),
+    status: statusHeadings ? 0 : fit(18, (i) => statusLabel(i.status)) - 1,
+    reason: fitOrNone(28, (i) => d.note(i)),
     // Assigned is all yours; assignee grouping puts names in the headings.
-    person: view === View.Mine || d.grouping === "assignee" ? 0 : 18,
+    person: view === View.Mine || d.grouping === "assignee" ? 0 : fit(18, (i) => i.assignee),
+    // Every row of the Sprints view is in the chosen sprint.
+    sprint: view === View.Sprint ? 0 : fitOrNone(16, (i) => sprintLabel(i.sprint)),
   };
   const fixed = 6 + key + 2 + 2 + 2;
-  const room = (c: typeof wanted) => width - 2 - fixed - c.status - c.reason - c.person;
+  const room = (c: typeof wanted) => width - 2 - fixed - c.status - c.reason - c.person - c.sprint;
   const MIN_TITLE = 36;
   // The status icon still shows the stage once the status text is gone.
-  for (const drop of ["person", "status", "reason"] as const) if (room(wanted) < MIN_TITLE) wanted[drop] = 0;
+  for (const drop of ["sprint", "person", "status", "reason"] as const) if (room(wanted) < MIN_TITLE) wanted[drop] = 0;
   return { key, ...wanted, title: Math.max(10, room(wanted)) };
 }
+
+/** A sprint without its board's prefix: "Platform Team - Sprint 2" reads "Sprint 2".
+ * The footer shows the full name. */
+const sprintLabel = (name: string): string => name.split(/\s[-–—|]\s/).at(-1) ?? name;
 
 /** Separators that end a breadcrumb prefix such as "Storefront - " or "ЛК / Рассылки - ". */
 const CRUMB = /^(.{2,48}?\s[-–—|]\s)/;

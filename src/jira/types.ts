@@ -13,6 +13,8 @@ export interface Issue {
   priority: string;
   assigneeId: string;
   assignee: string;
+  /** The sprint the issue is in now, or "" when it is in none. */
+  sprint: string;
   /** The newest comment that @-mentions you, when the view looked for one. */
   mention?: Comment;
   /** Today: the section this issue belongs to, and why, e.g. "QA Blocked". */
