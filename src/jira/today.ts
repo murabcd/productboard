@@ -3,7 +3,7 @@
 import { localDay, usDate } from "../dates";
 import type { JiraClient } from "./client";
 import { jiraTime, LIST_FIELDS, openBlocker, type RawIssue, toIssue } from "./parse";
-import type { IssueQuery } from "./query";
+import { type IssueQuery, initialQuery, jql, View } from "./query";
 import {
   BACKLOG_STATUS,
   BLOCKED_STATUS,
@@ -40,8 +40,7 @@ export function ago(ms: number, now: number): string {
 /** Why an active-sprint issue needs attention, or undefined when it doesn't.
  * Blocked names its cause when Jira knows one; a "Blocked" status alone
  * leaves the reason empty because the status column already says it. */
-function attention(raw: RawIssue, flagged: Set<string>, now: number): [TodaySection, string] | undefined {
-  const issue = toIssue(raw);
+function attention(issue: Issue, raw: RawIssue, flagged: Set<string>, now: number): [TodaySection, string] | undefined {
   const idle = raw.fields.updated ? Math.floor((now - jiraTime(raw.fields.updated)) / DAY_MS) : 0;
   // Long-untouched work would bury live problems, so it is set aside first.
   if (idle >= FORGOTTEN_DAYS) return ["Forgotten in active sprints", `${idle}d no update`];
@@ -65,9 +64,8 @@ export async function today(
   now = Date.now(),
 ): Promise<{ issues: Issue[]; more: boolean }> {
   // The project filter narrows every section, e.g. to one team's project.
-  const where = (...terms: string[]) =>
-    [...terms, ...(query.project ? [`project = ${JSON.stringify(query.project)}`] : [])].join(" AND ") +
-    " ORDER BY updated DESC";
+  const scope = { ...initialQuery, view: View.All, project: query.project };
+  const where = (...terms: string[]) => jql(scope, ...terms);
   const inSprint = ["sprint in openSprints()", "statusCategory != Done"];
   const [sprintWork, flagged, mentioned, created, assigned] = await Promise.all([
     source.search(where(...inSprint), SPRINT_FIELDS, query.limit + 1),
@@ -92,8 +90,9 @@ export async function today(
   const flaggedKeys = new Set(flagged.map((raw) => raw.key));
   const updated = new Map<string, string>();
   for (const raw of sprintWork.slice(0, query.limit)) {
-    const found = attention(raw, flaggedKeys, now);
-    if (found) place(found[0], toIssue(raw), found[1]);
+    const issue = toIssue(raw);
+    const found = attention(issue, raw, flaggedKeys, now);
+    if (found) place(found[0], issue, found[1]);
     updated.set(raw.key, raw.fields.updated ?? "");
   }
   // Idle work reads oldest first; every other section keeps the newest first.

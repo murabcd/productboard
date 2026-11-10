@@ -37,8 +37,17 @@ export type DocBlock =
   /** Preformatted text, shown line by line without reflowing. */
   | { kind: "pre"; text: string };
 
-export const textBlock = (text: string, style: SpanStyle = "plain", extra: Partial<DocBlock> = {}): DocBlock =>
-  ({ kind: "text", spans: [{ text, style }], ...extra }) as DocBlock;
+type TextBlock = Extract<DocBlock, { kind: "text" }>;
+
+export const textBlock = (
+  text: string,
+  style: SpanStyle = "plain",
+  extra: Omit<TextBlock, "kind" | "spans"> = {},
+): TextBlock => ({
+  kind: "text",
+  spans: [{ text, style }],
+  ...extra,
+});
 
 /** The parts of a Jira document (ADF) node this reader uses. Every field is
  * optional and checked where it is read, since ADF keeps adding node types. */
