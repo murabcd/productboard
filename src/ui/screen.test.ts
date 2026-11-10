@@ -48,7 +48,7 @@ describe("OpenTUI shell", () => {
     expect(setup.captureCharFrame()).toMatch(/› EX-1/);
     await setup.mockInput.pressArrow("down");
     await setup.renderOnce();
-    expect(dashboard.selected()?.key).toBe("EX-2");
+    expect(dashboard.list.selected?.key).toBe("EX-2");
     expect(setup.captureCharFrame()).toMatch(/› EX-2/);
   });
 
@@ -56,10 +56,10 @@ describe("OpenTUI shell", () => {
     const { setup, dashboard } = await start();
     await setup.mockMouse.click(30, 8); // EX-2's row
     await setup.renderOnce();
-    expect(dashboard.selected()?.key).toBe("EX-2");
+    expect(dashboard.list.selected?.key).toBe("EX-2");
     await setup.mockMouse.scroll(30, 8, "up");
     await setup.renderOnce();
-    expect(dashboard.selected()?.key).toBe("EX-1");
+    expect(dashboard.list.selected?.key).toBe("EX-1");
     await setup.mockMouse.click(6, 3); // My issues in the sidebar
     expect(dashboard.workspace.query.view).toBe(View.Mine);
   });
@@ -71,17 +71,17 @@ describe("OpenTUI shell", () => {
     expect(dashboard.peek?.issue.key).toBe("EX-1");
     await setup.mockMouse.scroll(120, 12, "down"); // inside the peek panel
     await setup.renderOnce();
-    expect(dashboard.selected()?.key).toBe("EX-1");
+    expect(dashboard.list.selected?.key).toBe("EX-1");
     await setup.mockMouse.scroll(40, 7, "down"); // over the list
     await setup.renderOnce();
-    expect(dashboard.selected()?.key).toBe("EX-2");
+    expect(dashboard.list.selected?.key).toBe("EX-2");
   });
 
   test("search typing and pasting go to the search box", async () => {
     const { setup, dashboard } = await start();
     await setup.mockInput.typeText("/ex");
     await settle();
-    expect(dashboard.search).toBe("ex");
+    expect(dashboard.list.search).toBe("ex");
   });
 
   test("the last tab stays visible and clickable at the minimum pane width", async () => {

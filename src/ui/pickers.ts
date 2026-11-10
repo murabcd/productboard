@@ -222,7 +222,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
         item("Project", query.project || "Any project", () => d.openPicker("project")),
         item("Assignee", person, () => d.openPicker("assignee")),
         item("Status", STATUS_LABELS[query.status], () => d.openPicker("status")),
-        item("Filter loaded issues", d.search ? `“${d.search}”` : "Type to narrow the list", () => {
+        item("Filter loaded issues", d.list.search ? `“${d.list.search}”` : "Type to narrow the list", () => {
           d.searching = true;
         }),
         item("Clear filters", active ? `${active} active` : "None active", () => d.clearFilters()),
@@ -232,11 +232,11 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   display: {
     title: "Display",
     items: (d) => [
-      item("Group by status", "Blocked, in progress, review, done", () => d.setGrouping("status"), {
-        current: d.grouping === "status",
+      item("Group by status", "Blocked, in progress, review, done", () => d.list.groupBy("status"), {
+        current: d.list.grouping === "status",
       }),
-      item("Group by assignee", "One group per person", () => d.setGrouping("assignee"), {
-        current: d.grouping === "assignee",
+      item("Group by assignee", "One group per person", () => d.list.groupBy("assignee"), {
+        current: d.list.grouping === "assignee",
       }),
     ],
   },

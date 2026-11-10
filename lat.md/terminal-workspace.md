@@ -43,6 +43,12 @@ active filters, and page actions on the right.
 sprints, filters, models, the command palette and the rest. Each item carries
 the action it runs, so choosing one just runs it.
 
+[[src/ui/issue-list.ts#IssueList]] owns the projection for grouping, folded
+rows, selected issue identity, and scrolling. Paging uses display rows so
+group headings count against the same capacity the frame draws. The frame
+uses that projection for the visible rows and issue count. This keeps
+selection and viewport changes together across filtering and refresh.
+
 Status groups are workflow stages from [[src/ui/status.ts#stage]]. Rows show
 the key, the title, then reason, assignee, sprint and priority columns. A
 column is left out when the view or headings already say the same thing.

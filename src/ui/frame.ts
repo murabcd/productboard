@@ -18,7 +18,6 @@ import {
   BOX_ROWS,
   FOOTER_ROWS,
   LIST_TOP,
-  listRows,
   MIN_HEIGHT,
   MIN_WIDTH,
   modalRows,
@@ -156,7 +155,6 @@ function drawFooter(
 function drawList(canvas: Canvas, d: Dashboard): void {
   const { height } = canvas;
   const work = d.workspace;
-  const selected = d.selected();
   const peek = d.peek;
   const width = peek ? canvas.width - peekWidth(canvas.width) : canvas.width;
   const box = d.searchBox();
@@ -169,27 +167,12 @@ function drawList(canvas: Canvas, d: Dashboard): void {
     canvas.mark(y, 2, width - 4, { kind: "box" });
   }
   const top = box ? LIST_TOP + BOX_ROWS : LIST_TOP;
-  type Heading = [label: string, count: number, glyph: string, glyphStyle: Style];
-  type Row = { issue: Issue } | { heading: Heading } | { text: string };
-  const rows: Row[] = [];
-  for (const [label, issues, glyph, glyphStyle] of d.groups()) {
-    rows.push({ heading: [label, issues.length, glyph, glyphStyle] });
-    if (!d.collapsed.has(label)) for (const issue of issues) rows.push({ issue });
-  }
-  if (rows.length === 0) rows.push({ text: emptyText(d) });
-  const available = listRows(height, box !== null);
-  const selectedRow = Math.max(
-    0,
-    rows.findIndex((row) => "issue" in row && row.issue.key === selected?.key),
-  );
-  if (selectedRow < d.offset) d.offset = Math.max(0, selectedRow - 1);
-  if (selectedRow >= d.offset + available) d.offset = selectedRow - available + 1;
-  d.offset = Math.min(d.offset, Math.max(0, rows.length - available));
-  const shownRows = rows.slice(d.offset, d.offset + available);
+  const { rows: shownRows, selected, count: shown } = d.list.window(d.listCapacity());
+  if (!shownRows.length) canvas.put(top, 4, emptyText(d), "mutedBold", width - 6);
   const shownIssues = shownRows.flatMap((row) => ("issue" in row ? [row.issue] : []));
   const columns = rowColumns(d, shownIssues, width);
   // Rows carry a status icon unless status headings already show it.
-  const icons = !(d.grouping === "status" && work.query.view !== View.Today && work.query.view !== View.Mentions);
+  const icons = !(d.list.grouping === "status" && work.query.view !== View.Today && work.query.view !== View.Mentions);
 
   if (shownIssues.length) {
     const y = top - 1;
@@ -208,16 +191,11 @@ function drawList(canvas: Canvas, d: Dashboard): void {
 
   shownRows.forEach((row, i) => {
     const y = top + i;
-    if ("text" in row) {
-      canvas.put(y, 4, row.text, "mutedBold", width - 6);
-      return;
-    }
-    if ("heading" in row) {
-      const [label, count, glyph, glyphStyle] = row.heading;
-      const folded = d.collapsed.has(label);
+    if (!("issue" in row)) {
+      const { label, count, icon, style, folded } = row;
       const room = width - 14;
       canvas.paint(y, 1, width - 2, "raised");
-      canvas.put(y, 2, glyph, glyphStyle);
+      canvas.put(y, 2, icon, style);
       canvas.put(y, 4, label, "accentBold", room);
       canvas.put(y, 5 + Math.min(cells(label), room), `${count} ${folded ? "▸" : "▾"}`, "muted");
       canvas.mark(y, 1, width - 2, { kind: "group", label });
@@ -249,7 +227,6 @@ function drawList(canvas: Canvas, d: Dashboard): void {
 
   if (peek) drawPeek(canvas, peek, width, top - 1, canvas.width - width, height - 1);
 
-  const shown = d.visible().length;
   const total = work.issues.length;
   let count = `${shown} ${shown === 1 ? "issue" : "issues"}`;
   if (shown !== total) count = `${shown} of ${total} issues`;
@@ -270,7 +247,7 @@ function emptyText(d: Dashboard): string {
   if (!work.current && work.pending)
     return work.query.view === View.Mentions ? "Looking for mentions…" : "Loading issues…";
   if (work.error) return "Could not load issues · r retry";
-  return d.search || filterChips(d).length
+  return d.list.search || filterChips(d).length
     ? "No issues match this view. Clear a filter or change the search."
     : "No issues in this view";
 }
@@ -288,7 +265,7 @@ function rowColumns(d: Dashboard, issues: Issue[], width: number) {
   const wanted = {
     reason: fitOrNone(26, (i) => i.reason ?? ""),
     // Assigned is all yours; assignee grouping puts names in the headings.
-    person: view === View.Mine || d.grouping === "assignee" ? 0 : fit(18, (i) => i.assignee),
+    person: view === View.Mine || d.list.grouping === "assignee" ? 0 : fit(18, (i) => i.assignee),
     // Every row of the Sprints view is in the chosen sprint.
     sprint: view === View.Sprint ? 0 : fitOrNone(14, (i) => shortSprintName(i.sprint)),
   };

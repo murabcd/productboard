@@ -63,7 +63,7 @@ function setup() {
   work.query = { ...initialQuery, view: View.All };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
   const dashboard = new Dashboard(work, client, opener, () => {});
-  dashboard.height = 40;
+  dashboard.resize(120, 40);
   return { dashboard, work, client, opener, pending, downloads, source };
 }
 
@@ -104,7 +104,7 @@ describe("dashboard", () => {
     expect(work.query).toMatchObject({ view: View.Search, text: "оплата" });
     for (const key of [...text("/x"), ENTER]) dashboard.handle(key);
     dashboard.handle(ESC); // clears the filter first
-    expect(dashboard.search).toBe("");
+    expect(dashboard.list.search).toBe("");
     expect(work.query.text).toBe("оплата");
     dashboard.handle(ESC); // then the search, ready for a new one
     expect(work.query).toMatchObject({ view: View.Search, text: "" });
@@ -123,7 +123,7 @@ describe("dashboard", () => {
   test("clicks select, then open; the wheel moves and scrolls", () => {
     const { dashboard, client } = setup();
     dashboard.click({ kind: "issue", key: "EX-2" });
-    expect(dashboard.selected()?.key).toBe("EX-2");
+    expect(dashboard.list.selected?.key).toBe("EX-2");
     expect(dashboard.modal).toBeNull();
     dashboard.click({ kind: "issue", key: "EX-2" });
     expect(client.detail).toHaveBeenCalledWith("EX-2");
@@ -131,7 +131,7 @@ describe("dashboard", () => {
     expect(dashboard.modal?.scroll).toBe(3);
     dashboard.handle(ESC);
     dashboard.wheel(-1);
-    expect(dashboard.selected()?.key).toBe("EX-1");
+    expect(dashboard.list.selected?.key).toBe("EX-1");
     dashboard.click({ kind: "view", view: View.Mine });
     expect(dashboard.workspace.query.view).toBe(View.Mine);
   });
@@ -150,7 +150,7 @@ describe("dashboard", () => {
     const { dashboard, source } = setup();
     dashboard.handle({ text: "/" });
     for (const key of text("q2dn")) expect(dashboard.handle(key)).toBe(true);
-    expect(dashboard.search).toBe("q2dn");
+    expect(dashboard.list.search).toBe("q2dn");
     expect(source.snapshot).not.toHaveBeenCalled();
   });
 
@@ -230,15 +230,36 @@ describe("dashboard", () => {
     expect(dashboard.modal?.attachments.length).toBe(3);
   });
 
+  test("Page Down counts group headings and skips folded issues", () => {
+    const { dashboard, work } = setup();
+    const base = snapshot(
+      work.query,
+      Array.from({ length: 14 }, (_, i) => `EX-${i + 1}`),
+    );
+    work.snapshot = {
+      ...base,
+      issues: base.issues.map((issue, i) => ({ ...issue, assignee: `Person ${String(i + 1).padStart(2, "0")}` })),
+    };
+    dashboard.resize(120, 18);
+    dashboard.handle({ text: "g" });
+    dashboard.click({ kind: "group", label: "Person 02" });
+    expect(dashboard.list.selected?.key).toBe("EX-1");
+    dashboard.handle({ name: "pagedown" });
+    expect(dashboard.list.selected?.key).toBe("EX-6");
+    expect(frame(dashboard).text(7)).toContain("EX-6");
+    dashboard.handle({ name: "pageup" });
+    expect(dashboard.list.selected?.key).toBe("EX-1");
+  });
+
   test("a refresh keeps the selected issue when the order changes", async () => {
     const { dashboard, work, source } = setup();
-    dashboard.index = 1;
-    dashboard.selected();
+    dashboard.handle({ name: "down" });
     source.snapshot.mockImplementation(() => Promise.resolve(snapshot(work.query, ["EX-2", "EX-1"])));
     work.refresh();
     await settle();
-    expect(dashboard.selected()?.key).toBe("EX-2");
-    expect(dashboard.index).toBe(0);
+    expect(dashboard.list.selected?.key).toBe("EX-2");
+    dashboard.handle({ name: "down" });
+    expect(dashboard.list.selected?.key).toBe("EX-1");
   });
 
   test("details headings count comments that mention me", () => {
@@ -320,7 +341,7 @@ describe("concept layout", () => {
       ["In Progress", "indeterminate"],
       ["Backlog", "new"],
     ]);
-    expect(dashboard.groups().map(([label, issues]) => [label, issues.length])).toEqual([
+    expect(dashboard.list.window(30).rows.flatMap((row) => ("label" in row ? [[row.label, row.count]] : []))).toEqual([
       ["Blocked", 2],
       ["In progress", 1],
       ["In review", 1],
@@ -344,7 +365,7 @@ describe("concept layout", () => {
     expect(client.detail).toHaveBeenCalledTimes(3); // each move shows the newly selected issue
     dashboard.handle(ESC);
     expect(dashboard.peek).toBeNull();
-    dashboard.width = 80; // too narrow for a side panel: Space opens details
+    dashboard.resize(80, 30); // too narrow for a side panel: Space opens details
     dashboard.handle({ text: " " });
     expect(dashboard.modal?.issue?.key).toBe("EX-1");
   });
@@ -358,7 +379,7 @@ describe("concept layout", () => {
     let canvas = draw(dashboard, 120, 30);
     expect(canvas.text(5)).toContain("↓ more");
     dashboard.wheel(1, { kind: "peek" });
-    expect(dashboard.selected()?.key).toBe("EX-1"); // the list stays put
+    expect(dashboard.list.selected?.key).toBe("EX-1"); // the list stays put
     canvas = draw(dashboard, 120, 30);
     expect(canvas.text(5)).toContain("↑↓ more");
     expect(canvas.text(7).slice(82)).not.toContain("EX-1"); // the key scrolled out of the peek
@@ -384,10 +405,11 @@ describe("concept layout", () => {
       ["Ready for dev", "new"],
     ]);
     dashboard.click({ kind: "group", label: "Blocked" });
-    expect(dashboard.visible().map((issue) => issue.key)).toEqual(["EX-2"]);
+    expect(dashboard.list.selected?.key).toBe("EX-2");
+    expect(dashboard.list.window(30).count).toBe(1);
     expect(draw(dashboard, 120, 30).text(6)).toContain("Blocked 1 ▸");
     dashboard.click({ kind: "group", label: "Blocked" });
-    expect(dashboard.visible()).toHaveLength(2);
+    expect(dashboard.list.window(30).count).toBe(2);
   });
 
   test("number keys and Tab follow the sidebar order", () => {
@@ -557,9 +579,9 @@ describe("concept layout", () => {
     expect(dashboard.picker?.kind).toBe("display");
     dashboard.handle(ESC);
     dashboard.handle({ text: "z" }); // folds the selected issue's group
-    expect(dashboard.collapsed).toEqual(new Set(["Blocked"]));
+    expect(dashboard.list.selected?.key).toBe("EX-2");
     dashboard.handle({ text: "Z" });
-    expect(dashboard.collapsed.size).toBe(0);
+    expect(dashboard.list.window(30).count).toBe(2);
     dashboard.handle({ text: " " });
     pending[0]?.resolve(detail(Array.from({ length: 200 }, (_, n) => `word${n}`).join(" ")));
     await settle();
@@ -607,7 +629,7 @@ describe("concept layout", () => {
     dashboard.click({ kind: "action", action: "display" });
     expect(dashboard.picker?.kind).toBe("display");
     for (const key of [...text("assignee"), ENTER]) dashboard.handle(key);
-    expect(dashboard.grouping).toBe("assignee");
+    expect(dashboard.list.grouping).toBe("assignee");
   });
 });
 

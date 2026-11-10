@@ -6,8 +6,8 @@ import { type IssueQuery, STATUSES, scoped, View, withAssignee, withView } from 
 import { type Attachment, type Issue, isImage } from "../jira/types";
 import { message, type Workspace } from "../state/workspace";
 import { AgentPanel } from "./agent-panel";
-import { type Group, type Grouping, groupIssues } from "./grouping";
 import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
+import { IssueList } from "./issue-list";
 import { listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, PEEK_MIN_WIDTH, pickerRows, sidebarWidth } from "./layout";
 import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
 import { helpPanel, issuePanel, type Panel, showDetail, sprintPanel } from "./panel";
@@ -44,13 +44,10 @@ export interface SearchBox {
 }
 
 export class Dashboard {
-  index = 0;
-  offset = 0;
-  search = "";
+  readonly list: IssueList;
   searching = false;
   /** Words typed after f, not yet sent to Jira; null when not typing. */
   finding: string | null = null;
-  grouping: Grouping = "status";
   personLabel = "All people";
   picker: Picker | null = null;
   modal: Panel | null = null;
@@ -62,13 +59,10 @@ export class Dashboard {
   /** The peek panel beside the list; Space toggles it. */
   peekOpen = false;
   peek: Peek | null = null;
-  readonly collapsed = new Set<string>();
   readonly agent: AgentPanel;
   private autoSprintPicker = true;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly imageCache = new ImageCache();
-  /** The issue last shown as selected, kept when a refresh reorders the list. */
-  private selectedKey: string | undefined;
 
   constructor(
     readonly workspace: Workspace,
@@ -77,13 +71,17 @@ export class Dashboard {
     private readonly redraw: () => void,
     agentBackend?: AgentBackend,
   ) {
+    this.list = new IssueList(workspace);
     this.agent = new AgentPanel(workspace, agentBackend, redraw, () => this.update());
     workspace.subscribe(() => this.update());
   }
 
   resize(width: number, height: number): void {
+    if (width === this.width && height === this.height) return;
+    const peekFit = this.peekFits();
     this.width = width;
     this.height = height;
+    if (peekFit !== this.peekFits()) this.syncPeek();
   }
 
   get site(): string {
@@ -95,34 +93,12 @@ export class Dashboard {
     clearTimeout(this.noticeTimer);
   }
 
-  groups(): Group[] {
-    const { issues, query } = this.workspace;
-    return groupIssues(issues, query.view, this.grouping, this.search);
-  }
-
-  /** Issues the selection can reach: folded groups are skipped. */
-  visible(): Issue[] {
-    return this.groups().flatMap(([label, issues]) => (this.collapsed.has(label) ? [] : issues));
-  }
-
   /** Whether the peek panel fits beside the list; narrow panes open details instead. */
   peekFits(): boolean {
     return this.width - sidebarWidth(this.width) >= PEEK_MIN_WIDTH;
   }
 
-  selected(): Issue | undefined {
-    const issues = this.visible();
-    this.index = Math.max(0, Math.min(this.index, issues.length - 1));
-    const issue = issues[this.index];
-    this.selectedKey = issue?.key;
-    return issue;
-  }
-
   private update(): void {
-    if (this.selectedKey) {
-      const index = this.visible().findIndex((issue) => issue.key === this.selectedKey);
-      if (index >= 0) this.index = index;
-    }
     if (this.picker) {
       this.picker.choices = PICKERS[this.picker.kind].items(this);
       if (!this.picker.query) this.picker.focusCurrent();
@@ -158,18 +134,18 @@ export class Dashboard {
   }
 
   changeQuery(change: Partial<IssueQuery>): void {
-    this.resetList();
+    this.list.filter("");
     this.workspace.change(scoped(this.workspace.query, change));
   }
 
   chooseBoard(board: string): void {
-    this.resetList();
+    this.list.filter("");
     this.workspace.chooseBoard(board);
     this.openPicker("sprint");
   }
 
   chooseAssignee(assignee: string, label: string): void {
-    this.resetList();
+    this.list.filter("");
     this.personLabel = label;
     this.workspace.change(withAssignee(this.workspace.query, assignee));
   }
@@ -199,14 +175,14 @@ export class Dashboard {
         return;
       }
       case "peek": {
-        const issue = this.selected();
+        const issue = this.list.selected;
         if (!issue) return;
         if (this.peekFits()) this.peekOpen = !this.peekOpen;
         else this.openDetail(issue);
         return;
       }
       case "details": {
-        const issue = this.selected();
+        const issue = this.list.selected;
         if (issue) this.openDetail(issue);
         return;
       }
@@ -231,18 +207,12 @@ export class Dashboard {
       this.personLabel = "All people";
       this.workspace.change(withAssignee(query, ""));
     }
-    this.toTop();
+    this.list.first();
   }
 
   clearFilters(): void {
     for (const [chip] of filterChips(this)) this.removeFilter(chip);
-    this.search = "";
-  }
-
-  setGrouping(grouping: Grouping): void {
-    this.grouping = grouping;
-    this.collapsed.clear();
-    this.toTop();
+    this.list.filter("");
   }
 
   openAgent(): void {
@@ -256,7 +226,7 @@ export class Dashboard {
 
   /** Keep the peek panel on the selected issue, loading its details once. */
   private syncPeek(): void {
-    const issue = this.peekOpen && this.peekFits() ? this.selected() : undefined;
+    const issue = this.peekOpen && this.peekFits() ? this.list.selected : undefined;
     if (!issue) {
       this.peek = null;
       return;
@@ -353,7 +323,7 @@ export class Dashboard {
 
   /** Open the shown issue in Helium, or copy its link. */
   openIssue(copy: boolean): void {
-    const issue = this.modal ? this.modal.issue : this.selected();
+    const issue = this.modal ? this.modal.issue : this.list.selected;
     if (!issue) return;
     const url = `https://${this.site}/browse/${issue.key}`;
     if (copy) this.report(this.opener.copy(url), "Link copied");
@@ -391,9 +361,13 @@ export class Dashboard {
     return { kind: this.agent.tab ? "agent" : "list" };
   }
 
+  listCapacity(): number {
+    return listRows(this.height, this.searchBox() !== null);
+  }
+
   searchBox(): SearchBox | null {
     if (this.finding !== null) return { kind: "jira", text: this.finding, editing: true };
-    if (this.searching || this.search) return { kind: "filter", text: this.search, editing: this.searching };
+    if (this.searching || this.list.search) return { kind: "filter", text: this.list.search, editing: this.searching };
     if (this.workspace.query.view === View.Search)
       return { kind: "jira", text: this.workspace.query.text, editing: false };
     return null;
@@ -408,22 +382,12 @@ export class Dashboard {
     this.searching = false;
   }
 
-  resetList(): void {
-    this.search = "";
-    this.toTop();
-  }
-
-  private toTop(): void {
-    this.index = 0;
-    this.offset = 0;
-  }
-
   showView(view: View): void {
     this.agent.tab = false;
-    this.collapsed.clear();
+    this.list.unfold();
     const work = this.workspace;
     work.change(withView(work.query, view));
-    this.resetList();
+    this.list.filter("");
     if (view === View.Sprint && work.query.sprint === null) this.openPicker("sprint");
     if (view === View.Search && !work.query.text) this.finding = "";
   }
@@ -431,7 +395,7 @@ export class Dashboard {
   /** Esc on search results: clear them and type a new search, staying on the tab. */
   private clearSearch(): void {
     this.workspace.change(scoped(this.workspace.query, { text: "" }));
-    this.resetList();
+    this.list.filter("");
     this.finding = "";
   }
 
@@ -439,7 +403,7 @@ export class Dashboard {
     const { query } = this.workspace;
     const status = STATUSES[(STATUSES.indexOf(query.status) + 1) % STATUSES.length] ?? "all";
     this.workspace.change(scoped(query, { status }));
-    this.toTop();
+    this.list.first();
   }
 
   /** Route a key to the active layer; returns false to quit. */
@@ -476,7 +440,6 @@ export class Dashboard {
         // Space can't sit in a space-separated binding table.
         if (id === " ") this.runAction("peek");
         else this.listKeys.get(id)?.();
-        this.selected();
     }
     this.syncPeek();
     return true;
@@ -494,14 +457,13 @@ export class Dashboard {
   }
 
   private handleSearch(key: Key): void {
-    const edited = editLine(this.search, key, 200);
-    if (edited !== undefined) this.search = edited;
+    const edited = editLine(this.list.search, key, 200);
+    if (edited !== undefined) this.list.filter(edited);
     else if (keyId(key) === "enter" || keyId(key) === "escape") this.searching = false;
     else if (keyId(key) === "ctrl-c") {
       this.searching = false;
-      this.search = "";
+      this.list.filter("");
     }
-    this.toTop();
   }
 
   private handleFind(draft: string, key: Key): void {
@@ -511,7 +473,7 @@ export class Dashboard {
     } else if (keyId(key) === "enter" && draft.trim()) {
       this.finding = null;
       this.workspace.change(scoped(this.workspace.query, { view: View.Search, text: draft.trim() }));
-      this.resetList();
+      this.list.filter("");
     } else if (keyId(key) === "escape" || keyId(key) === "ctrl-c") {
       this.finding = null;
     }
@@ -534,9 +496,7 @@ export class Dashboard {
         this.runAction(target.action);
         return;
       case "group":
-        if (this.collapsed.has(target.label)) this.collapsed.delete(target.label);
-        else this.collapsed.add(target.label);
-        this.selected();
+        this.list.toggle(target.label);
         return;
       case "agent":
         this.agentClick(target.action);
@@ -555,13 +515,8 @@ export class Dashboard {
         return;
       case "issue": {
         // The first click selects; a click on the selected issue opens it.
-        const issues = this.visible();
-        const index = issues.findIndex((issue) => issue.key === target.key);
-        const issue = issues[index];
-        if (!issue) return;
-        if (index === this.index) this.openDetail(issue);
-        this.index = index;
-        this.selected();
+        const issue = this.list.click(target.key);
+        if (issue) this.openDetail(issue);
         return;
       }
       case "box":
@@ -620,8 +575,7 @@ export class Dashboard {
     } else if (layer.kind === "modal") {
       layer.panel.scroll = Math.max(0, layer.panel.scroll + delta * WHEEL_LINES);
     } else if (layer.kind === "list" || layer.kind === "filter" || layer.kind === "find") {
-      this.index = Math.max(0, this.index + delta);
-      this.selected();
+      this.list.move(delta);
       this.syncPeek();
     }
   }
@@ -672,21 +626,17 @@ export class Dashboard {
     // Esc steps back: first the peek, then the filter, then the Jira search.
     escape: () => {
       if (this.peekOpen) this.peekOpen = false;
-      else if (!this.search && this.workspace.query.text && this.workspace.query.view === View.Search)
+      else if (!this.list.search && this.workspace.query.text && this.workspace.query.view === View.Search)
         this.clearSearch();
-      else this.resetList();
+      else this.list.filter("");
     },
     "/": () => {
       this.searching = true;
     },
     F: () => this.runAction("filter"),
     D: () => this.runAction("display"),
-    z: () => {
-      const issue = this.selected();
-      const group = this.groups().find(([, issues]) => issue && issues.includes(issue));
-      if (group) this.collapsed.add(group[0]);
-    },
-    Z: () => this.collapsed.clear(),
+    z: () => this.list.foldSelected(),
+    Z: () => this.list.unfold(),
     "left right": () => {
       const tabs = MY_ISSUES_TABS.map(([view]) => view);
       const at = tabs.indexOf(this.workspace.query.view);
@@ -704,24 +654,12 @@ export class Dashboard {
     ...Object.fromEntries(
       NAVIGATION.map((page) => [navKey(page), () => (page.to === "agent" ? this.openAgent() : this.showView(page.to))]),
     ),
-    "j down": () => {
-      this.index += 1;
-    },
-    "k up": () => {
-      this.index -= 1;
-    },
-    pagedown: () => {
-      this.index += Math.max(1, listRows(this.height, this.searchBox() !== null) - 1);
-    },
-    pageup: () => {
-      this.index -= Math.max(1, listRows(this.height, this.searchBox() !== null) - 1);
-    },
-    home: () => {
-      this.index = 0;
-    },
-    end: () => {
-      this.index = this.visible().length - 1;
-    },
+    "j down": () => this.list.move(1),
+    "k up": () => this.list.move(-1),
+    pagedown: () => this.list.page(1, this.listCapacity()),
+    pageup: () => this.list.page(-1, this.listCapacity()),
+    home: () => this.list.first(),
+    end: () => this.list.last(),
     "enter v": () => this.runAction("details"),
     "?": () => this.runAction("help"),
     t: () => this.runAction("brief"),
@@ -733,7 +671,7 @@ export class Dashboard {
     p: () => this.openPicker("project"),
     a: () => this.openPicker("assignee"),
     d: () => this.cycleStatus(),
-    g: () => this.setGrouping(this.grouping === "status" ? "assignee" : "status"),
+    g: () => this.list.groupBy(this.list.grouping === "status" ? "assignee" : "status"),
     n: () => this.runAction("load-more"),
   });
 }
