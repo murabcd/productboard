@@ -8,7 +8,7 @@ import { message, type Workspace } from "../state/workspace";
 import { AgentPanel } from "./agent-panel";
 import { type Group, type Grouping, groupIssues } from "./grouping";
 import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
-import { listRows, modalRows, PEEK_MIN_WIDTH, pickerRows, sidebarWidth } from "./layout";
+import { listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, PEEK_MIN_WIDTH, pickerRows, sidebarWidth } from "./layout";
 import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
 import { helpPanel, issuePanel, type Panel, showDetail, sprintPanel } from "./panel";
 import type { Peek } from "./peek";
@@ -26,6 +26,8 @@ const WHEEL_LINES = 3;
 
 /** What receives input, topmost first. Prompts belong to the list screen. */
 export type Layer =
+  | { kind: "too-small" }
+  | { kind: "agent" }
   | { kind: "preview"; preview: Preview }
   | { kind: "picker"; picker: Picker }
   | { kind: "modal"; panel: Panel }
@@ -79,6 +81,11 @@ export class Dashboard {
     workspace.subscribe(() => this.update());
   }
 
+  resize(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
+  }
+
   get site(): string {
     return this.client.site;
   }
@@ -86,10 +93,6 @@ export class Dashboard {
   dispose(): void {
     this.agent.dispose();
     clearTimeout(this.noticeTimer);
-  }
-
-  agentActive(): boolean {
-    return this.agent.active(this.layer().kind === "list");
   }
 
   groups(): Group[] {
@@ -379,12 +382,13 @@ export class Dashboard {
   }
 
   layer(): Layer {
+    if (this.width < MIN_WIDTH || this.height < MIN_HEIGHT) return { kind: "too-small" };
     if (this.preview) return { kind: "preview", preview: this.preview };
     if (this.picker) return { kind: "picker", picker: this.picker };
     if (this.modal) return { kind: "modal", panel: this.modal };
     if (this.finding !== null) return { kind: "find", draft: this.finding };
     if (this.searching) return { kind: "filter" };
-    return { kind: "list" };
+    return { kind: this.agent.tab ? "agent" : "list" };
   }
 
   searchBox(): SearchBox | null {
@@ -441,20 +445,17 @@ export class Dashboard {
   /** Route a key to the active layer; returns false to quit. */
   handle(key: Key): boolean {
     const id = keyId(key);
-    if (id === "commands") {
-      this.closeLayers();
-      this.agent.tab = false;
-      this.runAction("commands");
-      return true;
-    }
-    if (this.agentActive()) {
-      // Issues Agent mentioned open from a dialog; the rest is Agent's own.
-      if (id === "agent-cited") this.openPicker("cited");
-      else this.agent.key(key, Math.max(1, this.height - 12));
-      return true;
-    }
     const layer = this.layer();
+    if (layer.kind === "too-small") return id !== "q" && id !== "ctrl-c";
+    if (id === "commands") {
+      this.click({ kind: "action", action: "commands" });
+      return true;
+    }
     switch (layer.kind) {
+      case "agent":
+        if (id === "agent-cited") this.openPicker("cited");
+        else this.agent.key(key, Math.max(1, this.height - 12));
+        return true;
       case "preview":
         this.previewKeys.get(id)?.(layer.preview);
         break;
@@ -612,13 +613,13 @@ export class Dashboard {
     const layer = this.layer();
     if (over?.kind === "peek" && this.peek && layer.kind === "list") {
       this.scrollPeek(delta);
-    } else if (this.agentActive()) {
+    } else if (layer.kind === "agent") {
       this.agent.wheel(delta);
     } else if (layer.kind === "picker") {
       layer.picker.index = Math.max(0, layer.picker.index + delta);
     } else if (layer.kind === "modal") {
       layer.panel.scroll = Math.max(0, layer.panel.scroll + delta * WHEEL_LINES);
-    } else if (layer.kind !== "preview") {
+    } else if (layer.kind === "list" || layer.kind === "filter" || layer.kind === "find") {
       this.index = Math.max(0, this.index + delta);
       this.selected();
       this.syncPeek();

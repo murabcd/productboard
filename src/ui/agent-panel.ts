@@ -47,11 +47,6 @@ export class AgentPanel {
     return chat;
   }
 
-  /** Whether Agent takes input: its page is shown with nothing open over it. */
-  active(listShown: boolean): boolean {
-    return this.tab && listShown;
-  }
-
   get current(): AgentChoice | undefined {
     return this.backend?.current;
   }

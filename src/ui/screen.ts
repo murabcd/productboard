@@ -162,9 +162,8 @@ class DashboardView extends Renderable {
   protected override renderSelf(buffer: OptimizedBuffer): void {
     const { width, height } = buffer;
     if (this.composer.visible) this.fitComposer();
-    this.dashboard.height = height;
-    this.dashboard.width = width;
-    const canvas = frame(this.dashboard, width, height);
+    this.dashboard.resize(width, height);
+    const canvas = frame(this.dashboard);
     this.canvas = canvas;
     for (let y = 0; y < height; y++) {
       let x = 0;
@@ -241,7 +240,7 @@ class DashboardView extends Renderable {
 
   /** Keep drawing while a reply streams, once per scanner step, then stop. */
   private animate(): void {
-    if (this.animation || !this.dashboard.agentActive() || !this.dashboard.agent.chat.current.pending) return;
+    if (this.animation || !this.composer.visible || !this.dashboard.agent.chat.current.pending) return;
     this.animation = setTimeout(() => {
       this.animation = undefined;
       this.requestRender();
@@ -302,19 +301,15 @@ export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => v
   };
   renderer.keyInput.on("keypress", (key) => {
     const keys = toKeys(key);
-    // While the Agent text box has focus, it gets the typing; the dashboard
-    // keeps its global keys and stops them from reaching the box.
-    if (dashboard.agentActive()) {
-      const global = keys.filter((k) => "name" in k && COMPOSER_KEYS.has(k.name));
-      if (global.length === 0) return;
-      key.preventDefault();
-      feed(global);
-      return;
-    }
-    feed(keys);
+    const dashboardKeys =
+      dashboard.layer().kind === "agent" ? keys.filter((k) => "name" in k && COMPOSER_KEYS.has(k.name)) : keys;
+    if (dashboardKeys.length === 0) return;
+    key.preventDefault();
+    feed(dashboardKeys);
   });
   renderer.keyInput.on("paste", (event) => {
-    if (dashboard.agentActive()) return;
+    if (dashboard.layer().kind === "agent") return;
+    event.preventDefault();
     feed(textKeys(new TextDecoder().decode(event.bytes)));
   });
   renderer.requestRender();

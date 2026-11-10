@@ -32,6 +32,11 @@ const file = (id: string, filename: string, mimeType: string) => ({
   created: "",
 });
 
+function draw(dashboard: Dashboard, width: number, height: number) {
+  dashboard.resize(width, height);
+  return frame(dashboard);
+}
+
 function setup() {
   const pending: ReturnType<typeof deferred<Detail>>[] = [];
   const downloads: { id: string; reply: ReturnType<typeof deferred<Uint8Array>> }[] = [];
@@ -79,12 +84,12 @@ describe("dashboard", () => {
   test("searches type into a box above the list, like a picker", () => {
     const { dashboard } = setup();
     for (const key of text("fоплата")) dashboard.handle(key);
-    let canvas = frame(dashboard, 80, 24);
+    let canvas = draw(dashboard, 80, 24);
     expect(canvas.text(5)).toContain("Search Jira  / оплата▏");
     expect(canvas.text(24 - 1)).not.toContain("Shortcuts"); // typing a search hides the key hints
     dashboard.handle(ESC);
     dashboard.handle({ text: "/" });
-    canvas = frame(dashboard, 80, 24);
+    canvas = draw(dashboard, 80, 24);
     expect(canvas.text(5)).toContain("Filter loaded  / ▏");
     expect(canvas.text(8)).toContain("To do 2 ▾"); // the list starts below the box
     dashboard.handle(ENTER);
@@ -219,7 +224,7 @@ describe("dashboard", () => {
     await settle();
     expect(dashboard.preview?.bytes).toEqual(new Uint8Array([1]));
 
-    expect(frame(dashboard, 80, 24).text(6)).toContain("1 of 2");
+    expect(draw(dashboard, 80, 24).text(6)).toContain("1 of 2");
     dashboard.handle(ESC);
     expect(dashboard.preview).toBeNull();
     expect(dashboard.modal?.attachments.length).toBe(3);
@@ -332,7 +337,7 @@ describe("concept layout", () => {
     expect(client.detail).toHaveBeenCalledTimes(1);
     pending[0]?.resolve(detail("EX-1 description"));
     await settle();
-    expect(frame(dashboard, 120, 30).text(5)).toContain("ISSUE PEEK");
+    expect(draw(dashboard, 120, 30).text(5)).toContain("ISSUE PEEK");
     dashboard.handle({ name: "down" });
     expect(dashboard.peek?.issue.key).toBe("EX-2");
     dashboard.handle({ name: "up" });
@@ -350,11 +355,11 @@ describe("concept layout", () => {
     const words = Array.from({ length: 120 }, (_, n) => `word${n}`).join(" ");
     pending[0]?.resolve(detail(words));
     await settle();
-    let canvas = frame(dashboard, 120, 30);
+    let canvas = draw(dashboard, 120, 30);
     expect(canvas.text(5)).toContain("↓ more");
     dashboard.wheel(1, { kind: "peek" });
     expect(dashboard.selected()?.key).toBe("EX-1"); // the list stays put
-    canvas = frame(dashboard, 120, 30);
+    canvas = draw(dashboard, 120, 30);
     expect(canvas.text(5)).toContain("↑↓ more");
     expect(canvas.text(7).slice(82)).not.toContain("EX-1"); // the key scrolled out of the peek
   });
@@ -362,7 +367,7 @@ describe("concept layout", () => {
   test("active filters show beside Filter; Clear filters in its menu removes them", () => {
     const { dashboard, work } = setup();
     work.query = { ...work.query, project: "WEB", status: "open" };
-    const canvas = frame(dashboard, 120, 30);
+    const canvas = draw(dashboard, 120, 30);
     // One toolbar: filters on the left, Display on the right; no web-style × on the labels.
     expect(canvas.text(4)).toMatch(/Filter 2 ▾ +Project: WEB +Status: Open +Display ▾/);
     expect(canvas.text(4)).not.toContain("×");
@@ -380,7 +385,7 @@ describe("concept layout", () => {
     ]);
     dashboard.click({ kind: "group", label: "Blocked" });
     expect(dashboard.visible().map((issue) => issue.key)).toEqual(["EX-2"]);
-    expect(frame(dashboard, 120, 30).text(6)).toContain("Blocked 1 ▸");
+    expect(draw(dashboard, 120, 30).text(6)).toContain("Blocked 1 ▸");
     dashboard.click({ kind: "group", label: "Blocked" });
     expect(dashboard.visible()).toHaveLength(2);
   });
@@ -414,7 +419,7 @@ describe("concept layout", () => {
   test("every page has the same header: title on row 1, a description on row 2", () => {
     const { dashboard, work } = setup();
     const header = (): [string, string] => {
-      const canvas = frame(dashboard, 120, 30);
+      const canvas = draw(dashboard, 120, 30);
       return [canvas.text(1).slice(20).trim(), canvas.text(2).slice(20).trim()];
     };
     for (const page of NAVIGATION) {
@@ -430,7 +435,7 @@ describe("concept layout", () => {
   test("the Agent page shows its title once and no issue filters", () => {
     const { dashboard } = setup();
     dashboard.handle({ text: "3" });
-    const canvas = frame(dashboard, 120, 30);
+    const canvas = draw(dashboard, 120, 30);
     const rows = Array.from({ length: 29 }, (_, y) =>
       canvas
         .text(y + 1)
@@ -480,7 +485,7 @@ describe("concept layout", () => {
     dashboard.agent.chat.current.draft = "Any risks?";
     dashboard.agent.send();
     await settle();
-    const canvas = frame(dashboard, 120, 30);
+    const canvas = draw(dashboard, 120, 30);
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y).slice(20)).join("\n");
     expect(screen).toMatch(/┃ +Any risks\?/); // full width with a bar, not a right-aligned bubble
     expect(screen).toContain("Risks");
@@ -509,11 +514,11 @@ describe("concept layout", () => {
     dashboard.agent.chat.current.draft = "First?";
     dashboard.agent.send();
     await settle();
-    expect(frame(dashboard, 120, 30).text(4)).toContain("Test Model · Medium ▾");
+    expect(draw(dashboard, 120, 30).text(4)).toContain("Test Model · Medium ▾");
     dashboard.click({ kind: "action", action: "model" });
     expect(dashboard.picker?.kind).toBe("model");
     const dialog = () => {
-      const canvas = frame(dashboard, 120, 30);
+      const canvas = draw(dashboard, 120, 30);
       return Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
     };
     expect(dialog()).toContain("Loading models…");
@@ -532,7 +537,7 @@ describe("concept layout", () => {
     for (const key of [{ name: "down" } as const, ENTER]) dashboard.handle(key);
     await settle();
     expect(agent.choice).toEqual({ provider: "anthropic", model: "other-model", reasoning: "high" });
-    const canvas = frame(dashboard, 120, 30);
+    const canvas = draw(dashboard, 120, 30);
     expect(canvas.text(4)).toContain("Other Model · High ▾");
     expect(canvas.text(29)).toContain("Other Model · High");
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
@@ -558,7 +563,7 @@ describe("concept layout", () => {
     dashboard.handle({ text: " " });
     pending[0]?.resolve(detail(Array.from({ length: 200 }, (_, n) => `word${n}`).join(" ")));
     await settle();
-    frame(dashboard, 120, 30);
+    draw(dashboard, 120, 30);
     dashboard.handle({ text: "J" });
     expect(dashboard.peek?.scroll).toBe(3);
     dashboard.handle(ESC);
@@ -609,7 +614,7 @@ describe("concept layout", () => {
 describe("frame", () => {
   test("rows fit the terminal and the selection is marked", () => {
     const { dashboard } = setup();
-    const canvas = frame(dashboard, 80, 24);
+    const canvas = draw(dashboard, 80, 24);
     for (let y = 0; y < 24; y++) expect(canvas.text(y).length).toBeLessThanOrEqual(80);
     expect(canvas.text(7)).toMatch(/› EX-1/);
     expect(canvas.text(1)).toContain("All issues");
@@ -636,7 +641,7 @@ describe("frame", () => {
         { ...mine, status: "Ready for dev", assignee: "Avery", section: "Assigned to you", reason: "updated 3h ago" },
       ],
     };
-    const canvas = frame(dashboard, 138, 24);
+    const canvas = draw(dashboard, 138, 24);
     const rows = [7, 9].map((y) => canvas.text(y));
     expect(canvas.text(6)).toContain("◐ Stuck 1 ▾");
     expect(rows[0]).toMatch(/› EX-1 +Рабочая задача +7d no update +Cameron +Sprint 2/);
@@ -654,7 +659,7 @@ describe("frame", () => {
       { id: 35, name: "HR Team - Sprint 35", state: "active", start: "2026-10-20", end: "2026-11-02", goal: "" },
     ];
     dashboard.openPicker("sprint");
-    const canvas = frame(dashboard, 100, 30);
+    const canvas = draw(dashboard, 100, 30);
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
     expect(screen).toMatch(/Choose sprint +esc/);
     expect(screen).toMatch(/● HR Team - Sprint 36 +Active · Nov 3–17/);
@@ -667,6 +672,6 @@ describe("frame", () => {
 
   test("a small pane asks to be resized", () => {
     const { dashboard } = setup();
-    expect(frame(dashboard, 50, 10).text(1)).toContain("at least 60 × 18");
+    expect(draw(dashboard, 50, 10).text(1)).toContain("at least 60 × 18");
   });
 });

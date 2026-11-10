@@ -12,7 +12,7 @@ import { markdownBlocks } from "./markdown";
 export const COMPOSER_MAX_ROWS = 6;
 
 /** The conversation and its text box, below the page header. */
-export function drawAgent(canvas: Canvas, dashboard: Dashboard): void {
+export function drawAgent(canvas: Canvas, dashboard: Dashboard, editing: boolean): void {
   const { chat, composerRows } = dashboard.agent;
   const thread = chat.current;
   const { width, height } = canvas;
@@ -29,8 +29,7 @@ export function drawAgent(canvas: Canvas, dashboard: Dashboard): void {
     canvas.put(y, left, "┃", thread.pending ? "muted" : "accent");
   }
   // A dialog over Agent takes the keys, so the text box steps aside while it is open.
-  if (dashboard.agentActive())
-    canvas.reserve("composer", { left: left + 2, top: boxTop + 1, width: room - 3, height: rows });
+  if (editing) canvas.reserve("composer", { left: left + 2, top: boxTop + 1, width: room - 3, height: rows });
 
   const bodyTop = 1;
   const available = boxTop - bodyTop - 1;

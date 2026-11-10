@@ -8,7 +8,7 @@ import { cells } from "../text";
 import { drawAgent } from "./agent";
 import { Canvas, type Style } from "./canvas";
 import { action, buttonsRight } from "./controls";
-import type { Dashboard } from "./dashboard";
+import type { Dashboard, Layer } from "./dashboard";
 import { drawDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
 import { drawHeader } from "./header";
@@ -32,20 +32,21 @@ import { filterChips } from "./pickers";
 import { currentImage, type Preview } from "./preview";
 import { priorityMark, statusIcon } from "./status";
 
-export function frame(d: Dashboard, width: number, height: number): Canvas {
+export function frame(d: Dashboard): Canvas {
+  const { width, height } = d;
+  const layer = d.layer();
   const canvas = new Canvas(width, height);
-  if (height < MIN_HEIGHT || width < MIN_WIDTH) {
+  if (layer.kind === "too-small") {
     canvas.put(1, 1, `productboard · make this pane at least ${MIN_WIDTH} × ${MIN_HEIGHT}`, "warning");
     canvas.put(3, 1, "q quit", "text");
     return canvas;
   }
   const sidebar = sidebarWidth(width);
   const content = new Canvas(width - sidebar, height);
-  drawWorkspace(content, d);
+  drawWorkspace(content, d, layer);
   canvas.paste(content, sidebar, 0);
   if (sidebar) drawSidebar(canvas, d, sidebar);
   drawTopBar(canvas, d, sidebar);
-  const layer = d.layer();
   if (layer.kind === "picker") drawDialog(canvas, d, layer.picker);
 
   return canvas;
@@ -96,15 +97,14 @@ function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
   }
 }
 
-function drawWorkspace(canvas: Canvas, d: Dashboard): void {
+function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
   const { width, height } = canvas;
   drawHeader(canvas, d);
-  const layer = d.layer();
   // A picker opens as a dialog over the page, so the page stays drawn under it.
-  if (d.agent.tab && (layer.kind === "list" || layer.kind === "picker")) {
+  if (layer.kind === "agent" || (d.agent.tab && layer.kind === "picker")) {
     // Under the shared header, where the list would start, and above the footer.
     const body = new Canvas(width, height - (LIST_TOP - 1) - FOOTER_ROWS);
-    drawAgent(body, d);
+    drawAgent(body, d, layer.kind === "agent");
     canvas.paste(body, 0, LIST_TOP - 1);
     drawAgentFooter(canvas, d);
     return;

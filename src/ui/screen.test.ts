@@ -35,7 +35,7 @@ async function start(width = 100, agent?: AgentBackend) {
     attachment: mock(() => deferred<never>().promise),
   };
   const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {}, agent);
-  setup = await createTestRenderer({ width, height: 30 });
+  setup = await createTestRenderer({ width, height: 30, exitOnCtrlC: false });
   const quit = mock(() => {});
   mount(setup.renderer, dashboard, quit);
   await setup.renderOnce();
@@ -156,6 +156,39 @@ describe("OpenTUI shell", () => {
     await settle();
     expect(dashboard.agent.chat.current.pending).toBeUndefined();
     expect(dashboard.agent.tab).toBe(true); // the first Esc only interrupts
+  });
+
+  test("the command palette opens over Agent from the shortcut and top bar", async () => {
+    const { setup, dashboard } = await start();
+    await setup.mockMouse.click(6, 4);
+    await setup.renderOnce();
+    const command = setup.captureCharFrame().split("\n")[0]?.indexOf("^K") ?? -1;
+    expect(command).toBeGreaterThan(0);
+    for (const open of [() => setup.mockInput.pressKey("k", { ctrl: true }), () => setup.mockMouse.click(command, 0)]) {
+      await open();
+      await setup.renderOnce();
+      expect(dashboard.picker?.kind).toBe("commands");
+      expect(dashboard.agent.tab).toBe(true);
+      setup.mockInput.pressEscape();
+      await Bun.sleep(30);
+      await setup.renderOnce();
+      expect(dashboard.picker).toBeNull();
+      await setup.mockInput.typeText("resumed");
+      expect(dashboard.agent.chat.current.draft.endsWith("resumed")).toBe(true);
+      dashboard.agent.chat.current.draft = "";
+      await setup.renderOnce();
+    }
+  });
+
+  test("q quits from the minimum-size screen when Agent was active", async () => {
+    const { setup, quit } = await start();
+    await setup.mockMouse.click(6, 4);
+    await setup.renderOnce();
+    setup.resize(MIN_WIDTH - 1, 15);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("q quit");
+    await setup.mockInput.typeText("q");
+    expect(quit).toHaveBeenCalledTimes(1);
   });
 
   test("q quits", async () => {

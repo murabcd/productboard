@@ -17,6 +17,12 @@ selection, and panels. [[src/ui/frame.ts#frame]] computes what to draw, and
 [[src/ui/screen.ts#mount]] connects input and drawing to OpenTUI. The CLI entry
 point restores the terminal on exit.
 
+Dashboard resolves the active input layer from the open views and the pane
+size. Rendering and the OpenTUI adapter use that layer for composer focus and
+key routing. The command palette follows the same activation path for keys and
+clicks, so dismissing it returns to the page beneath it. The minimum-size
+screen owns its quit shortcut even when Agent was active.
+
 Use [[src/text.ts]] for remote text sanitization, grapheme handling, and cell
 widths.
 
