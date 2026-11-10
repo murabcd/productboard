@@ -74,7 +74,7 @@ export class Dashboard {
 
   constructor(
     readonly workspace: Workspace,
-    private readonly client: Pick<JiraClient, "detail" | "attachment" | "site">,
+    private readonly client: Pick<JiraClient, "detail" | "attachment" | "site" | "findIssues">,
     private readonly opener: Opener,
     private readonly redraw: () => void,
     private readonly options: DashboardOptions = {},
@@ -82,7 +82,12 @@ export class Dashboard {
     this.selectedTheme = options.appearance?.initial ?? DEFAULT_THEME;
     this.list = new IssueList(workspace);
     this.images = new ImagePreviews((id) => client.attachment(id), redraw);
-    this.agent = new AgentPanel(options.agent, redraw, () => this.update());
+    this.agent = new AgentPanel(
+      options.agent,
+      redraw,
+      () => this.update(),
+      (text, signal) => client.findIssues(text, signal),
+    );
     this.details = new IssueDetails(
       (key) => client.detail(key),
       (read) => {
@@ -125,6 +130,7 @@ export class Dashboard {
     this.unsubscribe();
     this.details.dispose();
     this.images.close();
+    this.closePicker();
     this.agent.dispose();
     clearTimeout(this.noticeTimer);
   }
@@ -142,7 +148,7 @@ export class Dashboard {
 
   private refreshPicker(): void {
     const picker = this.picker;
-    if (picker) picker.replace(PICKERS[picker.kind].items(this));
+    if (picker) picker.replace(PICKERS[picker.kind].items(this, picker.query));
   }
 
   openPicker(requested: PickerKind): void {
@@ -152,14 +158,21 @@ export class Dashboard {
       if (kind === "sprint") kind = "board";
       if (kind === "sprint-filter") kind = "sprint-filter-board";
     }
+    this.closePicker();
     const source = PICKERS[kind];
-    this.picker = new Picker(kind, source.title, source.items(this), source.options?.(this));
+    this.picker = new Picker(kind, source.title, source.items(this, ""), source.options?.(this));
     source.load?.(this);
+  }
+
+  private closePicker(): void {
+    const picker = this.picker;
+    this.picker = null;
+    if (picker) PICKERS[picker.kind].close?.(this);
   }
 
   /** Close the picker and do what the chosen item does, which may open the next one. */
   private pick(item: PickerItem): void {
-    this.picker = null;
+    this.closePicker();
     item.run();
   }
 
@@ -338,7 +351,7 @@ export class Dashboard {
   /** Back to the plain list, dropping any open picker, panel or prompt. */
   private closeLayers(): void {
     this.images.close();
-    this.picker = null;
+    this.closePicker();
     this.modal = null;
     this.finding = null;
     this.searching = false;
@@ -407,9 +420,11 @@ export class Dashboard {
   }
 
   private handlePicker(picker: Picker, key: Key): void {
+    const before = picker.query;
     const picked = picker.handle(key, pickerRows(this.height));
-    if (picked === "dismiss") this.picker = null;
+    if (picked === "dismiss") this.closePicker();
     else if (picked) this.pick(picked);
+    else if (before !== picker.query) PICKERS[picker.kind].queryChanged?.(this, picker.query);
   }
 
   private handleSearch(key: Key): void {
@@ -438,7 +453,7 @@ export class Dashboard {
   click(target: Target): void {
     // A dialog takes the clicks: a choice picks, a click elsewhere closes it.
     if (this.picker && target.kind !== "choice" && target.kind !== "dialog") {
-      this.picker = null;
+      this.closePicker();
       return;
     }
     this.clickTarget(target);
@@ -461,7 +476,7 @@ export class Dashboard {
         const issue = this.agent.chat.current.issues.get(target.key);
         if (!issue) return;
         this.images.close();
-        this.picker = null;
+        this.closePicker();
         this.openDetail(issue);
         return;
       }
@@ -499,9 +514,6 @@ export class Dashboard {
         return;
       case "new":
         chat.start();
-        return;
-      case "sprint-context":
-        this.openPicker("sprint-context");
         return;
       case "previous":
       case "next":

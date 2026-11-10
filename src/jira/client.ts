@@ -26,7 +26,7 @@ import {
   toSprint,
   withSprints,
 } from "./parse";
-import { type IssueQuery, jql, View } from "./query";
+import { type IssueQuery, initialQuery, jql, View } from "./query";
 import { today } from "./today";
 import type { Choice, Detail, Issue, Sprint } from "./types";
 
@@ -111,6 +111,12 @@ export class JiraClient {
     if (query.view === View.Today) return { query, scanned: 0, ...(await today(this, query)) };
     const found = await this.search(jql(query), LIST_FIELDS, query.limit + 1);
     return { issues: found.slice(0, query.limit).map(toIssue), query, more: found.length > query.limit, scanned: 0 };
+  }
+
+  async findIssues(text: string, signal: AbortSignal): Promise<Issue[]> {
+    const query = { ...initialQuery, view: View.Search, text };
+    const found = await this.search(jql(query), LIST_FIELDS, 12, { signal });
+    return found.map(toIssue);
   }
 
   /** Issues matching the JQL whose comments @-mention you, newest mention first. */

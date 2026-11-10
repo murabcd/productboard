@@ -53,12 +53,7 @@ function agentHeader(d: Dashboard): PageHeader {
     title: AGENT.name,
     description: "Search across Jira",
     tabs: [],
-    filters: [
-      {
-        label: chat.current.sprint ? `${shortSprintName(chat.current.sprint.name)} ▾` : "+ Context ▾",
-        target: { kind: "agent", action: "sprint-context" },
-      },
-    ],
+    filters: [],
     actions,
   };
 }

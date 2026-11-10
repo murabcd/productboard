@@ -1,3 +1,4 @@
+import { draftSprint } from "../agent/draft";
 import { type AgentModel, modelName, PROVIDER_NAMES, REASONING_NAMES } from "../agent/models";
 import { REASONING_LEVELS, type Reasoning } from "../auth";
 import { isPersonal, STATUSES, type StatusFilter, View } from "../jira/query";
@@ -30,12 +31,15 @@ export function filterChips(d: Dashboard): string[] {
 
 interface PickerSource {
   title: string;
-  items(d: Dashboard): PickerItem[];
+  items(d: Dashboard, query: string): PickerItem[];
   /** Start loading what the list shows, when it isn't loaded yet. */
   load?(d: Dashboard): void;
+  queryChanged?(d: Dashboard, query: string): void;
+  close?(d: Dashboard): void;
   options?(d: Dashboard): PickerOptions;
   /** What the list says while empty: still loading, a failure, or no matches. */
   empty?(d: Dashboard): string;
+  status?(d: Dashboard): string;
 }
 
 const item = (label: string, detail: string, run: () => void, extra: Partial<PickerItem> = {}): PickerItem => ({
@@ -126,20 +130,6 @@ const SPRINT_PICKERS = {
       }
     },
   },
-  context: {
-    title: "Attach sprint context",
-    selected: (d) => d.agent.chat.current.sprint?.id ?? null,
-    choose: (d, sprint) => {
-      d.agent.chat.current.sprint = sprint;
-    },
-    clear: (d) => {
-      if (d.agent.chat.current.sprint) {
-        return item("Remove sprint context", "", () => {
-          d.agent.chat.current.sprint = undefined;
-        });
-      }
-    },
-  },
 } satisfies Record<string, SprintPickerMode>;
 
 function sprintPicker({ title, selected, choose, clear }: SprintPickerMode): PickerSource {
@@ -175,6 +165,57 @@ function sprintPicker({ title, selected, choose, clear }: SprintPickerMode): Pic
   };
 }
 
+const agentContext: PickerSource = {
+  title: "Add context",
+  options: () => ({ placeholder: "Search tasks and sprints", filterChoices: false }),
+  load: ({ workspace }) => {
+    if (!workspace.board) workspace.loadCatalog();
+    else if (!workspace.sprints.length) workspace.loadSprints();
+  },
+  queryChanged: ({ agent }, query) => void agent.searchContext(query),
+  close: ({ agent }) => agent.clearContextSearch(),
+  items: ({ workspace, agent }, query) => {
+    const needle = query.trim().toLocaleLowerCase();
+    const current = draftSprint(agent.chat.current.draft)?.id;
+    const matches = (text: string) => text.toLocaleLowerCase().includes(needle);
+    const sprints = workspace.sprints.filter(({ name }) => matches(name)).slice(0, needle ? 12 : 4);
+    const issues = new Map(
+      workspace.issues.filter(({ key, summary }) => matches(`${key} ${summary}`)).map((issue) => [issue.key, issue]),
+    );
+    const search = agent.contextSearch;
+    if (search?.kind === "results") {
+      for (const issue of search.issues) issues.set(issue.key, issue);
+    }
+    const tasks = Array.from(issues.values()).slice(0, needle ? 12 : 4);
+    return [
+      ...sprints.map((sprint) => ({
+        ...sprintChoice(sprint),
+        group: "Sprints",
+        current: sprint.id === current,
+        run: () => agent.attachReference?.({ kind: "sprint", sprint: { id: sprint.id, name: sprint.name } }),
+      })),
+      ...tasks.map((issue) =>
+        item(
+          `${issue.key}  ${issue.summary}`,
+          issue.status,
+          () => agent.attachReference?.({ kind: "issue", key: issue.key }),
+          {
+            value: issue.key,
+            group: "Tasks",
+          },
+        ),
+      ),
+    ];
+  },
+  empty: ({ workspace }) => catalogStatus(workspace.catalogError, workspace.sprintsPending || workspace.catalogPending),
+  status: ({ agent }) => {
+    const search = agent.contextSearch;
+    if (search?.kind === "pending") return "Searching Jira…";
+    if (search?.kind === "error") return `Jira search failed: ${search.message}`;
+    return "";
+  },
+};
+
 function commandItems(d: Dashboard): PickerItem[] {
   const { current } = d.agent;
   const page = { group: "Pages" };
@@ -185,7 +226,7 @@ function commandItems(d: Dashboard): PickerItem[] {
     ),
     item("Go to Created", "My issues tab", () => d.showView(View.Created), page),
     ...(d.agent.tab
-      ? [item("Attach sprint context", "Next message", () => d.openPicker("sprint-context"), act)]
+      ? [item("Add context", "@", () => d.openPicker("agent-context"), act)]
       : [
           item("Filter…", "F", () => d.openPicker("filter"), act),
           item("Choose board", "b", () => d.openPicker("board"), act),
@@ -217,7 +258,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   "sprint-filter-board": boardPicker("sprint-filter"),
   sprint: sprintPicker(SPRINT_PICKERS.scope),
   "sprint-filter": sprintPicker(SPRINT_PICKERS.filter),
-  "sprint-context": sprintPicker(SPRINT_PICKERS.context),
+  "agent-context": agentContext,
   project: {
     title: "Choose project",
     items: (d) =>
@@ -265,6 +306,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       ),
   },
   model: {
+    options: () => ({ placeholder: "Search models" }),
     title: "Select model",
     items: modelItems,
     load: (d) => d.agent.loadModels(),

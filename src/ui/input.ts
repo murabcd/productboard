@@ -72,5 +72,5 @@ export type Target =
   | { kind: "choice"; value: string }
   /** The search box above the list. */
   | { kind: "box" }
-  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "sprint-context" }
+  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" }
   | { kind: "agent-cite"; key: string };

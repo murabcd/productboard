@@ -45,10 +45,13 @@ export function frame(d: Dashboard): Canvas {
   const header = pageHeader(d);
   drawHeader(content, header, sidebar ? 1 : 2);
   drawWorkspace(content, d, layer);
+  if (layer.kind === "picker") {
+    const source = PICKERS[layer.picker.kind];
+    drawDialog(content, layer.picker, source.empty?.(d) ?? "No matches", source.status?.(d));
+  }
   canvas.paste(content, sidebar, 0);
   if (sidebar) drawSidebar(canvas, d, sidebar);
   drawTopBar(canvas, d, sidebar, header);
-  if (layer.kind === "picker") drawDialog(canvas, layer.picker, PICKERS[layer.picker.kind].empty?.(d) ?? "No matches");
 
   return canvas;
 }

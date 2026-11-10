@@ -6,16 +6,16 @@ import type { Picker } from "./picker";
 /** Text starts this far in; choices keep one more cell for the ● mark. */
 const INSET = 3;
 
-export function drawDialog(canvas: Canvas, picker: Picker, emptyText: string): void {
+export function drawDialog(canvas: Canvas, picker: Picker, emptyText: string, status?: string): void {
   const shown = picker.window(pickerRows(canvas.height));
   const selected = picker.selected?.value;
   const tab = picker.tabName;
   const empty = shown.length === 0;
 
   const width = Math.min(DIALOG_WIDTH, canvas.width - 4);
-  const height = 5 + Math.max(1, shown.length) + (empty || tab ? 2 : 0) + 1;
+  const height = 5 + Math.max(1, shown.length) + (empty || tab || status ? 2 : 0) + 1;
   const left = Math.floor((canvas.width - width) / 2);
-  const top = Math.max(1, Math.floor((canvas.height - height) / 3));
+  const top = Math.floor((canvas.height - height) / 2);
   const room = width - INSET * 2;
   // Opaque: nothing from the page shows through.
   for (let y = top; y < top + height; y++) {
@@ -27,7 +27,7 @@ export function drawDialog(canvas: Canvas, picker: Picker, emptyText: string): v
   canvas.put(top + 1, left + INSET, picker.title, "title", room - 5);
   canvas.put(top + 1, left + width - INSET - 3, "esc", "muted");
   canvas.mark(top + 1, left + width - INSET - 3, 3, { kind: "dismiss" });
-  const search = picker.query ? `${picker.query}▏` : `${picker.kind === "model" ? "Search models" : "Search"}▏`;
+  const search = `${picker.query || picker.placeholder}▏`;
   canvas.put(top + 3, left + INSET, search, picker.query ? "text" : "muted", room);
 
   shown.forEach((row, i) => {
@@ -48,8 +48,8 @@ export function drawDialog(canvas: Canvas, picker: Picker, emptyText: string): v
   });
 
   const footer = top + height - 2;
-  if (empty) {
-    canvas.put(footer, left + INSET, emptyText.replaceAll("\n", " · "), "warning", room);
+  if (status || empty) {
+    canvas.put(footer, left + INSET, (status || emptyText).replaceAll("\n", " · "), status ? "muted" : "warning", room);
   } else if (tab) {
     canvas.put(footer, left + INSET, "tab", "text");
     canvas.put(footer, left + INSET + 4, `${tab} ${picker.kind}s`, "muted", room - 4);

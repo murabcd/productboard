@@ -202,6 +202,7 @@ export function textKeys(text: string): Key[] {
 export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => void): void {
   const view = new DashboardView(renderer, dashboard);
   renderer.root.add(view);
+  dashboard.agent.attachReference = (reference) => view.composer.attachReference(reference);
   const feed = (keys: Key[]) => {
     for (const next of keys) {
       if (!dashboard.handle(next)) {
@@ -214,7 +215,15 @@ export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => v
   renderer.keyInput.on("keypress", (key) => {
     const keys = toKeys(key);
     const editing = dashboard.layer().kind === "agent";
-    if (editing) view.composer.sync();
+    if (editing) {
+      view.composer.sync();
+      if (key.sequence === "@" && view.composer.canMention()) {
+        key.preventDefault();
+        dashboard.openPicker("agent-context");
+        renderer.requestRender();
+        return;
+      }
+    }
     const dashboardKeys = editing ? keys.filter((k) => "name" in k && COMPOSER_KEYS.has(k.name)) : keys;
     if (dashboardKeys.length === 0) return;
     key.preventDefault();

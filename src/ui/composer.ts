@@ -1,10 +1,10 @@
 import { type CliRenderer, TextareaRenderable } from "@opentui/core";
 import type { AgentChat } from "../agent/chat";
-import { type Draft, type DraftAttachment, draftText } from "../agent/draft";
+import { type Draft, type DraftAttachment, type DraftReference, draftText } from "../agent/draft";
 import { pastedImagePath } from "../agent/images";
+import { shortSprintName } from "../jira/types";
+import { clean } from "../text";
 import type { resolveTheme } from "./theme";
-
-const END_OF_WORD = /\S$/;
 
 export class AgentComposer extends TextareaRenderable {
   private readonly attachments = new WeakMap<object, DraftAttachment>();
@@ -25,7 +25,7 @@ export class AgentComposer extends TextareaRenderable {
       visible: false,
       wrapMode: "word",
       ...style,
-      placeholder: chat.configured ? "Message Agent…" : "Agent is not set up",
+      placeholder: chat.configured ? "Message Agent… (@ for context)" : "Agent is not set up",
       keyBindings: [
         { name: "return", action: "submit" },
         { name: "kpenter", action: "submit" },
@@ -61,14 +61,34 @@ export class AgentComposer extends TextareaRenderable {
     this.setText(draftText(thread.draft));
     let offset = 0;
     for (const part of thread.draft) {
-      if (typeof part === "string") offset += this.editBuffer.measureText(part);
-      else {
-        this.mark(part, offset);
-        offset += part.label.length;
-      }
+      const end = offset + this.editBuffer.measureText(typeof part === "string" ? part : part.label);
+      if (typeof part !== "string") this.mark(part, offset, end);
+      offset = end;
     }
     this.cursorOffset = Math.min(cursor - removed, offset);
     this.updating = false;
+  }
+
+  canMention(): boolean {
+    const before = this.getTextRange(0, this.cursorOffset);
+    return !before || before.trimEnd() !== before;
+  }
+
+  attachReference(reference: DraftReference): void {
+    this.sync();
+    if (reference.kind === "sprint") {
+      const previous = this.extmarks.getAll().find(({ data }) => this.markedAttachment(data)?.kind === "sprint");
+      if (previous) {
+        const cursor = this.cursorOffset;
+        this.updating = true;
+        this.setSelection(previous.start, previous.end);
+        this.deleteSelection();
+        this.cursorOffset = cursor - Math.max(0, Math.min(cursor, previous.end) - previous.start);
+      }
+    }
+    const spacer = this.canMention() ? "" : " ";
+    const name = reference.kind === "sprint" ? clean(shortSprintName(reference.sprint.name)) : reference.key;
+    this.insert({ ...reference, label: `${spacer}@${name}` });
   }
 
   paste(text: string): boolean {
@@ -79,7 +99,7 @@ export class AgentComposer extends TextareaRenderable {
     if (!path && (!pasted.trim() || (breaks === 0 && pasted.length <= 200))) return false;
 
     const number = ++this.attachmentNumber;
-    const spacer = END_OF_WORD.test(this.getTextRange(0, this.cursorOffset)) ? " " : "";
+    const spacer = this.canMention() ? "" : " ";
     if (path) {
       void this.chat.attachImage(path, `${spacer}[Image #${number}]`, (attachment) => this.insert(attachment));
     } else {
@@ -92,15 +112,16 @@ export class AgentComposer extends TextareaRenderable {
   private insert(attachment: DraftAttachment): void {
     this.updating = true;
     this.insertText(attachment.label);
-    this.mark(attachment, this.cursorOffset - attachment.label.length);
+    const end = this.cursorOffset;
+    this.mark(attachment, end - this.editBuffer.measureText(attachment.label), end);
     this.updating = false;
     this.save();
   }
 
-  private mark(attachment: DraftAttachment, start: number): void {
+  private mark(attachment: DraftAttachment, start: number, end: number): void {
     const ref = {};
     this.attachments.set(ref, attachment);
-    this.extmarks.create({ start, end: start + attachment.label.length, virtual: true, data: ref });
+    this.extmarks.create({ start, end, virtual: true, data: ref });
   }
 
   private markedAttachment(data: unknown): DraftAttachment | undefined {

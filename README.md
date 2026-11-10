@@ -74,9 +74,12 @@ mentioned.
 Drop an image file into the Agent composer or paste its local path. Images
 and long or multiline pastes appear inline as numbered labels. Press
 Backspace after a label to remove it. You can attach up to four PNG, JPEG, GIF,
-or WebP files, up to 3 MB each and 6 MB total. Use **+ Context** to attach a
-sprint from the current board to the next message. Without an attachment,
-Agent searches across Jira as usual.
+or WebP files, up to 3 MB each and 6 MB total.
+
+Type `@` in the composer to search tasks across Jira and sprints on the current
+board. Select a result to insert its reference at the cursor. Backspace removes
+the reference. A sprint scopes the next message, and task references give Agent
+the issue keys to look up.
 
 Agent sends your prompt and attached images to your provider when you press
 Enter. It searches Jira when the question needs issue data. Each search shares

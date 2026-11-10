@@ -10,7 +10,7 @@ import { deferred, fakeAgent, rawComment, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key } from "./input";
-import { pickerRows } from "./layout";
+import { pickerRows, sidebarWidth } from "./layout";
 import { NAVIGATION, navKey } from "./navigation";
 import { detailBlocks } from "./panel";
 import { Picker } from "./picker";
@@ -42,6 +42,7 @@ function setup() {
   const downloads: { id: string; reply: ReturnType<typeof deferred<Uint8Array>> }[] = [];
   const client = {
     site: "example.atlassian.net",
+    findIssues: mock(async () => []),
     detail: mock(() => {
       const reply = deferred<Detail>();
       pending.push(reply);
@@ -579,7 +580,7 @@ describe("concept layout", () => {
     work.query = { ...initialQuery, view: View.Sprint, sprint: 7 };
     const dashboard = new Dashboard(
       work,
-      { site: "x", detail: mock(), attachment: mock() },
+      { site: "x", detail: mock(), attachment: mock(), findIssues: mock() },
       { open: mock(), copy: mock() },
       () => {},
       { agent: fakeAgent(ask) },
@@ -608,7 +609,7 @@ describe("concept layout", () => {
     work.query = { ...initialQuery, view: View.Sprint, sprint: 7 };
     const dashboard = new Dashboard(
       work,
-      { site: "x", detail: mock(), attachment: mock() },
+      { site: "x", detail: mock(), attachment: mock(), findIssues: mock() },
       { open: mock(), copy: mock() },
       () => {},
       { agent },
@@ -686,7 +687,7 @@ describe("concept layout", () => {
     work.query = { ...initialQuery, view: View.Sprint, sprint: 7 };
     const dashboard = new Dashboard(
       work,
-      { site: "x", detail: mock(() => new Promise<never>(() => {})), attachment: mock() },
+      { site: "x", detail: mock(() => new Promise<never>(() => {})), attachment: mock(), findIssues: mock() },
       { open: mock(), copy: mock() },
       () => {},
       { agent: fakeAgent(ask) },
@@ -765,6 +766,24 @@ describe("frame", () => {
     const canvas = draw(dashboard, 100, 30);
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
     expect(screen).toMatch(/Choose sprint +esc/);
+    for (const [width, height] of [
+      [60, 18],
+      [121, 60],
+    ] as const) {
+      const centered = draw(dashboard, width, height);
+      const middle = Math.floor(height / 2);
+      const columns = Array.from({ length: width }, (_, x) => centered.targetAt(x, middle)?.kind);
+      const left = columns.indexOf("dialog");
+      const right = columns.lastIndexOf("dialog");
+      expect(left).toBeGreaterThan(sidebarWidth(width));
+      expect(Math.abs(left - sidebarWidth(width) - (width - 1 - right))).toBeLessThanOrEqual(1);
+
+      const rows = Array.from({ length: height }, (_, y) => centered.targetAt(left, y)?.kind);
+      const top = rows.indexOf("dialog");
+      const bottom = rows.lastIndexOf("dialog");
+      expect(top).toBeGreaterThan(0);
+      expect(Math.abs(top - (height - 1 - bottom))).toBeLessThanOrEqual(1);
+    }
     expect(screen).toMatch(/● HR Team - Sprint 36 +Active · Nov 3–17/);
     expect(screen).toMatch(/ HR Team - Sprint 35 +Active · Oct 20–Nov 2/);
     expect(screen).toMatch(/tab active sprints/);

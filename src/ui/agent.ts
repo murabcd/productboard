@@ -117,8 +117,6 @@ function turnRows(canvas: Canvas, turn: Turn, issues: ReadonlyMap<string, unknow
       draw(y);
     };
   rows.push(prompt(blank));
-  const context = turn.sprint?.name;
-  if (context) rows.push(prompt((y) => canvas.put(y, indent, context, "muted", room - 5)));
   for (const line of wrapSpans([{ text: turn.displayPrompt, style: "plain" }], room - 5)) {
     rows.push(prompt((y) => drawLine(canvas, y, indent, line)));
   }

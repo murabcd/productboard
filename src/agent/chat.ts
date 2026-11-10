@@ -1,11 +1,17 @@
 import type { AgentChoice } from "../auth";
-import type { Issue, Sprint } from "../jira/types";
+import type { Issue } from "../jira/types";
 import { clean } from "../text";
-import { type Draft, type DraftImage, draftImages, draftText, expandDraft } from "./draft";
+import {
+  type Draft,
+  type DraftImage,
+  draftImages,
+  draftSprint,
+  draftText,
+  expandDraft,
+  type SprintContext,
+} from "./draft";
 import { type AgentImage, MAX_IMAGES, MAX_MESSAGE_IMAGE_BYTES, readAgentImage } from "./images";
 import type { AgentModel } from "./models";
-
-type SprintContext = Pick<Sprint, "id" | "name">;
 
 export interface AgentBackend {
   /** The model and reasoning that answer, shown under each reply. */
@@ -27,7 +33,6 @@ export interface AgentBackend {
 
 export interface Turn {
   prompt: string;
-  sprint?: SprintContext;
   displayPrompt: string;
   answer: string;
   choice: AgentChoice;
@@ -43,7 +48,6 @@ interface Conversation {
   issues: Map<string, Issue>;
   pending?: AbortController;
   draft: Draft;
-  sprint?: SprintContext;
   error: string;
   scroll: number;
 }
@@ -154,7 +158,6 @@ export class AgentChat {
     const pending = new AbortController();
     const turn: Turn = {
       prompt,
-      sprint: thread.sprint,
       displayPrompt: draftText(draft).trim(),
       answer: "",
       choice: this.backend.current,
@@ -162,7 +165,6 @@ export class AgentChat {
     };
     thread.pending = pending;
     thread.draft = [];
-    thread.sprint = undefined;
     thread.error = "";
     thread.scroll = 0;
     const history = thread.turns.slice(-6);
@@ -172,7 +174,7 @@ export class AgentChat {
       const reply = this.backend.ask({
         thread: thread.id,
         prompt,
-        sprint: turn.sprint,
+        sprint: draftSprint(draft),
         images,
         signal: pending.signal,
         history,
@@ -196,7 +198,6 @@ export class AgentChat {
       else if (pending.signal.aborted || failure) {
         if (!answered) thread.turns.pop();
         if (thread.draft.length === 0) thread.draft = draft;
-        thread.sprint ??= turn.sprint;
         thread.error = pending.signal.aborted ? "Stopped." : failure;
       }
       thread.pending = undefined;

@@ -20,7 +20,7 @@ function teamFocus(issues: number) {
       reason: n === keys.length - 1 ? "updated 12d ago, blocked by EX-1" : "1d",
     })),
   };
-  const client = { site: "example.atlassian.net", detail: never, attachment: never };
+  const client = { site: "example.atlassian.net", detail: never, attachment: never, findIssues: never };
   return new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {});
 }
 

@@ -8,8 +8,9 @@ import type { AgentBackend } from "../agent/chat";
 import { draftImages, draftText } from "../agent/draft";
 import type { JiraClient } from "../jira/client";
 import { initialQuery, View } from "../jira/query";
+import type { Issue } from "../jira/types";
 import { Workspace } from "../state/workspace";
-import { deferred, fakeAgent, settle, snapshot } from "../testing";
+import { deferred, fakeAgent, issues, settle, snapshot } from "../testing";
 import { Dashboard, type DashboardOptions } from "./dashboard";
 import { MIN_WIDTH } from "./layout";
 import { mount, toKeys } from "./screen";
@@ -28,20 +29,25 @@ afterEach(async () => {
 
 async function start(
   width = 100,
-  { reads, ...options }: DashboardOptions & { reads?: Partial<Pick<JiraClient, "detail" | "attachment">> } = {},
+  {
+    reads,
+    ...options
+  }: DashboardOptions & {
+    reads?: Partial<Pick<JiraClient, "detail" | "attachment" | "findIssues">>;
+  } = {},
 ) {
-  const source = {
+  const work = new Workspace({
     snapshot: mock(() => deferred<never>().promise),
     catalog: mock(() => deferred<never>().promise),
     sprints: mock(() => deferred<never>().promise),
-  };
-  const work = new Workspace(source);
+  });
   work.query = { ...initialQuery, view: View.All };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
   const client = {
     site: "example.atlassian.net",
     detail: mock(() => deferred<never>().promise),
     attachment: mock(() => deferred<never>().promise),
+    findIssues: mock(async () => []),
     ...reads,
   };
   const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {}, options);
@@ -222,16 +228,31 @@ describe("OpenTUI shell", () => {
       dashboard.workspace.board = "1";
       dashboard.workspace.sprints = [
         { id: 31, name: "Web - Sprint 31", state: "active", start: "", end: "", goal: "" },
+        { id: 32, name: "Web - Sprint 32 結果", state: "closed", start: "", end: "", goal: "" },
       ];
       await setup.mockMouse.click(6, 6);
       await setup.renderOnce();
-      setup.mockInput.pressKey("k", { ctrl: true });
-      await setup.mockInput.typeText("attach sprint context");
-      setup.mockInput.pressEnter();
+      await setup.mockInput.pasteBracketedText("Compare 🧪 結果: ");
+      await setup.mockInput.typeText("@");
+      expect(dashboard.picker?.kind).toBe("agent-context");
+      await setup.mockInput.typeText("sprint 32");
       setup.mockInput.pressEnter();
       await setup.renderOnce();
+      expect(draftText(dashboard.agent.chat.current.draft)).toBe("Compare 🧪 結果: @Sprint 32 結果");
+      setup.mockInput.pressBackspace();
+      await settle();
+      expect(draftText(dashboard.agent.chat.current.draft)).toBe("Compare 🧪 結果: ");
 
-      await setup.mockInput.pasteBracketedText("Compare 🧪 結果: ");
+      await setup.mockInput.typeText("@sprint 32");
+      setup.mockInput.pressEnter();
+      await setup.renderOnce();
+      setup.mockInput.pressKey("k", { ctrl: true });
+      await setup.mockInput.typeText("add context");
+      setup.mockInput.pressEnter();
+      await setup.mockInput.typeText("sprint 31");
+      setup.mockInput.pressEnter();
+      await setup.renderOnce();
+      expect(draftText(dashboard.agent.chat.current.draft)).toBe("Compare 🧪 結果: @Sprint 31");
       await setup.mockInput.pasteBracketedText(path.replaceAll(" ", "\\ "));
       for (
         let attempt = 0;
@@ -243,7 +264,7 @@ describe("OpenTUI shell", () => {
       const pasted = "first $&\nsecond\nthird\nfourth\nfifth\nsixth  ";
       await setup.mockInput.pasteBracketedText(pasted);
       await setup.renderOnce();
-      expect(setup.captureCharFrame()).toContain("Compare 🧪 結果: [Image #1] [Pasted text #2 +5 lines]");
+      expect(setup.captureCharFrame()).toContain("Compare 🧪 結果: @Sprint 31 [Image #1] [Pasted text #2 +5 lines]");
       expect(setup.captureCharFrame()).not.toContain(filename);
       await setup.mockInput.pasteBracketedText("remove me\nplease");
       setup.mockInput.pressBackspace();
@@ -273,6 +294,56 @@ describe("OpenTUI shell", () => {
       await unlink(path);
       await rmdir(directory);
     }
+  });
+
+  test("Agent context searches across Jira and attaches a task without changing the workspace", async () => {
+    const ask = mock<AgentBackend["ask"]>(async () => {});
+    const firstRequest = deferred<AbortSignal>();
+    const secondRequest = deferred<void>();
+    const stale = deferred<Issue[]>();
+    const { setup, dashboard } = await start(100, {
+      agent: fakeAgent(ask),
+      reads: {
+        findIssues: async (text, signal) => {
+          if (text === "reindex") {
+            firstRequest.resolve(signal);
+            return stale.promise;
+          }
+          expect(text).toBe("incident");
+          secondRequest.resolve();
+          return issues("OPS-91");
+        },
+      },
+    });
+    await setup.mockMouse.click(6, 6);
+    await setup.renderOnce();
+    await setup.mockInput.typeText("Review @reindex");
+    const signal = await firstRequest.promise;
+    setup.mockInput.pressEscape();
+    await Bun.sleep(30);
+    await setup.renderOnce();
+    expect(signal.aborted).toBe(true);
+
+    await setup.mockInput.typeText("@incident");
+    await secondRequest.promise;
+    stale.resolve(issues("OLD-2"));
+    await settle();
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    expect(frame).toContain("OPS-91");
+    expect(frame).not.toContain("OLD-2");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(draftText(dashboard.agent.chat.current.draft)).toBe("Review @OPS-91");
+
+    setup.mockInput.pressEnter();
+    await settle();
+    expect(ask.mock.calls[0]?.[0]).toMatchObject({
+      prompt: expect.stringMatching(/^Review +OPS-91$/),
+      sprint: undefined,
+    });
+    expect(dashboard.workspace.query.view).toBe(View.All);
+    expect(dashboard.workspace.issues.map(({ key }) => key)).toEqual(["EX-1", "EX-2"]);
   });
 
   test("the Agent box takes all typing, grows with lines, sends on Enter; Esc interrupts", async () => {

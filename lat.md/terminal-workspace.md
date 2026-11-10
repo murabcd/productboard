@@ -74,8 +74,9 @@ selection and viewport changes together across filtering and refresh.
 Status groups are workflow stages from [[src/ui/status.ts#stage]]. Rows show
 the key, the title, then reason, assignee, sprint and priority columns. A
 column is left out when the view or headings already say the same thing.
-[[src/ui/dialog.ts#drawDialog]] draws each picker over the page with a search
-field and grouped choices. It marks the current choice.
+[[src/ui/dialog.ts#drawDialog]] centers each picker in the content area beside
+the sidebar. The picker has a search field and grouped choices and marks the
+current choice.
 
 [[src/ui/peek.ts#drawPeek]] shows the selected issue beside the list. The
 dashboard loads details outside rendering. [[src/ui/issue-details.ts#IssueDetails]]
@@ -112,8 +113,12 @@ stages sent images in its local just-bash sandbox.
 [[src/ui/composer.ts#AgentComposer]] maps the ordered text and attachment parts
 of a draft to OpenTUI extmarks. Pasted local image paths and long or multiline
 text appear as numbered inline tokens that can be edited as a unit. Sending
-expands pasted text and passes staged images as separate parts. A sprint attached
-from the current board applies to the next message without changing the Jira view.
+expands pasted text and passes staged images as separate parts. Typing `@` at the
+start of a word opens a centered context picker with grouped task and sprint
+results. The picker cancels its pending lookup when the query changes or it
+closes. [[src/jira/client.ts#JiraClient]] searches tasks across Jira projects.
+Sprints come from the current board. The composer inserts removable references at the cursor. Task keys are
+passed in the prompt and a sprint scopes the next message.
 
 Eve's Jira search tool calls [[src/agent/jira-search.ts#openJiraSearch]]
 over an authenticated loopback connection owned by the dashboard. The tool can

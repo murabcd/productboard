@@ -6,7 +6,7 @@ export type PickerKind =
   | "sprint-filter-board"
   | "sprint"
   | "sprint-filter"
-  | "sprint-context"
+  | "agent-context"
   | "project"
   | "assignee"
   | "status"
@@ -33,6 +33,8 @@ export interface PickerItem {
 }
 
 export interface PickerOptions {
+  placeholder?: string;
+  filterChoices?: boolean;
   /** Tab cycles these choice states; "all" shows every choice. */
   tabs?: string[];
   tab?: number;
@@ -46,6 +48,8 @@ export class Picker {
   private offset = 0;
   private readonly tabs: string[];
   private tab: number;
+  readonly placeholder: string;
+  private readonly filterChoices: boolean;
   private rows: Row[] = [];
 
   constructor(
@@ -54,6 +58,8 @@ export class Picker {
     private choices: PickerItem[],
     options: PickerOptions = {},
   ) {
+    this.placeholder = options.placeholder ?? "Search";
+    this.filterChoices = options.filterChoices ?? true;
     this.tabs = options.tabs ?? [];
     this.tab = options.tab ?? 0;
     this.rebuild();
@@ -78,7 +84,7 @@ export class Picker {
   }
 
   private rebuild(previous?: string): void {
-    const needle = this.text.toLocaleLowerCase();
+    const needle = this.filterChoices ? this.text.toLocaleLowerCase() : "";
     const tab = this.tabName;
     this.rows = [];
     let group: string | undefined;
