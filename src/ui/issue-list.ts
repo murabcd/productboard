@@ -73,6 +73,8 @@ interface Projection {
   folded: ReadonlySet<string>;
   rows: ListRow[];
   issues: IssueRow[];
+  /** Every issue in the list, folded groups included, so columns can be sized once. */
+  listed: Issue[];
 }
 
 export class IssueList {
@@ -111,9 +113,11 @@ export class IssueList {
     const selectedKey = previous?.issues[this.cursor]?.issue.key;
     const rows: ListRow[] = [];
     const issues: IssueRow[] = [];
+    const listed: Issue[] = [];
     for (const [label, members, icon, style] of groupIssues(source?.issues ?? [], view, grouping, search)) {
       const closed = folded.has(label);
       rows.push({ label, count: members.length, icon, style, folded: closed });
+      listed.push(...members);
       if (closed) continue;
       for (const issue of members) {
         const entry = { issue, group: label, row: rows.length };
@@ -123,7 +127,7 @@ export class IssueList {
     }
     const index = issues.findIndex(({ issue }) => issue.key === selectedKey);
     this.cursor = index >= 0 ? index : Math.max(0, Math.min(this.cursor, issues.length - 1));
-    this.projection = { source, view, folded, rows, issues };
+    this.projection = { source, view, folded, rows, issues, listed };
     return this.projection;
   }
 
@@ -132,10 +136,15 @@ export class IssueList {
   }
 
   window(capacity: number) {
-    const { rows, issues } = this.project();
+    const { rows, issues, listed } = this.project();
     const selected = issues[this.cursor];
     this.offset = rowOffset(this.offset, selected?.row ?? 0, rows.length, capacity);
-    return { rows: rows.slice(this.offset, this.offset + capacity), count: issues.length, selected: selected?.issue };
+    return {
+      rows: rows.slice(this.offset, this.offset + capacity),
+      count: issues.length,
+      selected: selected?.issue,
+      listed,
+    };
   }
 
   move(delta: number): void {

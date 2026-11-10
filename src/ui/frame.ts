@@ -167,10 +167,11 @@ function drawList(canvas: Canvas, d: Dashboard): void {
     canvas.mark(y, 2, width - 4, { kind: "box" });
   }
   const top = box ? LIST_TOP + BOX_ROWS : LIST_TOP;
-  const { rows: shownRows, selected, count: shown } = d.list.window(d.listCapacity());
+  const { rows: shownRows, selected, count: shown, listed } = d.list.window(d.listCapacity());
   if (!shownRows.length) canvas.put(top, 4, emptyText(d), "mutedBold", width - 6);
   const shownIssues = shownRows.flatMap((row) => ("issue" in row ? [row.issue] : []));
-  const columns = rowColumns(d, shownIssues, width);
+  // Sized from the whole list, not the rows on screen, so columns hold still while scrolling.
+  const columns = rowColumns(d, listed, width);
   // Rows carry a status icon unless status headings already show it.
   const icons = !(d.list.grouping === "status" && work.query.view !== View.Today && work.query.view !== View.Mentions);
 
@@ -257,7 +258,7 @@ function emptyText(d: Dashboard): string {
 function rowColumns(d: Dashboard, issues: Issue[], width: number) {
   const key = Math.max(7, ...issues.map((issue) => cells(issue.key)));
   const view = d.workspace.query.view;
-  // Each column is as wide as its longest value on screen, up to a cap, plus a gap.
+  // Each column is as wide as its longest value in the list, up to a cap, plus a gap.
   const fit = (cap: number, text: (issue: Issue) => string) =>
     Math.min(cap, Math.max(0, ...issues.map((issue) => cells(text(issue))))) + 2;
   const fitOrNone = (cap: number, text: (issue: Issue) => string) =>
