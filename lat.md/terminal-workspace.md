@@ -59,9 +59,14 @@ column is left out when the view or headings already say the same thing.
 field and grouped choices. It marks the current choice.
 
 [[src/ui/peek.ts#drawPeek]] shows the selected issue beside the list. The
-dashboard loads its details outside rendering. [[src/jira/adf.ts]] converts
-Jira documents to typed blocks, and [[src/ui/document.ts]] lays those blocks
-out for the available terminal width.
+dashboard loads details outside rendering. [[src/ui/issue-details.ts#IssueDetails]]
+shares one read per issue key across Peek and full details. Both views observe
+the same result while open. A retry retains the last successful details until
+a new read settles. Completed reads are held by their open views, so the
+dashboard does not keep a session-wide cache of issue details.
+
+[[src/jira/adf.ts]] converts Jira documents to typed blocks, and
+[[src/ui/document.ts]] lays those blocks out for the available terminal width.
 
 ## Agent
 

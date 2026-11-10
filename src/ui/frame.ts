@@ -25,7 +25,7 @@ import {
   sidebarWidth,
 } from "./layout";
 import { currentPage, NAVIGATION, type NavItem } from "./navigation";
-import type { Panel } from "./panel";
+import { detailBlocks, type Panel } from "./panel";
 import { drawPeek } from "./peek";
 import { filterChips, PICKERS } from "./pickers";
 import { currentImage, type Preview } from "./preview";
@@ -309,20 +309,23 @@ function statusText(d: Dashboard): [string, Style] {
 
 function drawModal(canvas: Canvas, d: Dashboard, panel: Panel): void {
   const { width, height } = canvas;
-  if (panel.issue) {
+  const textWidth = Math.max(10, width - 5);
+  let lines: ReturnType<typeof layout>;
+  if (panel.kind === "issue") {
+    const { issue } = panel;
+    const { state } = panel.read;
     canvas.put(BODY_TOP - 3, 2, "ISSUE DETAILS", "muted");
-    canvas.put(BODY_TOP - 2, 2, panel.title, "title", width - 4);
+    canvas.put(BODY_TOP - 2, 2, issue.summary, "title", width - 4);
+    canvas.put(BODY_TOP - 1, 2, `${issue.key} · ${issue.status} · ${issue.assignee}`, "accent", width - 4);
+    lines = state.data ? layoutCached(detailBlocks(state.data), textWidth) : [];
+    if (state.kind === "loading" && !state.data)
+      lines = layout([textBlock("Loading details and comments…", "muted")], textWidth);
+    if (state.kind === "error")
+      lines = [...layout([textBlock(`Could not load details: ${state.message}`, "error")], textWidth), [], ...lines];
   } else {
     canvas.put(BODY_TOP - 3, 2, panel.title, "title", width - 4);
+    lines = layoutCached(panel.body, textWidth);
   }
-  canvas.put(BODY_TOP - 1, 2, panel.subtitle, "accent", width - 4);
-  const textWidth = Math.max(10, width - 5);
-  let lines = layoutCached(panel.body, textWidth);
-  if (panel.body.length === 0) {
-    lines = layout([textBlock(panel.loading ? "Loading details and comments…" : "No details.", "muted")], textWidth);
-  }
-  if (panel.error)
-    lines = [...layout([textBlock(`Could not load details: ${panel.error}`, "error")], textWidth), [], ...lines];
   const size = modalRows(height);
   panel.scroll = Math.max(0, Math.min(panel.scroll, lines.length - size));
   lines.slice(panel.scroll, panel.scroll + size).forEach((runs, i) => {
@@ -334,8 +337,9 @@ function drawModal(canvas: Canvas, d: Dashboard, panel: Panel): void {
   });
   const last = Math.min(lines.length, panel.scroll + size);
   const hints: Hint[] = [];
-  if (panel.attachments.length) hints.push(["i", `${panel.attachments.length} attachments`]);
-  if (panel.issue) hints.push(["o", "Open in Jira"], ["y", "Copy link"]);
+  const attachments = d.attachments.length;
+  if (attachments) hints.push(["i", `${attachments} attachments`]);
+  if (panel.kind === "issue") hints.push(["o", "Open in Jira"], ["y", "Copy link"]);
   const position = lines.length > size ? `${Math.round((last / lines.length) * 100)}%` : "";
   drawFooter(canvas, d, position, hints);
 }

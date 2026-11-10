@@ -3,16 +3,16 @@
 
 import { usDateTime } from "../dates";
 import { type DocBlock, textBlock } from "../jira/adf";
-import { type Comment, type Detail, type Issue, issueProject } from "../jira/types";
+import { type Comment, type Issue, issueProject } from "../jira/types";
 import { cells } from "../text";
 import type { Canvas } from "./canvas";
 import { type Line, layout, layoutCached } from "./document";
+import type { IssueRead } from "./issue-details";
 import { priorityMark, statusIcon, statusLabel } from "./status";
 
 export interface Peek {
   issue: Issue;
-  detail: Detail | null;
-  error: string;
+  read: IssueRead;
   /** Rows scrolled past under the panel's top bar. */
   scroll: number;
 }
@@ -50,7 +50,9 @@ function peekRows(canvas: Canvas, peek: Peek, left: number, room: number): Row[]
   const lines = (list: Line[]) => {
     for (const line of list) rows.push((y) => drawLine(canvas, y, left, line));
   };
-  const { issue, detail } = peek;
+  const { issue } = peek;
+  const { state } = peek.read;
+  const detail = state.data;
   rows.push((y) => canvas.put(y, left, issue.key, "muted"));
   lines(layout([textBlock(issue.summary, "strong")], room));
   rows.push(blank);
@@ -84,12 +86,9 @@ function peekRows(canvas: Canvas, peek: Peek, left: number, room: number): Row[]
   }
   rows.push(blank);
 
-  if (peek.error) {
-    lines(layout([textBlock(`Could not load details: ${peek.error}`, "error")], room));
-    return rows;
-  }
+  if (state.kind === "error") lines(layout([textBlock(`Could not load details: ${state.message}`, "error")], room));
   if (!detail) {
-    rows.push((y) => canvas.put(y, left, "Loading details…", "muted"));
+    if (state.kind === "loading") rows.push((y) => canvas.put(y, left, "Loading details…", "muted"));
     return rows;
   }
   rows.push((y) => canvas.put(y, left, "Description", "title"));

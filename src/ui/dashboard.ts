@@ -7,10 +7,11 @@ import { type Attachment, type Issue, isImage } from "../jira/types";
 import { message, type Workspace } from "../state/workspace";
 import { AgentPanel } from "./agent-panel";
 import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
+import { IssueDetails, type IssueRead } from "./issue-details";
 import { IssueList } from "./issue-list";
 import { listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, PEEK_MIN_WIDTH, pickerRows, sidebarWidth } from "./layout";
 import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
-import { helpPanel, issuePanel, type Panel, showDetail, sprintPanel } from "./panel";
+import { helpPanel, type Panel, sprintPanel } from "./panel";
 import type { Peek } from "./peek";
 import { Picker, type PickerItem, type PickerKind } from "./picker";
 import { type FilterChip, filterChips, PICKERS } from "./pickers";
@@ -63,6 +64,8 @@ export class Dashboard {
   private autoSprintPicker = true;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly imageCache = new ImageCache();
+  private readonly details: IssueDetails;
+  private readonly unsubscribe: () => void;
 
   constructor(
     readonly workspace: Workspace,
@@ -73,7 +76,15 @@ export class Dashboard {
   ) {
     this.list = new IssueList(workspace);
     this.agent = new AgentPanel(workspace, agentBackend, redraw, () => this.update());
-    workspace.subscribe(() => this.update());
+    this.details = new IssueDetails(
+      (key) => client.detail(key),
+      (read) => {
+        const visibleInModal = this.modal?.kind === "issue" && this.modal.read === read;
+        if (visibleInModal && this.picker?.kind === "attachment") this.refreshPicker();
+        if (visibleInModal || this.peek?.read === read) this.redraw();
+      },
+    );
+    this.unsubscribe = workspace.subscribe(() => this.update());
   }
 
   resize(width: number, height: number): void {
@@ -89,6 +100,8 @@ export class Dashboard {
   }
 
   dispose(): void {
+    this.unsubscribe();
+    this.details.dispose();
     this.agent.dispose();
     clearTimeout(this.noticeTimer);
   }
@@ -99,7 +112,7 @@ export class Dashboard {
   }
 
   private update(): void {
-    if (this.picker) this.picker.replace(PICKERS[this.picker.kind].items(this));
+    this.refreshPicker();
     this.syncPeek();
     const { sprints, query } = this.workspace;
     if (
@@ -114,6 +127,11 @@ export class Dashboard {
       this.autoSprintPicker = false;
     }
     this.redraw();
+  }
+
+  private refreshPicker(): void {
+    const picker = this.picker;
+    if (picker) picker.replace(PICKERS[picker.kind].items(this));
   }
 
   openPicker(requested: PickerKind): void {
@@ -149,7 +167,7 @@ export class Dashboard {
 
   /** Images preview over the details panel; other files open in Helium. */
   openAttachment(item: Attachment): void {
-    const images = (this.modal?.attachments ?? []).filter(isImage);
+    const images = this.attachments.filter(isImage);
     if (isImage(item)) this.openPreview(previewOf(images, item));
     else this.openUrl(this.attachmentUrl(item), "Opened attachment");
   }
@@ -232,44 +250,22 @@ export class Dashboard {
       this.peek.issue = issue;
       return;
     }
-    const peek: Peek = { issue, detail: null, error: "", scroll: 0 };
-    this.peek = peek;
-    this.client
-      .detail(issue.key)
-      .then(
-        (detail) => {
-          peek.detail = detail;
-        },
-        (error: unknown) => {
-          peek.error = message(error);
-        },
-      )
-      .finally(() => {
-        if (this.peek === peek) this.redraw();
-      });
+    this.peek = { issue, read: this.readIssue(issue.key), scroll: 0 };
   }
 
   openDetail(issue: Issue): void {
-    this.modal = issuePanel(issue);
-    this.loadDetail(this.modal);
+    this.modal = { kind: "issue", issue, read: this.readIssue(issue.key), scroll: 0 };
   }
 
-  private loadDetail(target: Panel): void {
-    if (!target.issue || target.loading) return;
-    target.error = "";
-    target.loading = true;
-    this.client
-      .detail(target.issue.key)
-      .then(
-        (detail) => showDetail(target, detail),
-        (error: unknown) => {
-          target.error = message(error);
-        },
-      )
-      .finally(() => {
-        target.loading = false;
-        if (this.modal === target) this.redraw();
-      });
+  get attachments(): Attachment[] {
+    return this.modal?.kind === "issue" ? (this.modal.read.state.data?.attachments ?? []) : [];
+  }
+
+  private readIssue(key: string): IssueRead {
+    const modal = this.modal;
+    if (modal?.kind === "issue" && modal.issue.key === key) return modal.read;
+    if (this.peek?.issue.key === key) return this.peek.read;
+    return this.details.open(key);
   }
 
   private attachmentUrl(item: Attachment): string {
@@ -320,7 +316,8 @@ export class Dashboard {
 
   /** Open the shown issue in Helium, or copy its link. */
   openIssue(copy: boolean): void {
-    const issue = this.modal ? this.modal.issue : this.list.selected;
+    if (this.modal?.kind === "text") return;
+    const issue = this.modal?.issue ?? this.list.selected;
     if (!issue) return;
     const url = `https://${this.site}/browse/${issue.key}`;
     if (copy) this.report(this.opener.copy(url), "Link copied");
@@ -598,10 +595,12 @@ export class Dashboard {
     },
     o: () => this.openIssue(false),
     y: () => this.openIssue(true),
-    i: (panel) => {
-      if (panel.attachments.length) this.openPicker("attachment");
+    i: () => {
+      if (this.attachments.length) this.openPicker("attachment");
     },
-    r: (panel) => this.loadDetail(panel),
+    r: (panel) => {
+      if (panel.kind === "issue") void this.details.reload(panel.read);
+    },
   });
 
   private readonly previewKeys = bindings<(preview: Preview) => void>({

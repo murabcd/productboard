@@ -184,7 +184,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   attachment: {
     title: "Attachments · Enter previews images, opens other files in Helium",
     items: (d) =>
-      (d.modal?.attachments ?? []).map((attachment) =>
+      d.attachments.map((attachment) =>
         item(attachment.filename, describeAttachment(attachment), () => d.openAttachment(attachment), {
           value: attachment.id,
         }),

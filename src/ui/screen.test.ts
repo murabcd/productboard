@@ -125,7 +125,7 @@ describe("OpenTUI shell", () => {
     expect(citation).toBeGreaterThan(0);
     await setup.mockMouse.click(lines[citation]?.indexOf("EX-1") ?? -1, citation);
     await setup.renderOnce();
-    expect(dashboard.modal?.issue?.key).toBe("EX-1");
+    expect(dashboard.modal).toMatchObject({ kind: "issue", issue: { key: "EX-1" } });
     setup.mockInput.pressCtrlC();
     expect(dashboard.modal).toBeNull();
     expect(dashboard.agent.tab).toBe(true);

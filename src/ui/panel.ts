@@ -2,32 +2,15 @@
 
 import { usDate, usDateTime } from "../dates";
 import { type DocBlock, textBlock } from "../jira/adf";
-import { type Attachment, type Detail, describeAttachment, type Issue, type Sprint } from "../jira/types";
+import { type Detail, describeAttachment, type Issue, type Sprint } from "../jira/types";
 import { HELP } from "./help";
+import type { IssueRead } from "./issue-details";
 
-/** Issue panels own their details request; closing the panel drops it. */
-export interface Panel {
-  title: string;
-  subtitle: string;
-  /** Replaced, never edited in place, so its layout can be cached. */
-  body: DocBlock[];
-  error: string;
-  scroll: number;
-  issue?: Issue;
-  loading: boolean;
-  attachments: Attachment[];
-}
+export type Panel =
+  | { kind: "text"; title: string; body: DocBlock[]; scroll: number }
+  | { kind: "issue"; issue: Issue; read: IssueRead; scroll: number };
 
-const panel = (title: string, body: DocBlock[], extra: Partial<Panel> = {}): Panel => ({
-  title,
-  subtitle: "",
-  body,
-  error: "",
-  scroll: 0,
-  loading: false,
-  attachments: [],
-  ...extra,
-});
+const panel = (title: string, body: DocBlock[]): Panel => ({ kind: "text", title, body, scroll: 0 });
 
 export const helpPanel = (): Panel => panel("Keyboard shortcuts", [{ kind: "pre", text: HELP }]);
 
@@ -39,17 +22,12 @@ export function sprintPanel(sprint: Sprint): Panel {
   ]);
 }
 
-/** An issue panel; its body arrives with `showDetail`. */
-export const issuePanel = (issue: Issue): Panel =>
-  panel(issue.summary, [], { subtitle: `${issue.key} · ${issue.status} · ${issue.assignee}`, issue });
-
-export function showDetail(target: Panel, detail: Detail): void {
-  target.body = detailBlocks(detail);
-  target.attachments = detail.attachments;
-}
+const bodies = new WeakMap<Detail, DocBlock[]>();
 
 /** Issue details in reading order: facts, description, comments, files. */
 export function detailBlocks(detail: Detail): DocBlock[] {
+  const cached = bodies.get(detail);
+  if (cached) return cached;
   const blocks: DocBlock[] = [];
   if (detail.facts.length) blocks.push(textBlock(detail.facts.join("\n"), "muted"));
   blocks.push(...(detail.description.length ? detail.description : [textBlock("No description.", "muted")]));
@@ -82,5 +60,6 @@ export function detailBlocks(detail: Detail): DocBlock[] {
       textBlock(detail.attachments.map((item) => `${item.filename} · ${describeAttachment(item)}`).join("\n"), "muted"),
     );
   }
+  bodies.set(detail, blocks);
   return blocks;
 }

@@ -160,13 +160,13 @@ describe("dashboard", () => {
     dashboard.handle(ESC);
     dashboard.handle({ text: "j" });
     dashboard.handle(ENTER);
-    expect(dashboard.modal?.issue?.key).toBe("EX-2");
+    expect(dashboard.modal).toMatchObject({ kind: "issue", issue: { key: "EX-2" } });
     pending[0]?.resolve(detail("EX-1 description"));
     await settle();
-    expect(dashboard.modal?.body).toEqual([]);
+    expect(dashboard.modal).toMatchObject({ read: { state: { kind: "loading", data: null } } });
     pending[1]?.resolve(detail("EX-2 description"));
     await settle();
-    expect(plainText(dashboard.modal?.body ?? [])).toContain("EX-2 description");
+    expect(draw(dashboard, 120, 30).text(8)).toContain("EX-2 description");
   });
 
   test("a closed issue's late details cannot replace a sprint goal", async () => {
@@ -178,8 +178,8 @@ describe("dashboard", () => {
     dashboard.handle({ text: "t" });
     pending[0]?.resolve(detail("An issue's description"));
     await settle();
-    expect(dashboard.modal?.title).toBe("Sprint 7");
-    expect(plainText(dashboard.modal?.body ?? [])).toContain("Ship statuses");
+    expect(dashboard.modal).toMatchObject({ kind: "text", title: "Sprint 7" });
+    expect(draw(dashboard, 120, 30).text(10)).toContain("Ship statuses");
   });
 
   test("the attachment picker opens other files in Helium and returns to details", async () => {
@@ -227,7 +227,7 @@ describe("dashboard", () => {
     expect(draw(dashboard, 80, 24).text(6)).toContain("1 of 2");
     dashboard.handle(ESC);
     expect(dashboard.preview).toBeNull();
-    expect(dashboard.modal?.attachments.length).toBe(3);
+    expect(dashboard.attachments.length).toBe(3);
   });
 
   test("Page Down counts group headings and skips folded issues", () => {
@@ -396,7 +396,37 @@ describe("concept layout", () => {
     expect(dashboard.peek).toBeNull();
     dashboard.resize(80, 30); // too narrow for a side panel: Space opens details
     dashboard.handle({ text: " " });
-    expect(dashboard.modal?.issue?.key).toBe("EX-1");
+    expect(dashboard.modal).toMatchObject({ kind: "issue", issue: { key: "EX-1" } });
+  });
+
+  test("Peek and full details share one read, including a failed read and retry", async () => {
+    const { dashboard, client, pending } = setup();
+    dashboard.handle({ text: " " });
+    dashboard.handle(ENTER);
+    expect(client.detail).toHaveBeenCalledTimes(1);
+    pending[0]?.reject(new Error("Jira temporarily unavailable"));
+    await settle();
+
+    expect(draw(dashboard, 120, 30).text(8)).toContain("Jira temporarily unavailable");
+    dashboard.handle({ text: "r" });
+    dashboard.handle({ text: "r" });
+    expect(client.detail).toHaveBeenCalledTimes(2);
+    pending[1]?.resolve(detail("Details after retry"));
+    await settle();
+    expect(draw(dashboard, 120, 30).text(8)).toContain("Details after retry");
+
+    dashboard.handle(ESC);
+    const peek = draw(dashboard, 120, 30);
+    expect(Array.from({ length: 30 }, (_, row) => peek.text(row)).join("\n")).toContain("Details after retry");
+    dashboard.handle(ENTER);
+    expect(client.detail).toHaveBeenCalledTimes(2);
+
+    dashboard.handle({ text: "r" });
+    expect(client.detail).toHaveBeenCalledTimes(3);
+    expect(draw(dashboard, 120, 30).text(8)).toContain("Details after retry");
+    pending[2]?.resolve(detail("Updated details"));
+    await settle();
+    expect(draw(dashboard, 120, 30).text(8)).toContain("Updated details");
   });
 
   test("a long peek scrolls under its top bar", async () => {
@@ -646,7 +676,7 @@ describe("concept layout", () => {
     dashboard.handle({ name: "agent-cited" });
     expect(dashboard.picker?.selected?.label).toBe("EX-7");
     dashboard.handle(ENTER);
-    expect(dashboard.modal?.issue?.key).toBe("EX-7");
+    expect(dashboard.modal).toMatchObject({ kind: "issue", issue: { key: "EX-7" } });
   });
 
   test("Ctrl-K opens commands that run views and menus", () => {
