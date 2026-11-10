@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testing";
+import type { AgentBackend } from "../agent/chat";
 import { initialQuery, View } from "../jira/query";
 import { Workspace } from "../state/workspace";
-import { deferred, settle, snapshot } from "../testing";
+import { deferred, fakeAgent, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
 import { MIN_WIDTH } from "./layout";
 import { mount, toKeys } from "./screen";
@@ -19,21 +20,21 @@ afterEach(async () => {
   setup = undefined;
 });
 
-async function start(width = 100) {
+async function start(width = 100, agent?: AgentBackend) {
   const source = {
     snapshot: mock(() => deferred<never>().promise),
     catalog: mock(() => deferred<never>().promise),
     sprints: mock(() => deferred<never>().promise),
   };
   const work = new Workspace(source);
-  work.query = { ...initialQuery, view: View.All };
+  work.query = { ...initialQuery, view: View.All, sprint: agent ? 25 : null };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
   const client = {
     site: "example.atlassian.net",
     detail: mock(() => deferred<never>().promise),
     attachment: mock(() => deferred<never>().promise),
   };
-  const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {});
+  const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {}, agent);
   setup = await createTestRenderer({ width, height: 30 });
   const quit = mock(() => {});
   mount(setup.renderer, dashboard, quit);
@@ -44,25 +45,36 @@ async function start(width = 100) {
 describe("OpenTUI shell", () => {
   test("draws the list and moves the selection with keys", async () => {
     const { setup, dashboard } = await start();
-    expect(setup.captureCharFrame()).toMatch(/› . EX-1/);
+    expect(setup.captureCharFrame()).toMatch(/› EX-1/);
     await setup.mockInput.pressArrow("down");
     await setup.renderOnce();
     expect(dashboard.selected()?.key).toBe("EX-2");
-    expect(setup.captureCharFrame()).toMatch(/› . EX-2/);
+    expect(setup.captureCharFrame()).toMatch(/› EX-2/);
   });
 
   test("clicking a row selects it and the wheel moves the selection", async () => {
     const { setup, dashboard } = await start();
-    await setup.mockMouse.click(10, 8); // EX-2's row
+    await setup.mockMouse.click(30, 8); // EX-2's row
     await setup.renderOnce();
     expect(dashboard.selected()?.key).toBe("EX-2");
-    await setup.mockMouse.scroll(10, 8, "up");
+    await setup.mockMouse.scroll(30, 8, "up");
     await setup.renderOnce();
     expect(dashboard.selected()?.key).toBe("EX-1");
-    const assigned = setup.captureCharFrame().split("\n")[1]?.indexOf("3 Assigned") ?? -1;
-    expect(assigned).toBeGreaterThan(0);
-    await setup.mockMouse.click(assigned, 1);
+    await setup.mockMouse.click(6, 3); // My issues in the sidebar
     expect(dashboard.workspace.query.view).toBe(View.Mine);
+  });
+
+  test("the wheel over the peek scrolls the peek, not the list", async () => {
+    const { setup, dashboard } = await start(130);
+    await setup.mockInput.typeText(" ");
+    await setup.renderOnce();
+    expect(dashboard.peek?.issue.key).toBe("EX-1");
+    await setup.mockMouse.scroll(120, 12, "down"); // inside the peek panel
+    await setup.renderOnce();
+    expect(dashboard.selected()?.key).toBe("EX-1");
+    await setup.mockMouse.scroll(40, 7, "down"); // over the list
+    await setup.renderOnce();
+    expect(dashboard.selected()?.key).toBe("EX-2");
   });
 
   test("search typing and pasting go to the search box", async () => {
@@ -74,9 +86,9 @@ describe("OpenTUI shell", () => {
 
   test("the last tab stays visible and clickable at the minimum pane width", async () => {
     const { setup, dashboard } = await start(MIN_WIDTH);
-    const search = setup.captureCharFrame().split("\n")[1]?.indexOf("7 Find") ?? -1;
+    const search = setup.captureCharFrame().split("\n")[0]?.indexOf("Find") ?? -1;
     expect(search).toBeGreaterThan(0);
-    await setup.mockMouse.click(search, 1);
+    await setup.mockMouse.click(search, 0);
     expect(dashboard.workspace.query.view).toBe(View.Search);
   });
 
@@ -89,11 +101,61 @@ describe("OpenTUI shell", () => {
     const view = setup.renderer.root.getRenderable("dashboard");
     const shown = view?.getRenderable("preview");
     expect(shown?.visible).toBe(true);
-    expect([shown?.x, shown?.y]).toEqual([2, 9]);
+    expect([shown?.x, shown?.y]).toEqual([22, 8]);
     expect(setup.captureCharFrame()).toContain("dot.png");
     dashboard.preview = null;
     await setup.renderOnce();
     expect(shown?.visible).toBe(false);
+  });
+
+  test("Agent answers about the sprint, and a cited issue opens and closes back to Agent", async () => {
+    const ask = mock<AgentBackend["ask"]>(async ({ onIssues, onText, scope }) => {
+      onIssues(snapshot({ ...initialQuery, sprint: scope.sprint }, ["EX-1"]).issues);
+      onText("Review EX-1 before release.");
+    });
+    const { setup, dashboard } = await start(100, fakeAgent(ask));
+    await setup.mockMouse.click(6, 4); // Agent in the sidebar
+    await setup.mockInput.typeText("Any risks?");
+    await setup.mockInput.pressEnter();
+    await settle();
+    await setup.renderOnce();
+    expect(ask.mock.calls[0]?.[0].scope.sprint).toBe(25);
+    const lines = setup.captureCharFrame().split("\n");
+    const citation = lines.findIndex((line) => line.includes("Review EX-1"));
+    expect(citation).toBeGreaterThan(0);
+    await setup.mockMouse.click(lines[citation]?.indexOf("EX-1") ?? -1, citation);
+    await setup.renderOnce();
+    expect(dashboard.modal?.issue?.key).toBe("EX-1");
+    setup.mockInput.pressCtrlC();
+    expect(dashboard.modal).toBeNull();
+    expect(dashboard.agent.tab).toBe(true);
+  });
+
+  test("the Agent box takes all typing, grows with lines, sends on Enter; Esc interrupts", async () => {
+    const ask = mock<AgentBackend["ask"]>(
+      ({ signal }) => new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve())),
+    );
+    const { setup, dashboard, quit } = await start(100, fakeAgent(ask));
+    await setup.mockMouse.click(6, 4); // Agent in the sidebar
+    await setup.renderOnce();
+    await setup.mockInput.typeText("quick 1 line"); // q and 1 are text here, not keys
+    setup.mockInput.pressKey("j", { ctrl: true });
+    await setup.mockInput.typeText("second line");
+    await setup.renderOnce();
+    expect(quit).not.toHaveBeenCalled();
+    expect(dashboard.agent.chat.current.draft).toBe("quick 1 line\nsecond line");
+    expect(dashboard.agent.composerRows).toBe(2);
+    setup.mockInput.pressEnter();
+    await settle();
+    await setup.renderOnce();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(dashboard.agent.chat.current.draft).toBe("");
+    expect(setup.captureCharFrame()).toContain("esc interrupt");
+    setup.mockInput.pressEscape();
+    await Bun.sleep(30); // a lone Esc is recognized after a short wait
+    await settle();
+    expect(dashboard.agent.chat.current.pending).toBeUndefined();
+    expect(dashboard.agent.tab).toBe(true); // the first Esc only interrupts
   });
 
   test("q quits", async () => {

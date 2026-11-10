@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { Catalog, Snapshot } from "../jira/client";
-import { type IssueQuery, initialQuery, VIEWS, View } from "../jira/query";
+import { type IssueQuery, initialQuery, View } from "../jira/query";
 import type { Sprint } from "../jira/types";
 import { type Deferred, deferred, settle, snapshot } from "../testing";
 import { REFRESH_MS, Workspace } from "./workspace";
@@ -126,13 +126,5 @@ describe("workspace", () => {
     expect(remembered).toEqual([]); // an automatic pick is not remembered
     work.chooseBoard("13");
     expect(remembered).toEqual(["13"]);
-  });
-
-  test("every view has a scope label", () => {
-    const { work } = setup();
-    for (const view of VIEWS) {
-      work.query = { ...initialQuery, view };
-      expect(work.scope().length).toBeGreaterThan(0);
-    }
   });
 });

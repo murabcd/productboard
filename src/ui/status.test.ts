@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { Category } from "../jira/types";
-import { priorityMark, statusGlyph, statusLabel, statusStyle } from "./status";
+import { priorityMark, statusIcon, statusLabel } from "./status";
 
-const style = (status: string, category: Category) => statusStyle({ status, category });
+const style = (status: string, category: Category) => statusIcon({ status, category })[1];
 
 describe("status colors", () => {
   test("each stage of the workflow has its own color", () => {
@@ -20,15 +20,17 @@ describe("status colors", () => {
   });
 });
 
+const icon = (issue: { status: string; category: Category }) => statusIcon(issue)[0];
+
 describe("row marks", () => {
   test("each stage has an icon", () => {
-    expect(statusGlyph({ status: "QA Blocked", category: "indeterminate" })).toBe("⊘");
-    expect(statusGlyph({ status: "In Progress", category: "indeterminate" })).toBe("◐");
-    expect(statusGlyph({ status: "IN REVIEW", category: "indeterminate" })).toBe("◑");
-    expect(statusGlyph({ status: "Ready for release", category: "indeterminate" })).toBe("◕");
-    expect(statusGlyph({ status: "Released", category: "done" })).toBe("●");
-    expect(statusGlyph({ status: "Ready for dev", category: "new" })).toBe("○");
-    expect(statusGlyph({ status: "Backlog", category: "new" })).toBe("◌");
+    expect(icon({ status: "QA Blocked", category: "indeterminate" })).toBe("⊘");
+    expect(icon({ status: "In Progress", category: "indeterminate" })).toBe("◐");
+    expect(icon({ status: "IN REVIEW", category: "indeterminate" })).toBe("◑");
+    expect(icon({ status: "Ready for release", category: "indeterminate" })).toBe("◕");
+    expect(icon({ status: "Released", category: "done" })).toBe("●");
+    expect(icon({ status: "Ready for dev", category: "new" })).toBe("○");
+    expect(icon({ status: "Backlog", category: "new" })).toBe("◌");
   });
 
   test("all-caps statuses read in sentence case, keeping acronyms", () => {
@@ -41,7 +43,7 @@ describe("row marks", () => {
   test("priority marks", () => {
     expect(priorityMark("Highest")[0]).toBe("!");
     expect(priorityMark("High")[0]).toBe("↑");
-    expect(priorityMark("Medium")[0]).toBe(" ");
+    expect(priorityMark("Medium")[0]).toBe("–");
     expect(priorityMark("Lowest")[0]).toBe("↓");
     expect(priorityMark("")[0]).toBe(" ");
   });

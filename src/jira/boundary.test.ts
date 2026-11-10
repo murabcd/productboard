@@ -5,7 +5,7 @@ import { clean, clip } from "../text";
 import { plainText, toDoc } from "./adf";
 import { decode, RawIssue, toComments, toDetail, toIssue } from "./parse";
 import { initialQuery, jql, View, withAssignee, withView } from "./query";
-import { describeAttachment } from "./types";
+import { describeAttachment, sprintDates } from "./types";
 
 describe("terminal text", () => {
   test("remote controls and bidi overrides are removed, Russian stays", () => {
@@ -171,6 +171,16 @@ describe("dates on screen", () => {
     expect(shortDate("2025-03-05 14:00", now)).toBe("Mar 5, 2025");
     expect(when("2026-11-09 14:14", now)).toBe("2:14 PM");
     expect(when("2026-11-08 14:14", now)).toBe("Nov 8");
+  });
+
+  test("sprint dates read as a short range, with the year once when it isn't this one", () => {
+    const range = (start: string, end: string) =>
+      sprintDates({ id: 1, name: "", state: "active", start, end, goal: "" });
+    const thisYear = new Date().getFullYear();
+    expect(range(`${thisYear}-11-03`, `${thisYear}-11-17`)).toBe("Nov 3–17");
+    expect(range(`${thisYear}-10-20`, `${thisYear}-11-02`)).toBe("Oct 20–Nov 2");
+    expect(range("2019-10-20", "2019-11-03")).toBe("Oct 20–Nov 3, 2019");
+    expect(range("", "")).toBe("");
   });
 
   test("mention headings group by period", () => {

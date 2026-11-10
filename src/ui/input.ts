@@ -15,7 +15,13 @@ export type KeyName =
   | "escape"
   | "tab"
   | "backspace"
-  | "ctrl-c";
+  | "ctrl-c"
+  | "commands"
+  | "agent-new"
+  | "agent-stop"
+  | "agent-previous"
+  | "agent-next"
+  | "agent-cited";
 
 /** A named key, or one typed character. */
 export type Key = { name: KeyName } | { text: string };
@@ -36,11 +42,37 @@ export function editLine(value: string, key: Key, max: number): string | undefin
   return undefined;
 }
 
+/** Buttons in the header, footer and peek panel; each matches a key. */
+export type Action =
+  | "filter"
+  | "display"
+  | "board"
+  | "sprint"
+  | "brief"
+  | "peek"
+  | "details"
+  | "refresh"
+  | "help"
+  | "commands"
+  | "model"
+  | "reasoning"
+  | "load-more";
+
 /** Something on screen the mouse can click. */
 export type Target =
+  | { kind: "action"; action: Action }
+  /** The open dialog's surface, and its esc button. */
+  | { kind: "dialog" }
+  | { kind: "dismiss" }
+  /** The peek panel; the wheel over it scrolls the panel. */
+  | { kind: "peek" }
+  /** A group heading; a click folds or unfolds it. */
+  | { kind: "group"; label: string }
   | { kind: "view"; view: View }
   | { kind: "issue"; key: string }
   /** A picker choice, by its index among the visible choices. */
   | { kind: "choice"; index: number }
   /** The search box above the list. */
-  | { kind: "box" };
+  | { kind: "box" }
+  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "sprint" | "board" }
+  | { kind: "agent-cite"; key: string };

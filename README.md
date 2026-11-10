@@ -11,6 +11,7 @@
 <p align="center">
   <a href="#installation">Installation</a> |
   <a href="#features">Features</a> |
+  <a href="#agent">Agent</a> |
   <a href="#built-with">Built with</a> |
   <a href="#development">Development</a>
 </p>
@@ -44,6 +45,35 @@ ln -s "$PWD/bin/board" ~/.local/bin/board
 - Find issues assigned to you or created by you, and search across Jira.
 - See blockers, overdue issues, and mentions in one place.
 - Read comments and preview image attachments in the terminal.
+- Ask Agent about a sprint from its page in the sidebar.
+
+## Agent
+
+Install Node.js 24 or newer for the local [Eve](https://github.com/vercel/eve) runtime.
+In Rex, run `board --agent-login` once to save your OpenAI API key to macOS
+Keychain. An existing `OPENAI_API_KEY` in your shell works too.
+
+Open `board`, choose a sprint, then select **Agent** in the sidebar (or press
+`3`). The message box grows as you type:
+`Enter` sends and `Shift+Enter` (or `Ctrl+J`) adds a line. While Agent answers,
+`Esc` interrupts it. Use `Ctrl+N` to start a chat, `Ctrl+↑` / `Ctrl+↓` to
+switch between chats for that sprint, and `Ctrl+O` to open an issue Agent
+mentioned.
+
+Agent sends your prompt and up to 200 issue summaries with status, assignee
+and priority to your provider when you ask. Its answers can link back to Jira
+issues in the terminal. Productboard keeps chat history for the current run.
+
+For Anthropic, set `PRODUCTBOARD_AGENT_PROVIDER=anthropic` and supply
+`ANTHROPIC_API_KEY` or run `board --agent-login` with that provider set.
+Agent uses `gpt-6-luna` with OpenAI and `claude-sonnet-5-5` with Anthropic. To
+switch, click the model button on the Agent page (or **Choose Agent model** in
+`Ctrl+K`): it lists the GPT-6 and Claude 5 models your keys can use, the one in
+use first, then asks how much the model should reason (None, Low, Medium, High
+or Extra high; Medium unless you change it). Both are remembered and show with
+the model, e.g. "GPT-6 Luna · Medium".
+`PRODUCTBOARD_AGENT_MODEL` overrides the model at start. Replies show which model
+answered.
 
 ## Built with
 

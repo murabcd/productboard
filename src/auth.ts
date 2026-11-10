@@ -9,11 +9,33 @@ import type { Credentials } from "./jira/http";
 const KEYCHAIN_SERVICE = "productboard";
 const CONFIG_PATH = join(homedir(), ".config", "productboard", "config.json");
 
+const AGENT_PROVIDERS = ["openai", "anthropic"] as const;
+export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
+
+/** How long a model thinks before answering, as Eve names the levels. */
+export const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"] as const;
+export type Reasoning = (typeof REASONING_LEVELS)[number];
+/** Set explicitly, so the level shown is the level used: providers' own defaults vary by model. */
+const DEFAULT_REASONING: Reasoning = "medium";
+
+export interface ModelRef {
+  provider: AgentProvider;
+  model: string;
+}
+
+const AgentChoice = z.object({
+  provider: z.enum(AGENT_PROVIDERS),
+  model: z.string(),
+  reasoning: z.enum(REASONING_LEVELS).default(DEFAULT_REASONING),
+});
+export type AgentChoice = z.infer<typeof AgentChoice>;
+
 const Config = z.object({
   site: z.string(),
   email: z.string(),
   /** The board chosen last, opened again on the next start. */
   board: z.string().optional(),
+  agent: AgentChoice.optional(),
 });
 type Config = z.infer<typeof Config>;
 
@@ -44,9 +66,8 @@ export function rememberBoard(board: string): void {
 export function loadCredentials(): Credentials | string {
   const config = readConfig();
   if (!config) return "Sign in first: board --login";
-  const read = Bun.spawnSync(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", config.email, "-w"]);
-  const token = read.stdout.toString().trim();
-  if (read.exitCode !== 0 || !token) return "Your API token is missing from Keychain. Run board --login.";
+  const token = readToken(KEYCHAIN_SERVICE, config.email);
+  if (!token) return "Your API token is missing from Keychain. Run board --login.";
   return { site: config.site, email: config.email, token };
 }
 
@@ -60,14 +81,60 @@ export function validate(credentials: Credentials): string | undefined {
 /** Save settings, and the token to Keychain without putting it on a command line. */
 export function saveCredentials(credentials: Credentials): void {
   const { site, email, token } = credentials;
-  const command = `add-generic-password -U -s ${KEYCHAIN_SERVICE} -a "${email}" -l "productboard (${site})" -w "${token}"\n`;
-  const result = Bun.spawnSync(["security", "-i"], { stdin: Buffer.from(command) });
-  const check = Bun.spawnSync(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", email]);
-  if (result.exitCode !== 0 || check.exitCode !== 0) {
-    throw new Error("Could not save the token to Keychain");
-  }
+  saveToken(KEYCHAIN_SERVICE, email, `productboard (${site})`, token);
   // A board belongs to one site, so it is kept only when the site stays the same.
+  // The Agent model belongs to the user, so it is always kept.
   const previous = readConfig();
   const board = previous?.site === site ? previous.board : undefined;
-  writeConfig(board ? { site, email, board } : { site, email });
+  writeConfig({ site, email, ...(board ? { board } : {}), ...(previous?.agent ? { agent: previous.agent } : {}) });
+}
+
+const AGENT_SERVICE = "productboard-agent";
+
+export function agentProvider(): AgentProvider {
+  return process.env.PRODUCTBOARD_AGENT_PROVIDER === "anthropic" ? "anthropic" : "openai";
+}
+
+const DEFAULT_MODELS: Record<AgentProvider, string> = { openai: "gpt-6-luna", anthropic: "claude-sonnet-5-5" };
+
+/** The model Agent starts with: the environment's, else the one chosen last,
+ * else the provider's default; and the reasoning chosen last, else medium. */
+export function agentChoice(): AgentChoice {
+  const saved = readConfig()?.agent;
+  const provider = process.env.PRODUCTBOARD_AGENT_PROVIDER ? agentProvider() : (saved?.provider ?? "openai");
+  const model =
+    process.env.PRODUCTBOARD_AGENT_MODEL?.trim() ||
+    (saved?.provider === provider ? saved.model : DEFAULT_MODELS[provider]);
+  return { provider, model, reasoning: saved?.reasoning ?? DEFAULT_REASONING };
+}
+
+/** Keep the model chosen in Agent for the next start. */
+export function rememberAgentChoice(agent: AgentChoice): void {
+  const config = readConfig();
+  if (config) writeConfig({ ...config, agent });
+}
+
+export function agentKeyName(provider: AgentProvider): "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" {
+  return provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+}
+
+export function loadAgentKey(provider: AgentProvider): string | undefined {
+  return process.env[agentKeyName(provider)]?.trim() || readToken(AGENT_SERVICE, provider);
+}
+
+export function saveAgentKey(provider: AgentProvider, token: string): void {
+  if (!TOKEN_PATTERN.test(token)) throw new Error("That doesn't look like a provider API key");
+  saveToken(AGENT_SERVICE, provider, `Productboard Agent (${provider})`, token);
+}
+
+function readToken(service: string, account: string): string | undefined {
+  const result = Bun.spawnSync(["security", "find-generic-password", "-s", service, "-a", account, "-w"]);
+  return result.exitCode === 0 ? result.stdout.toString().trim() || undefined : undefined;
+}
+
+function saveToken(service: string, account: string, label: string, token: string): void {
+  const command = `add-generic-password -U -s ${service} -a "${account}" -l "${label}" -w "${token}"\n`;
+  const result = Bun.spawnSync(["security", "-i"], { stdin: Buffer.from(command) });
+  if (result.exitCode !== 0 || readToken(service, account) !== token)
+    throw new Error("Could not save the token to Keychain");
 }

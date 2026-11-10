@@ -1,5 +1,3 @@
-/** OpenTUI shell: draws the dashboard's frame and feeds it keys. */
-
 import {
   type CliRenderer,
   createCliRenderer,
@@ -10,44 +8,105 @@ import {
   type RenderContext,
   RGBA,
   TextAttributes,
+  TextareaRenderable,
 } from "@opentui/core";
 import { cells, splitGraphemes } from "../text";
-import type { Canvas, Style } from "./canvas";
+import { COMPOSER_MAX_ROWS, SCANNER_FRAME_MS } from "./agent";
+import type { Canvas, Rect, ScannerStyle, Style, Surface, TextStyle } from "./canvas";
 import type { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key, KeyName } from "./input";
-import { previewArea } from "./layout";
 
 const NONE = RGBA.fromValues(0, 0, 0, 0);
 const hex = (value: string) => RGBA.fromHex(value);
-const SELECTION = hex("#3a3a3a");
+const SELECTION = hex("#292d40");
+const SURFACES: Record<Surface, RGBA> = {
+  workspace: hex("#151619"),
+  chrome: hex("#111215"),
+  raised: hex("#22253a"),
+  selected: SELECTION,
+  panel: hex("#1a1b21"),
+};
 
-const STYLES: Record<Style, { fg: RGBA; bg: RGBA; attributes: number }> = {
-  text: { fg: hex("#d0d0d0"), bg: NONE, attributes: TextAttributes.NONE },
-  title: { fg: hex("#d0d0d0"), bg: NONE, attributes: TextAttributes.BOLD },
-  muted: { fg: hex("#8a8a8a"), bg: NONE, attributes: TextAttributes.NONE },
-  mutedBold: { fg: hex("#8a8a8a"), bg: NONE, attributes: TextAttributes.BOLD },
-  accent: { fg: hex("#87afd7"), bg: NONE, attributes: TextAttributes.NONE },
-  accentBold: { fg: hex("#87afd7"), bg: NONE, attributes: TextAttributes.BOLD },
-  done: { fg: hex("#87d787"), bg: NONE, attributes: TextAttributes.NONE },
-  italic: { fg: hex("#d0d0d0"), bg: NONE, attributes: TextAttributes.ITALIC },
+const ACCENT = hex("#b8c1ff");
+const GLARE = RGBA.fromValues(
+  Math.min(1, ACCENT.r * 1.15),
+  Math.min(1, ACCENT.g * 1.15),
+  Math.min(1, ACCENT.b * 1.15),
+  1,
+);
+
+/** Resting blocks pulse between 30% and 100% of their base brightness. */
+const SCANNER: Record<ScannerStyle, [color: RGBA, alpha: number]> = {
+  trail0: [ACCENT, 1],
+  trail1: [GLARE, 0.9],
+  trail2: [ACCENT, 0.65],
+  trail3: [ACCENT, 0.65 ** 2],
+  trail4: [ACCENT, 0.65 ** 3],
+  trail5: [ACCENT, 0.65 ** 4],
+  idle0: [ACCENT, 0.6 * 0.3],
+  idle1: [ACCENT, 0.6 * 0.53],
+  idle2: [ACCENT, 0.6 * 0.77],
+  idle3: [ACCENT, 0.6],
+};
+
+/** A scanner shade blended over the background it sits on, since terminals have no transparency. */
+function blend([color, alpha]: [RGBA, number], background: RGBA): RGBA {
+  const mix = (front: number, back: number) => front * alpha + back * (1 - alpha);
+  return RGBA.fromValues(mix(color.r, background.r), mix(color.g, background.g), mix(color.b, background.b), 1);
+}
+
+const isScanner = (style: Style): style is ScannerStyle => style in SCANNER;
+
+const STYLES: Record<TextStyle, { fg: RGBA; bg: RGBA; attributes: number }> = {
+  line: { fg: hex("#353743"), bg: NONE, attributes: TextAttributes.NONE },
+  text: { fg: hex("#e3e4ec"), bg: NONE, attributes: TextAttributes.NONE },
+  title: { fg: hex("#e3e4ec"), bg: NONE, attributes: TextAttributes.BOLD },
+  muted: { fg: hex("#a2a5b5"), bg: NONE, attributes: TextAttributes.NONE },
+  mutedBold: { fg: hex("#a2a5b5"), bg: NONE, attributes: TextAttributes.BOLD },
+  accent: { fg: hex("#b8c1ff"), bg: NONE, attributes: TextAttributes.NONE },
+  accentBold: { fg: hex("#b8c1ff"), bg: NONE, attributes: TextAttributes.BOLD },
+  done: { fg: hex("#96d8b7"), bg: NONE, attributes: TextAttributes.NONE },
+  italic: { fg: hex("#e3e4ec"), bg: NONE, attributes: TextAttributes.ITALIC },
   code: { fg: hex("#d7af87"), bg: hex("#262626"), attributes: TextAttributes.NONE },
-  link: { fg: hex("#87afd7"), bg: NONE, attributes: TextAttributes.UNDERLINE },
-  strike: { fg: hex("#8a8a8a"), bg: NONE, attributes: TextAttributes.STRIKETHROUGH },
-  status: { fg: hex("#1c1c1c"), bg: hex("#87afd7"), attributes: TextAttributes.BOLD },
-  review: { fg: hex("#d787d7"), bg: NONE, attributes: TextAttributes.NONE },
+  link: { fg: hex("#b8c1ff"), bg: NONE, attributes: TextAttributes.UNDERLINE },
+  strike: { fg: hex("#a2a5b5"), bg: NONE, attributes: TextAttributes.STRIKETHROUGH },
+  status: { fg: hex("#1c1c1c"), bg: hex("#b8c1ff"), attributes: TextAttributes.BOLD },
+  review: { fg: hex("#cbb6f4"), bg: NONE, attributes: TextAttributes.NONE },
   ship: { fg: hex("#5fd7d7"), bg: NONE, attributes: TextAttributes.NONE },
   warning: { fg: hex("#d7af5f"), bg: NONE, attributes: TextAttributes.NONE },
   mention: { fg: hex("#d7af5f"), bg: NONE, attributes: TextAttributes.BOLD },
-  error: { fg: hex("#d75f5f"), bg: NONE, attributes: TextAttributes.NONE },
-  selection: { fg: hex("#d0d0d0"), bg: SELECTION, attributes: TextAttributes.NONE },
-  selectedBold: { fg: hex("#d0d0d0"), bg: SELECTION, attributes: TextAttributes.BOLD },
+  error: { fg: hex("#f0a4a8"), bg: NONE, attributes: TextAttributes.NONE },
+  selection: { fg: hex("#e3e4ec"), bg: SELECTION, attributes: TextAttributes.NONE },
+  selectedBold: { fg: hex("#e3e4ec"), bg: SELECTION, attributes: TextAttributes.BOLD },
 };
 
-/** Draws the whole dashboard; the frame decides every cell except an image
- * preview, which OpenTUI draws with the best protocol the terminal supports. */
+/** Keys the dashboard keeps while the Agent text box has focus; the rest are typing. */
+const COMPOSER_KEYS = new Set<KeyName>([
+  "escape",
+  "ctrl-c",
+  "agent-new",
+  "agent-stop",
+  "agent-previous",
+  "agent-next",
+  "agent-cited",
+  "commands",
+  "pageup",
+  "pagedown",
+]);
+
+/** Enter sends; Shift+Enter or Ctrl+J starts a new line. */
+const COMPOSER_BINDINGS = [
+  { name: "return", action: "submit" },
+  { name: "kpenter", action: "submit" },
+  { name: "return", shift: true, action: "newline" },
+  { name: "linefeed", action: "newline" },
+] as const;
+
 class DashboardView extends Renderable {
   private readonly image: ImageRenderable;
+  private readonly composer: TextareaRenderable;
+  private animation: ReturnType<typeof setTimeout> | undefined;
   /** The last frame drawn, which knows what each click hits. */
   private canvas: Canvas | undefined;
 
@@ -68,49 +127,125 @@ class DashboardView extends Renderable {
       onMouseScroll: (event) => {
         const direction = event.scroll?.direction;
         if (direction !== "up" && direction !== "down") return;
-        dashboard.wheel(direction === "down" ? 1 : -1);
+        dashboard.wheel(direction === "down" ? 1 : -1, this.canvas?.targetAt(event.x, event.y));
         this.requestRender();
       },
     });
     this.image = new ImageRenderable(ctx, { id: "preview", position: "absolute", fit: "fit", visible: false });
+    this.composer = new TextareaRenderable(ctx, {
+      id: "composer",
+      position: "absolute",
+      visible: false,
+      wrapMode: "word",
+      placeholderColor: STYLES.muted.fg,
+      textColor: STYLES.text.fg,
+      focusedTextColor: STYLES.text.fg,
+      backgroundColor: SURFACES.raised,
+      focusedBackgroundColor: SURFACES.raised,
+      cursorColor: STYLES.accent.fg,
+      selectionBg: SELECTION,
+      keyBindings: [...COMPOSER_BINDINGS],
+      onContentChange: () => {
+        dashboard.agent.chat.current.draft = this.composer.plainText;
+        this.fitComposer();
+        this.requestRender();
+      },
+      onSubmit: () => {
+        dashboard.agent.send();
+        this.requestRender();
+      },
+    });
     this.add(this.image);
+    this.add(this.composer);
   }
 
   protected override renderSelf(buffer: OptimizedBuffer): void {
     const { width, height } = buffer;
+    if (this.composer.visible) this.fitComposer();
     this.dashboard.height = height;
+    this.dashboard.width = width;
     const canvas = frame(this.dashboard, width, height);
     this.canvas = canvas;
     for (let y = 0; y < height; y++) {
       let x = 0;
       for (const run of canvas.runs(y)) {
-        const style = STYLES[run.style];
-        buffer.drawText(run.text, x, y, style.fg, style.bg, style.attributes);
+        const surface = SURFACES[run.surface ?? "workspace"];
+        if (isScanner(run.style)) {
+          buffer.drawText(run.text, x, y, blend(SCANNER[run.style], surface), surface, TextAttributes.NONE);
+        } else {
+          const style = STYLES[run.style];
+          const background = style.bg === NONE ? surface : style.bg;
+          buffer.drawText(run.text, x, y, style.fg, background, style.attributes);
+        }
         x += cells(run.text);
       }
     }
-    this.placeImage(width, height);
+    this.placeImage(canvas.reserved("image"));
+    this.placeComposer(canvas.reserved("composer"));
+    this.animate();
   }
 
-  /** Show the previewed image in its area, or hide it. */
-  private placeImage(width: number, height: number): void {
-    const bytes = this.dashboard.preview?.bytes ?? null;
-    if (this.image.visible !== (bytes !== null)) {
-      this.image.visible = bytes !== null;
-      this.requestRender();
+  /** Show `renderable` over `area`, or hide it; returns whether it is shown. */
+  private place(renderable: ImageRenderable | TextareaRenderable, area: Rect | undefined): boolean {
+    if (!area) {
+      if (renderable.visible) {
+        renderable.visible = false;
+        this.requestRender();
+      }
+      return false;
     }
-    if (!bytes) return;
-    if (this.image.source !== bytes) this.image.source = bytes;
-    const area = previewArea(width, height);
+    const { left, top, width, height } = area;
     if (
-      this.image.x !== area.left ||
-      this.image.y !== area.top ||
-      this.image.width !== area.width ||
-      this.image.height !== area.height
+      !renderable.visible ||
+      renderable.x !== left ||
+      renderable.y !== top ||
+      renderable.width !== width ||
+      renderable.height !== height
     ) {
-      Object.assign(this.image, area);
+      Object.assign(renderable, { x: left, y: top, width, height, visible: true });
       this.requestRender();
     }
+    return true;
+  }
+
+  private placeImage(area: Rect | undefined): void {
+    const bytes = this.dashboard.preview?.bytes;
+    if (!this.place(this.image, area) || !bytes) return;
+    if (this.image.source !== bytes) this.image.source = bytes;
+  }
+
+  private placeComposer(area: Rect | undefined): void {
+    if (!this.place(this.composer, area)) {
+      this.composer.blur();
+      return;
+    }
+    const { chat } = this.dashboard.agent;
+    // The draft changes outside the box too: sending clears it, a failed send restores it.
+    if (this.composer.plainText !== chat.current.draft) {
+      this.composer.setText(chat.current.draft);
+      this.fitComposer();
+    }
+    this.composer.placeholder = chat.configured ? "Message Agent…" : "Agent is not set up";
+    this.composer.focus();
+  }
+
+  /** Let the frame grow the box with its lines. Wrapped lines are counted
+   * after the box draws, so a change asks for one more frame. */
+  private fitComposer(): void {
+    const lines = Math.max(this.composer.lineCount, this.composer.virtualLineCount);
+    const rows = Math.max(1, Math.min(COMPOSER_MAX_ROWS, lines));
+    if (rows === this.dashboard.agent.composerRows) return;
+    this.dashboard.agent.composerRows = rows;
+    this.requestRender();
+  }
+
+  /** Keep drawing while a reply streams, once per scanner step, then stop. */
+  private animate(): void {
+    if (this.animation || !this.dashboard.agentActive() || !this.dashboard.agent.chat.current.pending) return;
+    this.animation = setTimeout(() => {
+      this.animation = undefined;
+      this.requestRender();
+    }, SCANNER_FRAME_MS);
   }
 }
 
@@ -132,8 +267,13 @@ const NAMED: Record<string, KeyName> = {
   delete: "backspace",
 };
 
-/** An OpenTUI key event as dashboard keys. */
-export function toKeys(key: Pick<KeyEvent, "name" | "ctrl" | "meta" | "shift" | "sequence">): Key[] {
+export function toKeys(key: Pick<KeyEvent, "name" | "ctrl" | "meta" | "shift" | "sequence" | "super">): Key[] {
+  if ((key.ctrl && key.name === "k") || (key.super && key.name === "k")) return [{ name: "commands" }];
+  if (key.ctrl && key.name === "n") return [{ name: "agent-new" }];
+  if (key.ctrl && key.name === "x") return [{ name: "agent-stop" }];
+  if (key.ctrl && key.name === "up") return [{ name: "agent-previous" }];
+  if (key.ctrl && key.name === "down") return [{ name: "agent-next" }];
+  if (key.ctrl && key.name === "o") return [{ name: "agent-cited" }];
   if (key.ctrl && key.name === "c") return [{ name: "ctrl-c" }];
   const named = NAMED[key.name];
   if (named) return named === "tab" && key.shift ? [] : [{ name: named }];
@@ -160,15 +300,28 @@ export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => v
     }
     renderer.requestRender();
   };
-  renderer.keyInput.on("keypress", (key) => feed(toKeys(key)));
-  renderer.keyInput.on("paste", (event) => feed(textKeys(new TextDecoder().decode(event.bytes))));
+  renderer.keyInput.on("keypress", (key) => {
+    const keys = toKeys(key);
+    // While the Agent text box has focus, it gets the typing; the dashboard
+    // keeps its global keys and stops them from reaching the box.
+    if (dashboard.agentActive()) {
+      const global = keys.filter((k) => "name" in k && COMPOSER_KEYS.has(k.name));
+      if (global.length === 0) return;
+      key.preventDefault();
+      feed(global);
+      return;
+    }
+    feed(keys);
+  });
+  renderer.keyInput.on("paste", (event) => {
+    if (dashboard.agentActive()) return;
+    feed(textKeys(new TextDecoder().decode(event.bytes)));
+  });
   renderer.requestRender();
 }
 
 export interface Screen {
-  /** Schedule a new frame after state changes. */
   redraw(): void;
-  /** Show the dashboard until the user quits. */
   show(dashboard: Dashboard): Promise<void>;
   /** Restore the terminal. Safe to call more than once. */
   close(): Promise<void>;

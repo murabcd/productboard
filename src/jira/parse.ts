@@ -30,7 +30,6 @@ export const CommentPage = z.object({
 });
 export type CommentPage = z.infer<typeof CommentPage>;
 
-/** Fields every issue list reads. */
 export const LIST_FIELDS = ["summary", "status", "priority", "assignee"];
 
 const BlockLink = z.object({
@@ -47,7 +46,6 @@ const BlockLink = z.object({
 const SprintRef = z.object({ name: z.string(), state: z.string().optional() });
 const SprintRefs = z.array(SprintRef);
 
-/** Jira's field catalog; the sprint field's ID differs between sites. */
 export const RawFields = z.array(
   z.object({ id: z.string(), schema: z.object({ custom: z.string().optional() }).optional() }),
 );

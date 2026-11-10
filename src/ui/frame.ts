@@ -1,19 +1,36 @@
-/** Draw one full screen of the dashboard onto a Canvas. */
-
-import { usDateTime, usTime } from "../dates";
+import { choiceLabel } from "../agent/models";
+import { usTime } from "../dates";
 import { textBlock } from "../jira/adf";
-import { MENTION_DAYS, PAGE, VIEW_LABELS, VIEW_SHORT_LABELS, VIEWS, View } from "../jira/query";
+import { PAGE, View } from "../jira/query";
 import { YOURS } from "../jira/today";
-import { describeAttachment, type Issue } from "../jira/types";
+import { describeAttachment, type Issue, shortSprintName } from "../jira/types";
 import { cells } from "../text";
+import { drawAgent } from "./agent";
 import { Canvas, type Style } from "./canvas";
+import { action, buttonsRight } from "./controls";
 import type { Dashboard } from "./dashboard";
+import { drawDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
-import { BODY_TOP, BOX_ROWS, LIST_TOP, listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, pickerRows } from "./layout";
+import { drawHeader } from "./header";
+import type { Target } from "./input";
+import {
+  BODY_TOP,
+  BOX_ROWS,
+  FOOTER_ROWS,
+  LIST_TOP,
+  listRows,
+  MIN_HEIGHT,
+  MIN_WIDTH,
+  modalRows,
+  peekWidth,
+  sidebarWidth,
+} from "./layout";
+import { currentPage, NAVIGATION, type NavItem } from "./navigation";
 import type { Panel } from "./panel";
-import type { Picker } from "./picker";
+import { drawPeek } from "./peek";
+import { filterChips } from "./pickers";
 import { currentImage, type Preview } from "./preview";
-import { priorityMark, statusGlyph, statusLabel, statusStyle } from "./status";
+import { priorityMark, statusIcon } from "./status";
 
 export function frame(d: Dashboard, width: number, height: number): Canvas {
   const canvas = new Canvas(width, height);
@@ -22,109 +39,144 @@ export function frame(d: Dashboard, width: number, height: number): Canvas {
     canvas.put(3, 1, "q quit", "text");
     return canvas;
   }
-  const work = d.workspace;
-  const line = (y: number) => canvas.put(y, 2, "─".repeat(Math.max(0, width - 4)), "muted");
-
-  const title = "◆ productboard";
-  canvas.put(1, 2, title, "title");
-  const tabGap = width >= 80 ? 3 : 1;
-  let x = 2 + cells(title) + Math.min(tabGap, 2);
-  const labels = width >= 100 ? VIEW_LABELS : VIEW_SHORT_LABELS;
-  for (const [n, view] of VIEWS.entries()) {
-    const text = `${n + 1} ${labels[view]}`;
-    canvas.put(1, x, text, view === work.query.view ? "accentBold" : "muted");
-    canvas.mark(1, x, text.length, { kind: "view", view });
-    x += text.length + tabGap;
-  }
-  line(2);
-  canvas.put(3, 2, `${work.scope()} · ${d.personScope()}`, "muted");
-  canvas.put(4, 2, `b board   s sprint   p project   a person   d status   g group: ${d.grouping}`, "muted");
-
+  const sidebar = sidebarWidth(width);
+  const content = new Canvas(width - sidebar, height);
+  drawWorkspace(content, d);
+  canvas.paste(content, sidebar, 0);
+  if (sidebar) drawSidebar(canvas, d, sidebar);
+  drawTopBar(canvas, d, sidebar);
   const layer = d.layer();
-  if (layer.kind === "preview") drawPreview(canvas, layer.preview, height, line);
-  else if (layer.kind === "picker") drawPicker(canvas, d, layer.picker, width, height, line);
-  else if (layer.kind === "modal") drawModal(canvas, layer.panel, width, height, line);
-  else drawList(canvas, d, width, height, line);
+  if (layer.kind === "picker") drawDialog(canvas, d, layer.picker);
+
   return canvas;
 }
 
-function drawPicker(
-  canvas: Canvas,
-  d: Dashboard,
-  picker: Picker,
-  width: number,
-  height: number,
-  line: (y: number) => void,
-): void {
-  canvas.put(6, 2, picker.title, "title");
-  canvas.put(7, 2, `/ ${picker.query}▏`, "accent");
-  const choices = picker.visible();
-  const available = pickerRows(height);
-  picker.index = Math.max(0, Math.min(picker.index, choices.length - 1));
-  picker.offset = Math.min(picker.offset, picker.index);
-  if (picker.index >= picker.offset + available) picker.offset = picker.index - available + 1;
-  choices.slice(picker.offset, picker.offset + available).forEach((choice, i) => {
-    const active = i + picker.offset === picker.index;
-    const y = BODY_TOP + i * 2;
-    const target = { kind: "choice", index: i + picker.offset } as const;
-    canvas.mark(y, 2, width - 4, target);
-    canvas.mark(y + 1, 2, width - 4, target);
-    if (active) canvas.put(y, 2, " ".repeat(width - 4), "selection");
-    canvas.put(y, 2, `${active ? "› " : "  "}${choice.label}`, active ? "selectedBold" : "text");
-    canvas.put(y + 1, 4, choice.detail, "muted");
-  });
-  if (choices.length === 0) {
-    const work = d.workspace;
-    const busy = work.catalogPending || work.sprintsPending;
-    const text = work.catalogError || (busy ? "Loading…" : "No matches");
-    canvas.put(BODY_TOP, 2, text.replaceAll("\n", " · "), "warning");
+const navTarget = (item: NavItem): Target =>
+  item.to === "agent" ? { kind: "agent", action: "tab" } : { kind: "view", view: item.to };
+
+function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number): void {
+  const { width } = canvas;
+  canvas.paint(0, 0, width, "chrome");
+  canvas.put(0, 2, "◆", "accent");
+  // The narrowest panes keep only the mark, so every page tab still fits.
+  const compact = !sidebar && width < 80;
+  if (!compact) canvas.put(0, 4, "productboard", "title");
+  const right = buttonsRight(canvas, 0, width - 2, [{ label: "^K", target: action("commands"), style: "accent" }]);
+  if (sidebar) return;
+  // Narrow panes: pages sit in the top bar, the current one highlighted.
+  const here = currentPage(d.workspace.query.view, d.agent.tab);
+  let x = compact ? 4 : 18;
+  for (const item of NAVIGATION) {
+    const label = ` ${item.short} `;
+    if (x + cells(label) > right - 1) break;
+    const active = item === here;
+    canvas.put(0, x, label, active ? "accentBold" : "muted");
+    if (active) canvas.paint(0, x, cells(label), "selected");
+    canvas.mark(0, x, cells(label), navTarget(item));
+    x += cells(label) + (compact ? 0 : 1);
   }
-  line(height - 4);
-  let footer = "↑↓ select   type to filter   Enter choose   Esc back";
-  if (picker.tabs.length) footer = `Tab: ${picker.tabName} ${picker.kind}s   ${footer}`;
-  canvas.put(height - 3, 2, footer, "muted");
-  const noun = choices.length === 1 ? "choice" : "choices";
-  canvas.put(height - 2, 2, `${choices.length} ${noun} · r retry after Esc`, "muted");
 }
 
-function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, line: (y: number) => void): void {
+function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
+  for (let y = 1; y < canvas.height; y++) canvas.put(y, width - 1, "│", "line");
+  const here = currentPage(d.workspace.query.view, d.agent.tab);
+  let row = 2;
+  let section = "";
+  for (const item of NAVIGATION) {
+    if (item.section !== section) {
+      section = item.section;
+      canvas.put(row + 1, 2, section, "muted");
+      row += 2;
+    }
+    const active = item === here;
+    if (active) canvas.paint(row, 1, width - 3, "selected");
+    canvas.put(row, 2, `${item.icon} ${item.name}`, active ? "accentBold" : "muted", width - 4);
+    canvas.mark(row, 1, width - 3, navTarget(item));
+    row += 1;
+  }
+}
+
+function drawWorkspace(canvas: Canvas, d: Dashboard): void {
+  const { width, height } = canvas;
+  drawHeader(canvas, d);
+  const layer = d.layer();
+  // A picker opens as a dialog over the page, so the page stays drawn under it.
+  if (d.agent.tab && (layer.kind === "list" || layer.kind === "picker")) {
+    // Under the shared header, where the list would start, and above the footer.
+    const body = new Canvas(width, height - (LIST_TOP - 1) - FOOTER_ROWS);
+    drawAgent(body, d);
+    canvas.paste(body, 0, LIST_TOP - 1);
+    drawAgentFooter(canvas, d);
+    return;
+  }
+  if (layer.kind === "preview") drawPreview(canvas, d, layer.preview);
+  else if (layer.kind === "modal") drawModal(canvas, d, layer.panel);
+  else drawList(canvas, d);
+}
+
+type Hint = [key: string, label: string, target?: Target];
+
+function drawAgentFooter(canvas: Canvas, d: Dashboard): void {
+  const { current } = d.agent;
+  const hints: Hint[] = [
+    ["⇧↵", "New line"],
+    ["^N", "New chat", { kind: "agent", action: "new" }],
+  ];
+  drawFooter(canvas, d, current ? choiceLabel(current) : "Agent is not set up", hints, ["", "muted"]);
+}
+
+function drawFooter(
+  canvas: Canvas,
+  d: Dashboard,
+  count: string,
+  hints: Hint[],
+  [status, style]: [string, Style] = statusText(d),
+): void {
+  const { width, height } = canvas;
+  const y = height - 1;
+  canvas.paint(y, 0, width, "chrome");
+  const size = (list: Hint[]) =>
+    list.reduce((sum, [key, label]) => sum + cells(key) + (label ? cells(label) + 1 : 0) + 3, -3);
+  // Drop hints from the left of the list when the pane is too narrow.
+  let shown = hints;
+  while (shown.length && size(shown) > width - 4 - cells(count) - 3) shown = shown.slice(1);
+  const room = width - 4 - (shown.length ? size(shown) + 3 : 0);
+  canvas.put(y, 2, count, "muted", room);
+  if (status && cells(count) + 5 < room) canvas.put(y, 2 + cells(count) + 3, status, style, room - cells(count) - 3);
+  let x = width - 2 - size(shown);
+  for (const [key, label, target] of shown) {
+    canvas.put(y, x, key, "text");
+    if (label) canvas.put(y, x + cells(key) + 1, label, "muted");
+    const span = cells(key) + (label ? cells(label) + 1 : 0);
+    if (target) canvas.mark(y, x, span, target);
+    x += span + 3;
+  }
+}
+
+function drawList(canvas: Canvas, d: Dashboard): void {
+  const { height } = canvas;
   const work = d.workspace;
   const selected = d.selected();
+  const peek = d.peek;
+  const width = peek ? canvas.width - peekWidth(canvas.width) : canvas.width;
   const box = d.searchBox();
   if (box) {
-    // Like a picker's filter line: what is searched, then the words.
+    const y = LIST_TOP - 1;
     const prefix = `${box.kind === "jira" ? "Search Jira" : "Filter loaded"}  / `;
-    canvas.put(LIST_TOP, 2, prefix, "title");
+    canvas.put(y, 2, prefix, "title");
     const text = `${box.text}${box.editing ? "▏" : ""}`;
-    canvas.put(LIST_TOP, 2 + prefix.length, text, box.editing ? "accent" : "text");
-    if (!box.editing) {
-      const keys = box.kind === "jira" ? "f edit · Esc clear" : "/ edit · Esc clear";
-      canvas.put(LIST_TOP, 2 + prefix.length + cells(text) + 3, keys, "muted");
-    }
-    canvas.mark(LIST_TOP, 2, width - 4, { kind: "box" });
+    canvas.put(y, 2 + prefix.length, text, box.editing ? "accent" : "text");
+    canvas.mark(y, 2, width - 4, { kind: "box" });
   }
   const top = box ? LIST_TOP + BOX_ROWS : LIST_TOP;
-  type Row = { issue: Issue } | { text: string; style: Style };
+  type Heading = [label: string, count: number, glyph: string, glyphStyle: Style];
+  type Row = { issue: Issue } | { heading: Heading } | { text: string };
   const rows: Row[] = [];
-  for (const [label, issues, heading] of d.groups()) {
-    rows.push({ text: `${label}  ${issues.length}`, style: heading });
-    for (const issue of issues) rows.push({ issue });
-    rows.push({ text: "", style: "muted" });
+  for (const [label, issues, glyph, glyphStyle] of d.groups()) {
+    rows.push({ heading: [label, issues.length, glyph, glyphStyle] });
+    if (!d.collapsed.has(label)) for (const issue of issues) rows.push({ issue });
   }
-  if (rows.length === 0) {
-    let text = d.search ? "No matching issues" : "No issues in this scope";
-    if (work.query.view === View.Sprint && work.query.sprint === null) {
-      text = "Press s to choose a sprint, or 2 for everyone's tasks";
-    } else if (work.query.view === View.Search && !work.query.text) {
-      text =
-        d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
-    } else if (!work.current && work.pending) {
-      text = work.query.view === View.Mentions ? "Looking for mentions…" : "Loading tasks…";
-    } else if (work.error) {
-      text = "Could not load tasks · r retry";
-    }
-    rows.push({ text, style: "mutedBold" });
-  }
+  if (rows.length === 0) rows.push({ text: emptyText(d) });
   const available = listRows(height, box !== null);
   const selectedRow = Math.max(
     0,
@@ -136,111 +188,119 @@ function drawList(canvas: Canvas, d: Dashboard, width: number, height: number, l
   const shownRows = rows.slice(d.offset, d.offset + available);
   const shownIssues = shownRows.flatMap((row) => ("issue" in row ? [row.issue] : []));
   const columns = rowColumns(d, shownIssues, width);
+  // Rows carry a status icon unless status headings already show it.
+  const icons = !(d.grouping === "status" && work.query.view !== View.Today && work.query.view !== View.Mentions);
+
+  if (shownIssues.length) {
+    const y = top - 1;
+    let x = columns.right;
+    canvas.put(y, columns.title, "Issue", "muted");
+    for (const [name, size] of [
+      ["Activity", columns.reason],
+      ["Assignee", columns.person],
+      ["Sprint", columns.sprint],
+    ] as const) {
+      if (size) canvas.put(y, x, name, "muted", size - 1);
+      x += size;
+    }
+    canvas.put(y, x, "Pri", "muted");
+  }
+
   shownRows.forEach((row, i) => {
     const y = top + i;
-    if (!("issue" in row)) {
-      canvas.put(y, 4, row.text, row.style);
+    if ("text" in row) {
+      canvas.put(y, 4, row.text, "mutedBold", width - 6);
+      return;
+    }
+    if ("heading" in row) {
+      const [label, count, glyph, glyphStyle] = row.heading;
+      const folded = d.collapsed.has(label);
+      const room = width - 14;
+      canvas.paint(y, 1, width - 2, "raised");
+      canvas.put(y, 2, glyph, glyphStyle);
+      canvas.put(y, 4, label, "accentBold", room);
+      canvas.put(y, 5 + Math.min(cells(label), room), `${count} ${folded ? "▸" : "▾"}`, "muted");
+      canvas.mark(y, 1, width - 2, { kind: "group", label });
       return;
     }
     const { issue } = row;
-    canvas.mark(y, 2, width - 4, { kind: "issue", key: issue.key });
+    canvas.mark(y, 1, width - 2, { kind: "issue", key: issue.key });
     const active = issue.key === selected?.key;
-    const style: Style = active ? "selectedBold" : "text";
     const quiet: Style = active ? "selection" : "muted";
-    if (active) canvas.put(y, 2, " ".repeat(width - 4), "selection");
-    canvas.put(y, 2, active ? "›" : " ", style);
+    if (active) {
+      canvas.put(y, 1, " ".repeat(width - 2), "selection");
+      canvas.put(y, 2, "›", "selectedBold");
+    } else if (icons) {
+      const [icon, style] = statusIcon(issue);
+      canvas.put(y, 2, icon, style);
+    }
+    canvas.put(y, 4, issue.key, quiet, columns.key);
+    drawSummary(canvas, y, columns.title, issue.summary, columns.titleWidth, active);
+    let x = columns.right;
+    if (columns.reason) canvas.put(y, x, issue.reason ?? "", quiet, columns.reason - 2);
+    x += columns.reason;
+    if (columns.person && issue.section !== YOURS) canvas.put(y, x, issue.assignee, quiet, columns.person - 2);
+    x += columns.person;
+    if (columns.sprint) canvas.put(y, x, shortSprintName(issue.sprint), quiet, columns.sprint - 2);
+    x += columns.sprint;
     const [mark, markStyle] = priorityMark(issue.priority);
-    canvas.put(y, 4, mark, active ? "selection" : markStyle);
-    canvas.put(y, 6, issue.key, quiet, columns.key);
-    const glyphX = 6 + columns.key + 2;
-    canvas.put(y, glyphX, statusGlyph(issue), active ? "selection" : statusStyle(issue));
-    drawSummary(canvas, y, glyphX + 2, issue.summary, columns.title, active);
-    let x = glyphX + 2 + columns.title + 2;
-    if (columns.reason) {
-      canvas.put(y, x, d.note(issue), quiet, columns.reason - 1);
-      x += columns.reason;
-    }
-    if (columns.person) {
-      if (issue.section !== YOURS) canvas.put(y, x, issue.assignee, quiet, columns.person - 2);
-      x += columns.person;
-    }
-    if (columns.sprint) {
-      canvas.put(y, x, sprintLabel(issue.sprint), quiet, columns.sprint - 2);
-      x += columns.sprint;
-    }
-    if (columns.status) {
-      canvas.put(y, x, statusLabel(issue.status), active ? "selection" : statusStyle(issue), columns.status);
-    }
+    canvas.put(y, x, mark, active ? "selection" : markStyle);
   });
 
+  if (peek) drawPeek(canvas, peek, width, top - 1, canvas.width - width, height - 1);
+
   const shown = d.visible().length;
-  const snapshot = work.current ? work.snapshot : null;
-  let count = `${shown} shown / ${work.issues.length} loaded`;
-  if (work.query.view === View.Mentions && snapshot) {
-    count = `${shown} shown · read ${snapshot.scanned} issues updated in ${MENTION_DAYS} days`;
-  }
-  if (work.more) count += ` · n load ${PAGE} more`;
-  canvas.put(height - 9, 2, count, "muted");
-  line(height - 8);
-  if (selected) {
-    canvas.put(height - 7, 2, selected.summary, "title");
-    const { mention } = selected;
-    if (mention) {
-      const said = mention.text.split(/\s+/).join(" ");
-      canvas.put(height - 6, 2, `${mention.author} · ${usDateTime(mention.created)} · ${said}`, "warning");
-    } else {
-      const meta = [
-        selected.key,
-        statusLabel(selected.status),
-        selected.assignee,
-        selected.sprint,
-        selected.priority,
-        selected.reason,
-      ].filter(Boolean);
-      canvas.put(height - 6, 2, meta.join(" · "), "muted");
-    }
-  }
-  drawStatus(canvas, d, height - 5);
-  let hint = "↑↓ select   Enter details   / filter   f search Jira";
-  if (d.finding !== null) hint = "Type words or an issue key   Enter search   Esc cancel";
-  else if (d.searching) hint = "Type to filter loaded issues   Enter keep   Esc done";
-  else if (d.search) hint = "↑↓ select   Enter details   / edit filter   Esc clear";
-  canvas.put(height - 3, 2, hint, "muted");
-  canvas.put(height - 2, 2, "1–7 views   o open   y copy   r refresh   ? help   q quit", "muted");
+  const total = work.issues.length;
+  let count = `${shown} ${shown === 1 ? "issue" : "issues"}`;
+  if (shown !== total) count = `${shown} of ${total} issues`;
+  if (work.query.view === View.Mentions && work.current) count += ` · read ${work.snapshot?.scanned ?? 0}`;
+  let hints: Hint[] = [["?", "Shortcuts", action("help")]];
+  if (d.peekFits()) hints.unshift(["Space", d.peekOpen ? "Close peek" : "Peek", action("peek")]);
+  if (work.more) hints.unshift(["n", `Load ${PAGE} more`, action("load-more")]);
+  if (d.finding !== null || d.searching) hints = [];
+  drawFooter(canvas, d, count, hints);
 }
 
-/** Column widths for issue rows. The title takes what is left; side columns
- * drop away on narrow panes, least useful first, and a column repeating what
- * the headings or view already say is left out. */
+function emptyText(d: Dashboard): string {
+  const work = d.workspace;
+  if (work.query.view === View.Sprint && work.query.sprint === null) return "Press s to choose a sprint";
+  if (work.query.view === View.Search && !work.query.text) {
+    return d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
+  }
+  if (!work.current && work.pending)
+    return work.query.view === View.Mentions ? "Looking for mentions…" : "Loading issues…";
+  if (work.error) return "Could not load issues · r retry";
+  return d.search || filterChips(d).length
+    ? "No issues match this view. Clear a filter or change the search."
+    : "No issues in this view";
+}
+
+/** Column positions for issue rows. The title takes what is left; side
+ * columns drop away on narrow panes, least useful first. */
 function rowColumns(d: Dashboard, issues: Issue[], width: number) {
   const key = Math.max(7, ...issues.map((issue) => cells(issue.key)));
   const view = d.workspace.query.view;
-  // Status headings already name each row's status.
-  const statusHeadings = d.grouping === "status" && view !== View.Today && view !== View.Mentions;
   // Each column is as wide as its longest value on screen, up to a cap, plus a gap.
   const fit = (cap: number, text: (issue: Issue) => string) =>
     Math.min(cap, Math.max(0, ...issues.map((issue) => cells(text(issue))))) + 2;
   const fitOrNone = (cap: number, text: (issue: Issue) => string) =>
     issues.some((issue) => text(issue)) ? fit(cap, text) : 0;
   const wanted = {
-    status: statusHeadings ? 0 : fit(18, (i) => statusLabel(i.status)) - 1,
-    reason: fitOrNone(28, (i) => d.note(i)),
+    reason: fitOrNone(26, (i) => i.reason ?? ""),
     // Assigned is all yours; assignee grouping puts names in the headings.
     person: view === View.Mine || d.grouping === "assignee" ? 0 : fit(18, (i) => i.assignee),
     // Every row of the Sprints view is in the chosen sprint.
-    sprint: view === View.Sprint ? 0 : fitOrNone(16, (i) => sprintLabel(i.sprint)),
+    sprint: view === View.Sprint ? 0 : fitOrNone(14, (i) => shortSprintName(i.sprint)),
   };
-  const fixed = 6 + key + 2 + 2 + 2;
-  const room = (c: typeof wanted) => width - 2 - fixed - c.status - c.reason - c.person - c.sprint;
-  const MIN_TITLE = 36;
-  // The status icon still shows the stage once the status text is gone.
-  for (const drop of ["sprint", "person", "status", "reason"] as const) if (room(wanted) < MIN_TITLE) wanted[drop] = 0;
-  return { key, ...wanted, title: Math.max(10, room(wanted)) };
+  const title = 4 + key + 2;
+  const PRI = 4;
+  const room = (c: typeof wanted) => width - 2 - title - 2 - c.reason - c.person - c.sprint - PRI;
+  // Sprint and reason go first; the assignee stays until titles get short.
+  const minimum = { sprint: 36, reason: 36, person: 24 } as const;
+  for (const drop of ["sprint", "reason", "person"] as const) if (room(wanted) < minimum[drop]) wanted[drop] = 0;
+  const titleWidth = Math.max(10, room(wanted));
+  return { key, title, titleWidth, right: title + titleWidth + 2, ...wanted };
 }
-
-/** A sprint without its board's prefix: "Platform Team - Sprint 2" reads "Sprint 2".
- * The footer shows the full name. */
-const sprintLabel = (name: string): string => name.split(/\s[-–—|]\s/).at(-1) ?? name;
 
 /** Separators that end a breadcrumb prefix such as "Storefront - " or "ЛК / Рассылки - ". */
 const CRUMB = /^(.{2,48}?\s[-–—|]\s)/;
@@ -257,28 +317,28 @@ function drawSummary(canvas: Canvas, y: number, x: number, summary: string, widt
   canvas.put(y, x + cells(crumb), rest, active ? "selectedBold" : "text", width - cells(crumb));
 }
 
-function drawStatus(canvas: Canvas, d: Dashboard, y: number): void {
+function statusText(d: Dashboard): [string, Style] {
   const work = d.workspace;
   if (work.error || work.catalogError) {
-    // Only a failed task refresh means the list shown is the previous one.
-    const keeping = work.error && work.current ? "Refresh failed · keeping previous list · " : "";
-    const text = (work.error || work.catalogError).replaceAll("\n", " · ");
-    canvas.put(y, 2, `${keeping}${text} · r retry`, "error");
-  } else if (work.pending) {
-    canvas.put(y, 2, work.current ? "Refreshing…" : "Loading Jira tasks…", "warning");
-  } else if (d.notice) {
-    canvas.put(y, 2, d.notice, "accent");
-  } else if (work.updated && work.current) {
-    const time = usTime(work.updated);
-    canvas.put(y, 2, `Updated ${time} · ${d.site} · refreshes every 60s`, "muted");
-  } else if (work.catalogPending || work.sprintsPending) {
-    canvas.put(y, 2, "Loading boards and sprints…", "warning");
+    // Only a failed refresh means the list shown is the previous one.
+    const keeping = work.error && work.current ? "Showing the last list · " : "";
+    return [`${keeping}${(work.error || work.catalogError).replaceAll("\n", " · ")} · r retry`, "error"];
   }
+  if (d.notice) return [d.notice, "accent"];
+  if (work.pending) return [work.current ? "Refreshing…" : "Loading…", "muted"];
+  if (work.updated && work.current) return [`Updated ${usTime(work.updated)}`, "muted"];
+  return ["", "muted"];
 }
 
-function drawModal(canvas: Canvas, panel: Panel, width: number, height: number, line: (y: number) => void): void {
-  canvas.put(6, 2, panel.title, "title");
-  canvas.put(7, 2, panel.subtitle, "accent");
+function drawModal(canvas: Canvas, d: Dashboard, panel: Panel): void {
+  const { width, height } = canvas;
+  if (panel.issue) {
+    canvas.put(BODY_TOP - 3, 2, "ISSUE DETAILS", "muted");
+    canvas.put(BODY_TOP - 2, 2, panel.title, "title", width - 4);
+  } else {
+    canvas.put(BODY_TOP - 3, 2, panel.title, "title", width - 4);
+  }
+  canvas.put(BODY_TOP - 1, 2, panel.subtitle, "accent", width - 4);
   const textWidth = Math.max(10, width - 5);
   let lines = layoutCached(panel.body, textWidth);
   if (panel.body.length === 0) {
@@ -295,23 +355,38 @@ function drawModal(canvas: Canvas, panel: Panel, width: number, height: number, 
       x += cells(run.text);
     }
   });
-  line(height - 4);
-  const files = panel.attachments.length ? "   i attachments" : "";
-  canvas.put(height - 3, 2, `↑↓ scroll   PgUp/PgDn page   o open${files}   Esc back`, "muted");
   const last = Math.min(lines.length, panel.scroll + size);
-  canvas.put(height - 2, 2, `${panel.scroll + 1}–${last} of ${lines.length} lines`, "muted");
+  const hints: Hint[] = [];
+  if (panel.attachments.length) hints.push(["i", `${panel.attachments.length} attachments`]);
+  if (panel.issue) hints.push(["o", "Open in Jira"], ["y", "Copy link"]);
+  const position = lines.length > size ? `${Math.round((last / lines.length) * 100)}%` : "";
+  drawFooter(canvas, d, position, hints);
 }
 
-/** Title and keys around an image; the screen draws the image itself. */
-function drawPreview(canvas: Canvas, preview: Preview, height: number, line: (y: number) => void): void {
+function drawPreview(canvas: Canvas, d: Dashboard, preview: Preview): void {
   const item = currentImage(preview);
   if (!item) return;
-  canvas.put(6, 2, item.filename, "title");
-  canvas.put(7, 2, `${preview.index + 1} of ${preview.images.length} · ${describeAttachment(item)}`, "accent");
+  canvas.put(BODY_TOP - 3, 2, item.filename, "title");
+  canvas.put(
+    BODY_TOP - 2,
+    2,
+    `${preview.index + 1} of ${preview.images.length} · ${describeAttachment(item)}`,
+    "accent",
+  );
   if (preview.error) canvas.put(BODY_TOP, 2, `Could not load the image: ${preview.error}`, "error");
   else if (!preview.bytes) canvas.put(BODY_TOP, 2, "Loading image…", "warning");
-  line(height - 4);
-  const flip = preview.images.length > 1 ? "←/→ previous / next   " : "";
-  canvas.put(height - 3, 2, `${flip}o open in Helium   Esc back`, "muted");
-  canvas.put(height - 2, 2, `Image ${preview.index + 1} of ${preview.images.length}`, "muted");
+  // OpenTUI draws the image itself, with the best protocol the terminal has.
+  else {
+    const height = canvas.height - BODY_TOP - FOOTER_ROWS - 1;
+    canvas.reserve("image", {
+      left: 2,
+      top: BODY_TOP,
+      width: Math.max(1, canvas.width - 4),
+      height: Math.max(1, height),
+    });
+  }
+  const hints: Hint[] = [];
+  if (preview.images.length > 1) hints.push(["←→", "Previous / next"]);
+  hints.push(["o", "Open in Helium"]);
+  drawFooter(canvas, d, `Image ${preview.index + 1} of ${preview.images.length}`, hints);
 }

@@ -2,12 +2,42 @@
 
 import { period } from "../dates";
 import { View } from "../jira/query";
-import { type Issue, issueProject } from "../jira/types";
+import { type Issue, issueProject, type TodaySection } from "../jira/types";
 import type { Style } from "./canvas";
-import { statusStyle } from "./status";
+import { STAGES, stage, statusIcon } from "./status";
 
 export type Grouping = "status" | "assignee";
-export type Group = [label: string, issues: Issue[], heading: Style];
+/** A heading's label, its issues, and the icon drawn before the label. */
+export type Group = [label: string, issues: Issue[], icon: string, iconStyle: Style];
+type Heading = [label: string, icon: string, iconStyle: Style];
+
+/** Icons for Team focus sections. */
+const SECTION_ICONS: Record<TodaySection, [icon: string, style: Style]> = {
+  Blocked: ["⊘", "error"],
+  Stuck: ["◐", "warning"],
+  "Needs an owner": ["○", "muted"],
+  Overdue: ["!", "warning"],
+  "Mentioned you": ["@", "accent"],
+  "Your issues, changed since yesterday": ["◇", "accent"],
+  "Assigned to you": ["◫", "accent"],
+  "Waiting for release": ["◕", "ship"],
+  "Forgotten in active sprints": ["◌", "muted"],
+};
+
+/** Issues matching the search, grouped under their headings in first-seen order. */
+function group(issues: Issue[], search: string, heading: (issue: Issue) => Heading): Group[] {
+  const needle = search.toLocaleLowerCase();
+  const groups = new Map<string, Group>();
+  for (const issue of issues) {
+    const haystack = `${issue.key} ${issue.summary} ${issue.status} ${issueProject(issue)} ${issue.assignee}`;
+    if (needle && !haystack.toLocaleLowerCase().includes(needle)) continue;
+    const [label, icon, iconStyle] = heading(issue);
+    const existing = groups.get(label);
+    if (existing) existing[1].push(issue);
+    else groups.set(label, [label, [issue], icon, iconStyle]);
+  }
+  return [...groups.values()];
+}
 
 const CATEGORY_RANK = { indeterminate: 0, new: 1, done: 2 } as const;
 
@@ -15,34 +45,16 @@ const CATEGORY_RANK = { indeterminate: 0, new: 1, done: 2 } as const;
 const byCategory = (issues: Issue[]): Issue[] =>
   issues.toSorted((a, b) => CATEGORY_RANK[a.category] - CATEGORY_RANK[b.category]);
 
-/** Issues matching the search, grouped by label in first-seen order.
- * Headings are muted unless `heading` colors them by their first issue. */
-function group(
-  issues: Issue[],
-  search: string,
-  label: (issue: Issue) => string,
-  heading: (issue: Issue) => Style = () => "mutedBold",
-): Group[] {
-  const needle = search.toLocaleLowerCase();
-  const groups = new Map<string, Issue[]>();
-  for (const issue of issues) {
-    const haystack = `${issue.key} ${issue.summary} ${issue.status} ${issueProject(issue)} ${issue.assignee}`;
-    if (needle && !haystack.toLocaleLowerCase().includes(needle)) continue;
-    const name = label(issue);
-    groups.set(name, [...(groups.get(name) ?? []), issue]);
-  }
-  return [...groups].map(([name, members]) => [name, members, members[0] ? heading(members[0]) : "mutedBold"]);
-}
-
 export function groupIssues(issues: Issue[], view: View, grouping: Grouping, search: string): Group[] {
   if (grouping === "assignee") {
-    return group(byCategory(issues), search, (i) => i.assignee).sort(([a], [b]) => a.localeCompare(b));
+    return group(byCategory(issues), search, (i) => [i.assignee, "◫", "accent"]).sort(([a], [b]) => a.localeCompare(b));
   }
-  if (view === View.Mentions) {
-    // Already newest mention first; group by when you were mentioned.
-    return group(issues, search, (i) => period(i.mention?.created ?? ""));
+  // Mentions arrive newest first; group by when you were mentioned.
+  if (view === View.Mentions) return group(issues, search, (i) => [period(i.mention?.created ?? ""), "@", "accent"]);
+  // Team focus arrives in section order, most urgent first.
+  if (view === View.Today) {
+    return group(issues, search, (i) => (i.section ? [i.section, ...SECTION_ICONS[i.section]] : ["", " ", "muted"]));
   }
-  // Today arrives in section order, most urgent first.
-  if (view === View.Today) return group(issues, search, (i) => i.section ?? "");
-  return group(byCategory(issues), search, (i) => i.status, statusStyle);
+  const rank = ([, [first]]: Group) => (first ? STAGES.indexOf(stage(first)) : 0);
+  return group(issues, search, (i) => [stage(i), ...statusIcon(i)]).sort((a, b) => rank(a) - rank(b));
 }

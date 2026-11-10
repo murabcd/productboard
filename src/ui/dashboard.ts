@@ -1,22 +1,19 @@
 /** Dashboard state and keyboard interaction, independent of the terminal. */
 
+import type { AgentBackend } from "../agent/chat";
 import type { JiraClient } from "../jira/client";
-import { isPersonal, STATUSES, scoped, VIEWS, View, withAssignee, withView } from "../jira/query";
-import {
-  type Attachment,
-  type Choice,
-  describeAttachment,
-  type Issue,
-  isImage,
-  SPRINT_STATES,
-  sprintChoice,
-} from "../jira/types";
+import { type IssueQuery, STATUSES, scoped, View, withAssignee, withView } from "../jira/query";
+import { type Attachment, type Issue, isImage } from "../jira/types";
 import { message, type Workspace } from "../state/workspace";
+import { AgentPanel } from "./agent-panel";
 import { type Group, type Grouping, groupIssues } from "./grouping";
-import { bindings, editLine, type Key, keyId, type Target } from "./input";
-import { listRows, modalRows, pickerRows } from "./layout";
+import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
+import { listRows, modalRows, PEEK_MIN_WIDTH, pickerRows, sidebarWidth } from "./layout";
+import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
 import { helpPanel, issuePanel, type Panel, showDetail, sprintPanel } from "./panel";
-import { Picker, type PickerKind } from "./picker";
+import type { Peek } from "./peek";
+import { Picker, type PickerItem, type PickerKind } from "./picker";
+import { type FilterChip, filterChips, PICKERS } from "./pickers";
 import { currentImage, ImageCache, type Preview, previewOf } from "./preview";
 
 export interface Opener {
@@ -24,16 +21,7 @@ export interface Opener {
   copy(text: string): Promise<void>;
 }
 
-const PICKER_TITLES: Record<PickerKind, string> = {
-  board: "Choose board",
-  sprint: "Choose sprint",
-  project: "Choose project",
-  assignee: "People in loaded issues",
-  attachment: "Attachments · Enter previews images, opens other files in Helium",
-};
-
 const NOTICE_MS = 4000;
-/** Lines a mouse-wheel notch scrolls in details. */
 const WHEEL_LINES = 3;
 
 /** What receives input, topmost first. Prompts belong to the list screen. */
@@ -53,8 +41,6 @@ export interface SearchBox {
   editing: boolean;
 }
 
-const choice = (value: string, label: string, detail = ""): Choice => ({ value, label, detail, state: "" });
-
 export class Dashboard {
   index = 0;
   offset = 0;
@@ -66,11 +52,16 @@ export class Dashboard {
   personLabel = "All people";
   picker: Picker | null = null;
   modal: Panel | null = null;
-  /** An image preview shown over the issue panel. */
   preview: Preview | null = null;
   /** A short confirmation or error after open/copy; it clears itself. */
   notice = "";
   height = 24;
+  width = 120;
+  /** The peek panel beside the list; Space toggles it. */
+  peekOpen = false;
+  peek: Peek | null = null;
+  readonly collapsed = new Set<string>();
+  readonly agent: AgentPanel;
   private autoSprintPicker = true;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly imageCache = new ImageCache();
@@ -81,9 +72,10 @@ export class Dashboard {
     readonly workspace: Workspace,
     private readonly client: Pick<JiraClient, "detail" | "attachment" | "site">,
     private readonly opener: Opener,
-    /** Schedules a new frame. */
     private readonly redraw: () => void,
+    agentBackend?: AgentBackend,
   ) {
+    this.agent = new AgentPanel(workspace, agentBackend, redraw, () => this.update());
     workspace.subscribe(() => this.update());
   }
 
@@ -91,13 +83,28 @@ export class Dashboard {
     return this.client.site;
   }
 
+  dispose(): void {
+    this.agent.dispose();
+    clearTimeout(this.noticeTimer);
+  }
+
+  agentActive(): boolean {
+    return this.agent.active(this.layer().kind === "list");
+  }
+
   groups(): Group[] {
     const { issues, query } = this.workspace;
     return groupIssues(issues, query.view, this.grouping, this.search);
   }
 
+  /** Issues the selection can reach: folded groups are skipped. */
   visible(): Issue[] {
-    return this.groups().flatMap(([, issues]) => issues);
+    return this.groups().flatMap(([label, issues]) => (this.collapsed.has(label) ? [] : issues));
+  }
+
+  /** Whether the peek panel fits beside the list; narrow panes open details instead. */
+  peekFits(): boolean {
+    return this.width - sidebarWidth(this.width) >= PEEK_MIN_WIDTH;
   }
 
   selected(): Issue | undefined {
@@ -108,20 +115,24 @@ export class Dashboard {
     return issue;
   }
 
-  /** After any change: keep the selection, refresh open pickers, redraw. */
   private update(): void {
     if (this.selectedKey) {
       const index = this.visible().findIndex((issue) => issue.key === this.selectedKey);
       if (index >= 0) this.index = index;
     }
-    if (this.picker) this.picker.choices = this.choices(this.picker.kind);
+    if (this.picker) {
+      this.picker.choices = PICKERS[this.picker.kind].items(this);
+      if (!this.picker.query) this.picker.focusCurrent();
+    }
+    this.syncPeek();
     const { sprints, query } = this.workspace;
     if (
       this.autoSprintPicker &&
       sprints.length &&
       query.view === View.Sprint &&
       query.sprint === null &&
-      !this.picker
+      !this.picker &&
+      !this.agent.tab
     ) {
       this.openPicker("sprint");
       this.autoSprintPicker = false;
@@ -129,70 +140,146 @@ export class Dashboard {
     this.redraw();
   }
 
-  choices(kind: PickerKind): Choice[] {
-    const work = this.workspace;
-    switch (kind) {
+  openPicker(requested: PickerKind): void {
+    // A sprint belongs to a board, so without one the board comes first.
+    const kind = requested === "sprint" && !this.workspace.board ? "board" : requested;
+    const source = PICKERS[kind];
+    this.picker = new Picker(kind, source.title, source.items(this), source.options?.(this));
+    source.load?.(this);
+  }
+
+  /** Close the picker and do what the chosen item does, which may open the next one. */
+  private pick(item: PickerItem): void {
+    this.picker = null;
+    item.run();
+  }
+
+  changeQuery(change: Partial<IssueQuery>): void {
+    this.resetList();
+    this.workspace.change(scoped(this.workspace.query, change));
+  }
+
+  chooseBoard(board: string): void {
+    this.resetList();
+    this.workspace.chooseBoard(board);
+    this.openPicker("sprint");
+  }
+
+  chooseAssignee(assignee: string, label: string): void {
+    this.resetList();
+    this.personLabel = label;
+    this.workspace.change(withAssignee(this.workspace.query, assignee));
+  }
+
+  /** Images preview over the details panel; other files open in Helium. */
+  openAttachment(item: Attachment): void {
+    const images = (this.modal?.attachments ?? []).filter(isImage);
+    if (isImage(item)) this.openPreview(previewOf(images, item));
+    else this.openUrl(this.attachmentUrl(item), "Opened attachment");
+  }
+
+  /** A header, footer or peek button, or its key. */
+  runAction(action: Action): void {
+    switch (action) {
+      case "filter":
+      case "display":
       case "board":
-        return work.boards;
       case "sprint":
-        return work.sprints.map(sprintChoice);
-      case "project":
-        return [choice("", "All projects"), ...work.projects];
-      case "attachment":
-        return (this.modal?.attachments ?? []).map((item) => choice(item.id, item.filename, describeAttachment(item)));
-      case "assignee": {
-        const people = new Map(work.issues.filter((i) => i.assigneeId).map((i) => [i.assigneeId, i.assignee]));
-        const sorted = [...people].sort(([, a], [, b]) => a.localeCompare(b));
-        return [
-          choice("", "All people"),
-          choice("unassigned", "Unassigned"),
-          ...sorted.map(([id, name]) => choice(id, name)),
-        ];
+      case "commands":
+      case "model":
+      case "reasoning":
+        this.openPicker(action);
+        return;
+      case "brief": {
+        const sprint = this.workspace.sprint();
+        if (sprint) this.modal = sprintPanel(sprint);
+        return;
       }
+      case "peek": {
+        const issue = this.selected();
+        if (!issue) return;
+        if (this.peekFits()) this.peekOpen = !this.peekOpen;
+        else this.openDetail(issue);
+        return;
+      }
+      case "details": {
+        const issue = this.selected();
+        if (issue) this.openDetail(issue);
+        return;
+      }
+      case "refresh":
+        this.workspace.refresh();
+        this.workspace.retryCatalogs();
+        return;
+      case "help":
+        this.modal = helpPanel();
+        return;
+      case "load-more":
+        this.workspace.loadMore();
+        return;
     }
   }
 
-  openPicker(requested: PickerKind): void {
-    const work = this.workspace;
-    const kind = requested === "sprint" && !work.board ? "board" : requested;
-    const tabs = kind === "sprint" ? [...SPRINT_STATES, "all"] : [];
-    // Start on the first tab that has sprints: active, then planned, then closed.
-    const present = new Set(work.sprints.map((s) => s.state));
-    const tab = Math.max(
-      0,
-      SPRINT_STATES.findIndex((state) => present.has(state)),
-    );
-    this.picker = new Picker(kind, PICKER_TITLES[kind], this.choices(kind), tabs, kind === "sprint" ? tab : 0);
-    if (kind === "sprint" && work.sprints.length === 0 && !work.sprintsPending) work.loadSprints();
-    else if ((kind === "board" || kind === "project") && work.boards.length === 0) work.loadCatalog();
+  private removeFilter(chip: FilterChip): void {
+    const { query } = this.workspace;
+    if (chip === "project") this.workspace.change(scoped(query, { project: "" }));
+    else if (chip === "status") this.workspace.change(scoped(query, { status: "all" }));
+    else {
+      this.personLabel = "All people";
+      this.workspace.change(withAssignee(query, ""));
+    }
+    this.toTop();
   }
 
-  choose(kind: PickerKind, picked: Choice): void {
-    const work = this.workspace;
-    this.picker = null;
-    if (kind === "attachment") {
-      // Images preview over the details panel; other files open in Helium.
-      const attachments = this.modal?.attachments ?? [];
-      const item = attachments.find((a) => a.id === picked.value);
-      if (item && isImage(item)) this.openPreview(previewOf(attachments.filter(isImage), item));
-      else if (item) this.openUrl(this.attachmentUrl(item), "Opened attachment");
+  clearFilters(): void {
+    for (const [chip] of filterChips(this)) this.removeFilter(chip);
+    this.search = "";
+  }
+
+  setGrouping(grouping: Grouping): void {
+    this.grouping = grouping;
+    this.collapsed.clear();
+    this.toTop();
+  }
+
+  openAgent(): void {
+    this.closeLayers();
+    this.agent.tab = true;
+  }
+
+  startFind(): void {
+    this.finding = this.workspace.query.text;
+  }
+
+  /** Keep the peek panel on the selected issue, loading its details once. */
+  private syncPeek(): void {
+    const issue = this.peekOpen && this.peekFits() ? this.selected() : undefined;
+    if (!issue) {
+      this.peek = null;
       return;
     }
-    this.resetList();
-    if (kind === "board") {
-      work.chooseBoard(picked.value);
-      this.openPicker("sprint");
-    } else if (kind === "sprint") {
-      work.change(scoped(work.query, { view: View.Sprint, sprint: Number(picked.value) }));
-    } else if (kind === "project") {
-      work.change(scoped(work.query, { project: picked.value }));
-    } else {
-      this.personLabel = picked.label;
-      work.change(withAssignee(work.query, picked.value));
+    if (this.peek?.issue.key === issue.key) {
+      this.peek.issue = issue;
+      return;
     }
+    const peek: Peek = { issue, detail: null, error: "", scroll: 0 };
+    this.peek = peek;
+    this.client
+      .detail(issue.key)
+      .then(
+        (detail) => {
+          peek.detail = detail;
+        },
+        (error: unknown) => {
+          peek.error = message(error);
+        },
+      )
+      .finally(() => {
+        if (this.peek === peek) this.redraw();
+      });
   }
 
-  private openDetail(issue: Issue): void {
+  openDetail(issue: Issue): void {
     this.modal = issuePanel(issue);
     this.loadDetail(this.modal);
   }
@@ -261,7 +348,8 @@ export class Dashboard {
       });
   }
 
-  private urlAction(copy: boolean): void {
+  /** Open the shown issue in Helium, or copy its link. */
+  openIssue(copy: boolean): void {
     const issue = this.modal ? this.modal.issue : this.selected();
     if (!issue) return;
     const url = `https://${this.site}/browse/${issue.key}`;
@@ -326,7 +414,9 @@ export class Dashboard {
     this.offset = 0;
   }
 
-  private showView(view: View): void {
+  showView(view: View): void {
+    this.agent.tab = false;
+    this.collapsed.clear();
     const work = this.workspace;
     work.change(withView(work.query, view));
     this.resetList();
@@ -350,16 +440,29 @@ export class Dashboard {
 
   /** Route a key to the active layer; returns false to quit. */
   handle(key: Key): boolean {
+    const id = keyId(key);
+    if (id === "commands") {
+      this.closeLayers();
+      this.agent.tab = false;
+      this.runAction("commands");
+      return true;
+    }
+    if (this.agentActive()) {
+      // Issues Agent mentioned open from a dialog; the rest is Agent's own.
+      if (id === "agent-cited") this.openPicker("cited");
+      else this.agent.key(key, Math.max(1, this.height - 12));
+      return true;
+    }
     const layer = this.layer();
     switch (layer.kind) {
       case "preview":
-        this.previewKeys.get(keyId(key))?.(layer.preview);
+        this.previewKeys.get(id)?.(layer.preview);
         break;
       case "picker":
         this.handlePicker(layer.picker, key);
         break;
       case "modal":
-        this.modalKeys.get(keyId(key))?.(layer.panel);
+        this.modalKeys.get(id)?.(layer.panel);
         break;
       case "find":
         this.handleFind(layer.draft, key);
@@ -368,20 +471,25 @@ export class Dashboard {
         this.handleSearch(key);
         break;
       case "list":
-        if (keyId(key) === "q" || keyId(key) === "ctrl-c") return false;
-        this.listKeys.get(keyId(key))?.();
+        if (id === "q" || id === "ctrl-c") return false;
+        // Space can't sit in a space-separated binding table.
+        if (id === " ") this.runAction("peek");
+        else this.listKeys.get(id)?.();
         this.selected();
     }
+    this.syncPeek();
     return true;
   }
 
   private handlePicker(picker: Picker, key: Key): void {
     const picked = picker.handle(key, pickerRows(this.height));
-    if (picked) this.choose(picker.kind, picked);
-    else if (picker.closed) {
-      this.picker = null;
-      this.autoSprintPicker = false;
-    }
+    if (picked) this.pick(picked);
+    else if (picker.closed) this.closePicker();
+  }
+
+  private closePicker(): void {
+    this.picker = null;
+    this.autoSprintPicker = false;
   }
 
   private handleSearch(key: Key): void {
@@ -395,7 +503,6 @@ export class Dashboard {
     this.toTop();
   }
 
-  /** Typing a Jira search: Enter runs it in the Search view. */
   private handleFind(draft: string, key: Key): void {
     const edited = editLine(draft, key, 200);
     if (edited !== undefined) {
@@ -409,9 +516,38 @@ export class Dashboard {
     }
   }
 
-  /** A click on something the last frame drew. */
   click(target: Target): void {
+    // A dialog takes the clicks: a choice picks, a click elsewhere closes it.
+    if (this.picker && target.kind !== "choice" && target.kind !== "dialog") {
+      this.closePicker();
+      return;
+    }
+    this.clickTarget(target);
+    this.syncPeek();
+  }
+
+  private clickTarget(target: Target): void {
     switch (target.kind) {
+      case "action":
+        this.closeLayers();
+        this.runAction(target.action);
+        return;
+      case "group":
+        if (this.collapsed.has(target.label)) this.collapsed.delete(target.label);
+        else this.collapsed.add(target.label);
+        this.selected();
+        return;
+      case "agent":
+        this.agentClick(target.action);
+        return;
+      case "agent-cite": {
+        const issue = this.agent.chat.current.issues.get(target.key);
+        if (!issue) return;
+        this.preview = null;
+        this.picker = null;
+        this.openDetail(issue);
+        return;
+      }
       case "view":
         this.closeLayers();
         this.showView(target.view);
@@ -428,7 +564,6 @@ export class Dashboard {
         return;
       }
       case "box":
-        // Edit whichever search the box shows.
         if (this.searchBox()?.kind === "jira") this.finding ??= this.workspace.query.text;
         else this.searching = true;
         return;
@@ -436,22 +571,57 @@ export class Dashboard {
         const picker = this.picker;
         const picked = picker?.visible()[target.index];
         if (!picker || !picked) return;
-        if (picker.index === target.index) this.choose(picker.kind, picked);
+        if (picker.index === target.index) this.pick(picked);
         else picker.index = target.index;
         return;
       }
+      case "peek":
+      case "dialog":
+      case "dismiss":
+        return;
     }
   }
 
-  /** The mouse wheel: `delta` is +1 per notch down, -1 per notch up. */
-  wheel(delta: number): void {
+  private agentClick(action: Extract<Target, { kind: "agent" }>["action"]): void {
+    const { chat } = this.agent;
+    switch (action) {
+      case "tab":
+        this.openAgent();
+        return;
+      case "new":
+        chat.start();
+        return;
+      case "previous":
+      case "next":
+        chat.select(action === "previous" ? -1 : 1);
+        return;
+      case "board":
+      case "sprint":
+        this.openPicker(action);
+        return;
+    }
+  }
+
+  private scrollPeek(delta: number): void {
+    if (this.peek) this.peek.scroll = Math.max(0, this.peek.scroll + delta * WHEEL_LINES);
+  }
+
+  /** The mouse wheel: `delta` is +1 per notch down, -1 per notch up.
+   * `over` is what the pointer is on, so the peek scrolls itself. */
+  wheel(delta: number, over?: Target): void {
     const layer = this.layer();
-    if (layer.kind === "preview") return;
-    if (layer.kind === "picker") layer.picker.index = Math.max(0, layer.picker.index + delta);
-    else if (layer.kind === "modal") layer.panel.scroll = Math.max(0, layer.panel.scroll + delta * WHEEL_LINES);
-    else {
+    if (over?.kind === "peek" && this.peek && layer.kind === "list") {
+      this.scrollPeek(delta);
+    } else if (this.agentActive()) {
+      this.agent.wheel(delta);
+    } else if (layer.kind === "picker") {
+      layer.picker.index = Math.max(0, layer.picker.index + delta);
+    } else if (layer.kind === "modal") {
+      layer.panel.scroll = Math.max(0, layer.panel.scroll + delta * WHEEL_LINES);
+    } else if (layer.kind !== "preview") {
       this.index = Math.max(0, this.index + delta);
       this.selected();
+      this.syncPeek();
     }
   }
 
@@ -477,8 +647,8 @@ export class Dashboard {
     end: (panel) => {
       panel.scroll = Number.MAX_SAFE_INTEGER;
     },
-    o: () => this.urlAction(false),
-    y: () => this.urlAction(true),
+    o: () => this.openIssue(false),
+    y: () => this.openIssue(true),
     i: (panel) => {
       if (panel.attachments.length) this.openPicker("attachment");
     },
@@ -498,22 +668,41 @@ export class Dashboard {
   });
 
   private readonly listKeys = bindings<() => void>({
-    // Esc steps back: first the filter, then the Jira search.
+    // Esc steps back: first the peek, then the filter, then the Jira search.
     escape: () => {
-      if (!this.search && this.workspace.query.text && this.workspace.query.view === View.Search) this.clearSearch();
+      if (this.peekOpen) this.peekOpen = false;
+      else if (!this.search && this.workspace.query.text && this.workspace.query.view === View.Search)
+        this.clearSearch();
       else this.resetList();
     },
     "/": () => {
       this.searching = true;
     },
-    f: () => {
-      this.finding = this.workspace.query.text;
+    F: () => this.runAction("filter"),
+    D: () => this.runAction("display"),
+    z: () => {
+      const issue = this.selected();
+      const group = this.groups().find(([, issues]) => issue && issues.includes(issue));
+      if (group) this.collapsed.add(group[0]);
     },
+    Z: () => this.collapsed.clear(),
+    "left right": () => {
+      const tabs = MY_ISSUES_TABS.map(([view]) => view);
+      const at = tabs.indexOf(this.workspace.query.view);
+      if (at >= 0) this.showView(tabs[(at + 1) % tabs.length] ?? View.Mine);
+    },
+    J: () => this.scrollPeek(1),
+    K: () => this.scrollPeek(-1),
+    f: () => this.startFind(),
     tab: () => {
-      const current = VIEWS.indexOf(this.workspace.query.view);
-      this.showView(VIEWS[(current + 1) % VIEWS.length] ?? View.Sprint);
+      // Created is a tab of My issues, so Tab moves on from the page, not the tab.
+      const here = pageOf(this.workspace.query.view);
+      const next = NAV_VIEWS[(NAV_VIEWS.findIndex((view) => pageOf(view) === here) + 1) % NAV_VIEWS.length];
+      if (next !== undefined) this.showView(next);
     },
-    ...Object.fromEntries(VIEWS.map((view, n) => [`${n + 1}`, () => this.showView(view)])),
+    ...Object.fromEntries(
+      NAVIGATION.map((page) => [navKey(page), () => (page.to === "agent" ? this.openAgent() : this.showView(page.to))]),
+    ),
     "j down": () => {
       this.index += 1;
     },
@@ -532,44 +721,18 @@ export class Dashboard {
     end: () => {
       this.index = this.visible().length - 1;
     },
-    "enter v": () => {
-      const issue = this.selected();
-      if (issue) this.openDetail(issue);
-    },
-    "?": () => {
-      this.modal = helpPanel();
-    },
-    t: () => {
-      const sprint = this.workspace.sprint();
-      if (sprint) this.modal = sprintPanel(sprint);
-    },
-    r: () => {
-      this.workspace.refresh();
-      this.workspace.retryCatalogs();
-    },
-    o: () => this.urlAction(false),
-    y: () => this.urlAction(true),
+    "enter v": () => this.runAction("details"),
+    "?": () => this.runAction("help"),
+    t: () => this.runAction("brief"),
+    r: () => this.runAction("refresh"),
+    o: () => this.openIssue(false),
+    y: () => this.openIssue(true),
     b: () => this.openPicker("board"),
     s: () => this.openPicker("sprint"),
     p: () => this.openPicker("project"),
     a: () => this.openPicker("assignee"),
     d: () => this.cycleStatus(),
-    g: () => {
-      this.grouping = this.grouping === "status" ? "assignee" : "status";
-      this.toTop();
-    },
-    n: () => this.workspace.loadMore(),
+    g: () => this.setGrouping(this.grouping === "status" ? "assignee" : "status"),
+    n: () => this.runAction("load-more"),
   });
-
-  /** Why Today lists a row. Mentions leaves it out: the headings say when,
-   * and the footer shows who mentioned you and what they said. */
-  note(issue: Issue): string {
-    return issue.reason ?? "";
-  }
-
-  personScope(): string {
-    const { query } = this.workspace;
-    if (isPersonal(query.view)) return "me";
-    return query.assignee ? this.personLabel : "All people";
-  }
 }

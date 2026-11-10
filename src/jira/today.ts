@@ -4,23 +4,10 @@ import { localDay, usDate } from "../dates";
 import type { JiraClient } from "./client";
 import { jiraTime, LIST_FIELDS, openBlocker, type RawIssue, toIssue } from "./parse";
 import type { IssueQuery } from "./query";
-import { type Issue, mentionNote } from "./types";
+import { type Issue, mentionNote, TODAY_SECTIONS, type TodaySection } from "./types";
 
-/** Sections in display order; an issue appears only in the first that fits. */
-export const TODAY_SECTIONS = [
-  "Blocked",
-  "Stuck",
-  "Needs an owner",
-  "Overdue",
-  "Mentioned you",
-  "Your issues, changed since yesterday",
-  "Assigned to you",
-  "Waiting for release",
-  "Forgotten in active sprints",
-] as const;
-type Section = (typeof TODAY_SECTIONS)[number];
 /** Its heading already names the person, so rows there leave the assignee out. */
-export const YOURS: Section = "Assigned to you";
+export const YOURS: TodaySection = "Assigned to you";
 
 /** In progress with no update for this many days counts as stuck. */
 export const STUCK_DAYS = 5;
@@ -46,7 +33,7 @@ export function ago(ms: number, now: number): string {
 /** Why an active-sprint issue needs attention, or undefined when it doesn't.
  * Blocked names its cause when Jira knows one; a "Blocked" status alone
  * leaves the reason empty because the status column already says it. */
-function attention(raw: RawIssue, flagged: Set<string>, now: number): [Section, string] | undefined {
+function attention(raw: RawIssue, flagged: Set<string>, now: number): [TodaySection, string] | undefined {
   const issue = toIssue(raw);
   const idle = raw.fields.updated ? Math.floor((now - jiraTime(raw.fields.updated)) / DAY_MS) : 0;
   // Long-untouched work would bury live problems, so it is set aside first.
@@ -87,9 +74,9 @@ export async function today(
     source.search(where("assignee = currentUser()", "statusCategory != Done"), TIMED_FIELDS, query.limit),
   ]);
 
-  const sections = new Map<Section, Issue[]>(TODAY_SECTIONS.map((name) => [name, []]));
+  const sections = new Map<TodaySection, Issue[]>(TODAY_SECTIONS.map((name) => [name, []]));
   const placed = new Set<string>();
-  const place = (section: Section, issue: Issue, reason: string) => {
+  const place = (section: TodaySection, issue: Issue, reason: string) => {
     if (placed.has(issue.key)) return;
     placed.add(issue.key);
     sections.get(section)?.push({ ...issue, section, ...(reason ? { reason } : {}) });

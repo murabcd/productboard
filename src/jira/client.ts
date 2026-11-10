@@ -189,7 +189,6 @@ export class JiraClient {
     return toDetail(raw, toComments(thread, me));
   }
 
-  /** An attachment's file content. */
   attachment(id: string): Promise<Uint8Array> {
     return this.http.download(`/rest/api/3/attachment/content/${encodeURIComponent(id)}`);
   }

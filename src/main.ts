@@ -1,7 +1,14 @@
-/** productboard: a read-only Jira workspace in the terminal. */
-
 import { createInterface } from "node:readline/promises";
-import { loadCredentials, readConfig, rememberBoard, saveCredentials, validate } from "./auth";
+import { EveAgent } from "./agent/eve";
+import {
+  agentProvider,
+  loadCredentials,
+  readConfig,
+  rememberBoard,
+  saveAgentKey,
+  saveCredentials,
+  validate,
+} from "./auth";
 import { JiraClient } from "./jira/client";
 import { type Credentials, JiraHttp } from "./jira/http";
 import { initialQuery, View } from "./jira/query";
@@ -10,10 +17,11 @@ import { clean } from "./text";
 import { Dashboard, type Opener } from "./ui/dashboard";
 import { openScreen } from "./ui/screen";
 
-const USAGE = `Usage: board [--login | --check | --help]
+const USAGE = `Usage: board [--login | --agent-login | --check | --help]
 
   board           Open the dashboard
   board --login   Save your Jira site, email and API token (token goes to Keychain)
+  board --agent-login   Save the Agent provider API key to Keychain
   board --check   Check Jira access without opening the dashboard`;
 
 const TOKEN_PAGE = "https://id.atlassian.com/manage-profile/security/api-tokens";
@@ -21,6 +29,7 @@ const TOKEN_PAGE = "https://id.atlassian.com/manage-profile/security/api-tokens"
 async function main(args: string[]): Promise<number> {
   if (args.includes("--help") || args.includes("-h")) return say(USAGE);
   if (args.includes("--login")) return login();
+  if (args.includes("--agent-login")) return agentLogin();
   const credentials = loadCredentials();
   if (typeof credentials === "string") return fail(credentials);
   const http = new JiraHttp(credentials);
@@ -52,17 +61,19 @@ async function dashboard(client: JiraClient, preferredBoard: string | undefined)
   const workspace = new Workspace(client, { preferredBoard, rememberBoard });
   // Scheduled refreshes and retries; the screen redraws only when state changes.
   const timer = setInterval(() => workspace.tick(), 1000);
+  const agent = EveAgent.create(client);
+  const board = new Dashboard(workspace, client, macOpener, screen.redraw, agent);
   try {
-    const board = new Dashboard(workspace, client, macOpener, screen.redraw);
     workspace.loadCatalog();
     await screen.show(board);
   } finally {
     clearInterval(timer);
+    board.dispose();
     await screen.close();
+    await agent?.close();
   }
 }
 
-/** Open links in Helium and copy with pbcopy. */
 const macOpener: Opener = {
   open: (url) => run(["open", "-a", "Helium", url]),
   copy: (text) => run(["pbcopy"], text),
@@ -78,6 +89,18 @@ async function run(command: string[], input?: string): Promise<void> {
   if ((await child.exited) !== 0) {
     const error = clean((await new Response(child.stderr).text()).trim());
     throw new Error(error || "Could not open the link");
+  }
+}
+
+async function agentLogin(): Promise<number> {
+  if (!process.stdin.isTTY) return fail("Run board --agent-login in a terminal.");
+  const provider = agentProvider();
+  try {
+    const token = await askHidden(provider === "openai" ? "OpenAI API key" : "Anthropic API key");
+    saveAgentKey(provider, token);
+    return say("Agent API key saved to Keychain.");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
   }
 }
 

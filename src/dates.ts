@@ -17,8 +17,8 @@ export function usDateTime(iso: string): string {
   return `${usDate(match[1] ?? "")} ${hour % 12 || 12}:${match[3]} ${hour < 12 ? "AM" : "PM"}`;
 }
 
-/** A moment's local time of day, e.g. "1:08:14 PM". */
-export const usTime = (date: Date): string => date.toLocaleTimeString("en-US");
+/** A moment's local time of day, e.g. "1:08 PM". */
+export const usTime = (date: Date): string => date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_NAMES = [

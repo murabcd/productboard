@@ -1,7 +1,7 @@
 /** Async view state: keep successful results and reject responses for old scopes. */
 
 import type { Catalog, Snapshot } from "../jira/client";
-import { type IssueQuery, initialQuery, isReady, PAGE, sameQuery, sameScope, scoped, View } from "../jira/query";
+import { type IssueQuery, initialQuery, isReady, PAGE, sameQuery, sameScope, scoped } from "../jira/query";
 import type { Choice, Issue, Sprint } from "../jira/types";
 import { clean } from "../text";
 
@@ -16,14 +16,6 @@ export const REFRESH_MS = 60_000;
 const DEFAULT_BOARD_CANDIDATES = 20;
 
 export const message = (error: unknown): string => clean(error instanceof Error ? error.message : String(error), true);
-
-const SCOPE_LABELS: Record<Exclude<View, typeof View.Sprint | typeof View.Search>, string> = {
-  [View.All]: "Everyone's tasks",
-  [View.Mine]: "Assigned to me",
-  [View.Created]: "Created by me",
-  [View.Today]: "Needs attention",
-  [View.Mentions]: "Mentioning me",
-};
 
 export class Workspace {
   query: IssueQuery = initialQuery;
@@ -93,7 +85,6 @@ export class Workspace {
     this.changed();
   }
 
-  /** Reload the current scope now. */
   refresh(): void {
     this.load();
     this.changed();
@@ -248,17 +239,5 @@ export class Workspace {
 
   sprint(): Sprint | undefined {
     return this.sprints.find((sprint) => sprint.id === this.query.sprint);
-  }
-
-  scope(): string {
-    const { project, status } = this.query;
-    return `${this.label()} · ${project || "all projects"} · ${status} statuses`;
-  }
-
-  private label(): string {
-    const { view, text } = this.query;
-    if (view === View.Sprint) return this.sprint()?.name ?? "Choose a sprint with s";
-    if (view === View.Search) return text ? `Search: ${text}` : "Press f to search all of Jira";
-    return SCOPE_LABELS[view];
   }
 }

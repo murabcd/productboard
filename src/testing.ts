@@ -1,5 +1,7 @@
 /** Shared test fixtures: Jira-shaped payloads and controllable promises. */
 
+import type { AgentBackend } from "./agent/chat";
+import type { AgentChoice } from "./auth";
 import type { Snapshot } from "./jira/client";
 import { type RawIssue, toIssue } from "./jira/parse";
 import type { IssueQuery } from "./jira/query";
@@ -55,3 +57,21 @@ export function deferred<T>(): Deferred<T> {
 
 /** Let pending promise callbacks run. */
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** An Agent backend for tests: answers with `ask`, offers two models, and switches between them. */
+export function fakeAgent(ask: AgentBackend["ask"]): AgentBackend & { choice: AgentChoice } {
+  return {
+    choice: { provider: "openai", model: "test-model", reasoning: "medium" },
+    get current() {
+      return this.choice;
+    },
+    models: async () => [
+      { provider: "openai", model: "test-model", created: 2 },
+      { provider: "anthropic", model: "other-model", created: 1 },
+    ],
+    async use(choice) {
+      this.choice = choice;
+    },
+    ask,
+  };
+}

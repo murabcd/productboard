@@ -14,7 +14,10 @@
     "konsistent": "konsistent"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "2.5.0",
     "@opentui/core": "0.8.3",
+    "eve": "0.82.0",
+    "marked": "17.0.1",
     "zod": "4.6.7"
   },
   "devDependencies": {

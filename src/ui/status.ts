@@ -1,30 +1,38 @@
-/** Status colors by workflow stage, so a list reads at a glance. */
+/** Workflow stages, and how a status and priority look in a list. */
 
 import type { Issue } from "../jira/types";
 import type { Style } from "./canvas";
 
-/** Blocked, in review or QA, and ready to ship stand out from Jira's
- * three categories: to do (grey), in progress (blue) and done (green). */
-export function statusStyle({ status, category }: Pick<Issue, "status" | "category">): Style {
-  if (/blocked/i.test(status)) return "error";
+/** Jira statuses such as "QA Blocked" and "Dev Blocked" share one workflow stage. */
+export const STAGES = ["Blocked", "In progress", "In review", "Ready for release", "Done", "To do", "Backlog"] as const;
+export type Stage = (typeof STAGES)[number];
+
+/** Blocked, in review or QA, and ready to ship stand out from Jira's three
+ * categories: to do, in progress and done. */
+export function stage({ status, category }: Pick<Issue, "status" | "category">): Stage {
+  if (/blocked/i.test(status)) return "Blocked";
   // Icebox counts as done in Jira, but the work was parked, not finished.
-  if (/icebox/i.test(status)) return "muted";
-  if (category === "done") return "done";
-  if (/review|\bqa\b/i.test(status)) return "review";
-  if (/ready for release/i.test(status)) return "ship";
-  return category === "indeterminate" ? "accent" : "muted";
+  if (/icebox/i.test(status)) return "Backlog";
+  if (category === "done") return "Done";
+  if (/review|\bqa\b/i.test(status)) return "In review";
+  if (/ready for release/i.test(status)) return "Ready for release";
+  if (category === "indeterminate") return "In progress";
+  return /backlog/i.test(status) ? "Backlog" : "To do";
 }
 
-/** A Linear-style icon for the stage, drawn in the same color as the status. */
-export function statusGlyph(issue: Pick<Issue, "status" | "category">): string {
-  const style = statusStyle(issue);
-  if (style === "error") return "⊘";
-  if (style === "done") return "●";
-  if (style === "ship") return "◕";
-  if (style === "review") return "◑";
-  if (style === "accent") return "◐";
-  return /backlog|icebox/i.test(issue.status) ? "◌" : "○";
-}
+const STAGE_ICONS: Record<Stage, [icon: string, style: Style]> = {
+  Blocked: ["⊘", "error"],
+  "In progress": ["◐", "accent"],
+  "In review": ["◑", "review"],
+  "Ready for release": ["◕", "ship"],
+  Done: ["●", "done"],
+  "To do": ["○", "muted"],
+  Backlog: ["◌", "muted"],
+};
+
+/** An issue's stage icon and color; the status text uses the same color. */
+export const statusIcon = (issue: Pick<Issue, "status" | "category">): [icon: string, style: Style] =>
+  STAGE_ICONS[stage(issue)];
 
 const ACRONYMS = new Set(["QA", "QC", "UAT", "UI", "UX", "PR", "AI", "CI", "CD", "MVP"]);
 
@@ -42,11 +50,12 @@ export function statusLabel(status: string): string {
     .join(" ");
 }
 
-/** A one-cell priority mark; Jira's default (Medium) stays blank so the others stand out. */
+/** A one-cell priority mark for the Pri column. */
 export function priorityMark(priority: string): [mark: string, style: Style] {
   const name = priority.toLowerCase();
   if (/highest|critical|blocker|urgent/.test(name)) return ["!", "error"];
   if (/high|major/.test(name)) return ["↑", "warning"];
   if (/low|minor|trivial/.test(name)) return ["↓", "muted"];
+  if (/medium|normal/.test(name)) return ["–", "muted"];
   return [" ", "muted"];
 }

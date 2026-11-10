@@ -1,9 +1,23 @@
 /** Domain types the dashboard works with, decoded from Jira responses. */
 
-import { usDate, when } from "../dates";
+import { shortDate, usDate, when } from "../dates";
 import type { DocBlock } from "./adf";
 
 export type Category = "new" | "indeterminate" | "done";
+
+/** Today's sections in display order; an issue appears only in the first that fits. */
+export const TODAY_SECTIONS = [
+  "Blocked",
+  "Stuck",
+  "Needs an owner",
+  "Overdue",
+  "Mentioned you",
+  "Your issues, changed since yesterday",
+  "Assigned to you",
+  "Waiting for release",
+  "Forgotten in active sprints",
+] as const;
+export type TodaySection = (typeof TODAY_SECTIONS)[number];
 
 export interface Issue {
   key: string;
@@ -17,8 +31,8 @@ export interface Issue {
   sprint: string;
   /** The newest comment that @-mentions you, when the view looked for one. */
   mention?: Comment;
-  /** Today: the section this issue belongs to, and why, e.g. "QA Blocked". */
-  section?: string;
+  /** Today: the section this issue belongs to, and why, e.g. "blocked by FL-12". */
+  section?: TodaySection;
   reason?: string;
 }
 
@@ -77,12 +91,33 @@ export interface Sprint {
   goal: string;
 }
 
+/** A sprint's name without its board's prefix: "Platform Team - Sprint 2" reads "Sprint 2". */
+export const shortSprintName = (name: string): string => name.split(/\s[-–—|]\s/).at(-1) ?? name;
+
+export const SPRINT_STATE_NAMES: Record<SprintState, string> = {
+  active: "Active",
+  future: "Upcoming",
+  closed: "Closed",
+};
+
+/** "Nov 2–13" within a month, else "Oct 28–Nov 6", with the year once when it
+ * isn't this one: "Oct 20–Nov 3, 2025"; "" without dates. */
+export function sprintDates(sprint: Sprint): string {
+  if (!sprint.start || !sprint.end) return "";
+  const [start = "", startYear] = shortDate(sprint.start).split(", ");
+  const [end = "", endYear] = shortDate(sprint.end).split(", ");
+  if (startYear !== endYear) return `${shortDate(sprint.start)}–${shortDate(sprint.end)}`;
+  const [startMonth] = start.split(" ");
+  const [endMonth, endDay] = end.split(" ");
+  const range = `${start}–${startMonth === endMonth ? endDay : end}`;
+  return endYear ? `${range}, ${endYear}` : range;
+}
+
 export function sprintChoice(sprint: Sprint): Choice {
-  const dates = sprint.start ? `${usDate(sprint.start)} → ${usDate(sprint.end)}` : "No dates";
   return {
     value: String(sprint.id),
     label: sprint.name,
-    detail: `${sprint.state} · ${dates}`,
+    detail: [SPRINT_STATE_NAMES[sprint.state], sprintDates(sprint) || "No dates"].join(" · "),
     state: sprint.state,
   };
 }

@@ -11,26 +11,6 @@ export const View = {
 } as const;
 export type View = (typeof View)[keyof typeof View];
 
-export const VIEWS: readonly View[] = Object.values(View);
-export const VIEW_LABELS: Record<View, string> = {
-  [View.Sprint]: "Sprints",
-  [View.All]: "All tasks",
-  [View.Mine]: "Assigned",
-  [View.Created]: "Created",
-  [View.Today]: "Today",
-  [View.Mentions]: "Mentions",
-  [View.Search]: "Search",
-};
-export const VIEW_SHORT_LABELS: Record<View, string> = {
-  [View.Sprint]: "Spr",
-  [View.All]: "All",
-  [View.Mine]: "Me",
-  [View.Created]: "New",
-  [View.Today]: "Day",
-  [View.Mentions]: "@me",
-  [View.Search]: "Find",
-};
-
 /** Views that always target the signed-in user. */
 export const isPersonal = (view: View): boolean => view === View.Mine || view === View.Today;
 

@@ -18,7 +18,53 @@ selection, and panels. [[src/ui/frame.ts#frame]] computes what to draw, and
 point restores the terminal on exit.
 
 Use [[src/text.ts]] for remote text sanitization, grapheme handling, and cell
-widths. Issue rows follow Linear's order: priority mark, key, a status icon
-from [[src/ui/status.ts#statusGlyph]], then the title. Side columns are left
-out when the view or headings already say the same thing. [[src/jira/adf.ts]] converts Jira documents to typed blocks, and
-[[src/ui/document.ts]] lays those blocks out for the available terminal width.
+widths.
+
+## Screen layout
+
+The frame has a top bar, navigation sidebar, page header, body, and footer.
+The footer shows counts, sync status, and shortcuts.
+
+[[src/ui/navigation.ts#NAVIGATION]] lists the pages in sidebar order and is
+the one source for page names, number keys, Tab and the command palette. The
+sidebar moves into the top bar on narrow panes.
+
+[[src/ui/header.ts#drawHeader]] draws the same header on every page: the title,
+a description, and one toolbar with tabs, board and sprint, the Filter menu,
+active filters, and page actions on the right.
+
+[[src/ui/pickers.ts#PICKERS]] describes every picker in one table: boards,
+sprints, filters, models, the command palette and the rest. Each item carries
+the action it runs, so choosing one just runs it.
+
+Status groups are workflow stages from [[src/ui/status.ts#stage]]. Rows show
+the key, the title, then reason, assignee, sprint and priority columns. A
+column is left out when the view or headings already say the same thing.
+[[src/ui/dialog.ts#drawDialog]] draws each picker over the page with a search
+field and grouped choices. It marks the current choice.
+
+[[src/ui/peek.ts#drawPeek]] shows the selected issue beside the list. The
+dashboard loads its details outside rendering. [[src/jira/adf.ts]] converts
+Jira documents to typed blocks, and [[src/ui/document.ts]] lays those blocks
+out for the available terminal width.
+
+## Agent
+
+The Agent page holds a sprint-scoped conversation managed by
+[[src/agent/chat.ts#AgentChat]]. [[src/ui/agent-panel.ts#AgentPanel]] owns
+whether Agent is shown and its keys.
+
+The frame reserves areas that OpenTUI draws itself: the Agent text box and image
+previews. Issue citations open the normal detail panel and can
+return to the conversation.
+
+[[src/agent/models.ts#listModels]] lists GPT-6 and Claude 5 models from each
+provider with a key. Choosing one, then a reasoning level, restarts the Eve process with both
+and saves them; each reply records the model and level that wrote it.
+
+[[src/agent/eve.ts#EveAgent]] starts a local Eve subprocess when the user asks
+a question. It reads a bounded sprint snapshot and passes the selected fields
+and the prompt to the configured provider using ACP. Jira transport and
+credentials stay in the dashboard. Provider credentials come from the shell
+or macOS Keychain. The dashboard keeps conversation history in memory and
+cancels pending work on exit.
