@@ -1,4 +1,5 @@
 import { editLine, type Key } from "./input";
+import { rowOffset } from "./layout";
 
 export type PickerKind =
   | "board"
@@ -33,88 +34,129 @@ export interface PickerOptions {
   tab?: number;
 }
 
+type Row = { choice: PickerItem } | { heading: string } | null;
+
 export class Picker {
-  query = "";
-  index = 0;
-  /** The first row on screen, counting group headings. */
-  offset = 0;
-  closed = false;
-  readonly tabs: string[];
-  tab: number;
+  private text = "";
+  private cursor = 0;
+  private offset = 0;
+  private readonly tabs: string[];
+  private tab: number;
+  private rows: Row[] = [];
 
   constructor(
     readonly kind: PickerKind,
     readonly title: string,
-    public choices: PickerItem[],
+    private choices: PickerItem[],
     options: PickerOptions = {},
   ) {
     this.tabs = options.tabs ?? [];
     this.tab = options.tab ?? 0;
-    this.focusCurrent();
+    this.rebuild();
   }
 
-  get tabName(): string {
-    return this.tabs[this.tab] ?? "all";
+  get query(): string {
+    return this.text;
   }
 
-  focusCurrent(): void {
-    this.index = Math.max(
-      0,
-      this.visible().findIndex((choice) => choice.current),
-    );
+  get tabName(): string | undefined {
+    return this.tabs[this.tab];
   }
 
-  visible(): PickerItem[] {
-    const needle = this.query.toLocaleLowerCase();
+  get selected(): PickerItem | undefined {
+    return this.choiceAt(this.cursor);
+  }
+
+  replace(choices: PickerItem[]): void {
+    const value = this.selected?.value;
+    this.choices = choices;
+    this.rebuild(value);
+  }
+
+  private rebuild(previous?: string): void {
+    const needle = this.text.toLocaleLowerCase();
     const tab = this.tabName;
-    return this.choices.filter(
-      (choice) =>
-        (tab === "all" || choice.state === tab) &&
-        `${choice.label} ${choice.detail} ${choice.group ?? ""}`.toLocaleLowerCase().includes(needle),
-    );
+    this.rows = [];
+    let group: string | undefined;
+    let first = -1;
+    let current = -1;
+    let retained = -1;
+    for (const choice of this.choices) {
+      if (tab && tab !== "all" && choice.state !== tab) continue;
+      if (!`${choice.label} ${choice.detail} ${choice.group ?? ""}`.toLocaleLowerCase().includes(needle)) continue;
+      if (choice.group && choice.group !== group) {
+        if (this.rows.length) this.rows.push(null);
+        this.rows.push({ heading: choice.group });
+      }
+      group = choice.group;
+      const row = this.rows.length;
+      if (first < 0) first = row;
+      if (choice.current && current < 0) current = row;
+      if (choice.value === previous) retained = row;
+      this.rows.push({ choice });
+    }
+    this.cursor = retained >= 0 ? retained : current >= 0 && !needle ? current : Math.max(0, first);
   }
 
-  /** Apply a key; `page` is how many choices fit on screen. */
-  handle(key: Key, page: number): PickerItem | undefined {
-    const edited = editLine(this.query, key, 120);
-    if (edited !== undefined) {
-      this.query = edited;
-      this.index = 0;
-      this.offset = 0;
-      return undefined;
+  private choiceAt(index: number): PickerItem | undefined {
+    const row = this.rows[index];
+    return row && "choice" in row ? row.choice : undefined;
+  }
+
+  window(capacity: number): readonly Row[] {
+    this.offset = rowOffset(this.offset, this.cursor, this.rows.length, capacity);
+    return this.rows.slice(this.offset, this.offset + capacity);
+  }
+
+  click(value: string): PickerItem | undefined {
+    const index = this.rows.findIndex((row) => row && "choice" in row && row.choice.value === value);
+    if (index < 0) return;
+    if (this.cursor === index) return this.selected;
+    this.cursor = index;
+  }
+
+  move(direction: -1 | 1, distance = 1): void {
+    let next = this.cursor;
+    for (let row = this.cursor + direction; row >= 0 && row < this.rows.length; row += direction) {
+      if (direction * (row - this.cursor) > distance && next !== this.cursor) break;
+      if (this.choiceAt(row)) next = row;
     }
-    if ("text" in key) return undefined;
-    const choices = this.visible();
+    this.cursor = next;
+  }
+
+  handle(key: Key, capacity: number): PickerItem | "dismiss" | undefined {
+    const edited = editLine(this.text, key, 120);
+    if (edited !== undefined) {
+      this.text = edited;
+      this.offset = 0;
+      this.rebuild();
+      return;
+    }
+    if ("text" in key) return;
     switch (key.name) {
       case "escape":
       case "ctrl-c":
-        this.closed = true;
-        break;
+        return "dismiss";
       case "enter":
-        return choices[Math.min(this.index, choices.length - 1)];
+        return this.selected;
       case "tab":
         if (this.tabs.length) {
           this.tab = (this.tab + 1) % this.tabs.length;
-          this.index = 0;
           this.offset = 0;
+          this.rebuild();
         }
-        break;
+        return;
       case "down":
-        this.index += 1;
-        break;
+        this.move(1);
+        return;
       case "up":
-        this.index -= 1;
-        break;
+        this.move(-1);
+        return;
       case "pagedown":
-        this.index += page;
-        break;
+        this.move(1, capacity);
+        return;
       case "pageup":
-        this.index -= page;
-        break;
-      default:
-        break;
+        this.move(-1, capacity);
     }
-    this.index = Math.max(0, Math.min(this.index, this.visible().length - 1));
-    return undefined;
   }
 }

@@ -24,3 +24,8 @@ export const modalRows = (height: number): number => height - BODY_TOP - FOOTER_
 export const DIALOG_WIDTH = 60;
 /** Rows a dialog's list may take, headings included: up to half the pane. */
 export const pickerRows = (height: number): number => Math.max(3, Math.floor(height / 2) - 6);
+
+export function rowOffset(offset: number, selected: number, count: number, capacity: number): number {
+  const first = selected < offset ? selected - 1 : Math.max(offset, selected - capacity + 1);
+  return Math.max(0, Math.min(first, count - capacity));
+}

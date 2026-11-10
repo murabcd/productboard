@@ -99,10 +99,7 @@ export class Dashboard {
   }
 
   private update(): void {
-    if (this.picker) {
-      this.picker.choices = PICKERS[this.picker.kind].items(this);
-      if (!this.picker.query) this.picker.focusCurrent();
-    }
+    if (this.picker) this.picker.replace(PICKERS[this.picker.kind].items(this));
     this.syncPeek();
     const { sprints, query } = this.workspace;
     if (
@@ -447,8 +444,8 @@ export class Dashboard {
 
   private handlePicker(picker: Picker, key: Key): void {
     const picked = picker.handle(key, pickerRows(this.height));
-    if (picked) this.pick(picked);
-    else if (picker.closed) this.closePicker();
+    if (picked === "dismiss") this.closePicker();
+    else if (picked) this.pick(picked);
   }
 
   private closePicker(): void {
@@ -524,11 +521,8 @@ export class Dashboard {
         else this.searching = true;
         return;
       case "choice": {
-        const picker = this.picker;
-        const picked = picker?.visible()[target.index];
-        if (!picker || !picked) return;
-        if (picker.index === target.index) this.pick(picked);
-        else picker.index = target.index;
+        const picked = this.picker?.click(target.value);
+        if (picked) this.pick(picked);
         return;
       }
       case "peek":
@@ -564,14 +558,14 @@ export class Dashboard {
 
   /** The mouse wheel: `delta` is +1 per notch down, -1 per notch up.
    * `over` is what the pointer is on, so the peek scrolls itself. */
-  wheel(delta: number, over?: Target): void {
+  wheel(delta: -1 | 1, over?: Target): void {
     const layer = this.layer();
     if (over?.kind === "peek" && this.peek && layer.kind === "list") {
       this.scrollPeek(delta);
     } else if (layer.kind === "agent") {
       this.agent.wheel(delta);
     } else if (layer.kind === "picker") {
-      layer.picker.index = Math.max(0, layer.picker.index + delta);
+      layer.picker.move(delta);
     } else if (layer.kind === "modal") {
       layer.panel.scroll = Math.max(0, layer.panel.scroll + delta * WHEEL_LINES);
     } else if (layer.kind === "list" || layer.kind === "filter" || layer.kind === "find") {

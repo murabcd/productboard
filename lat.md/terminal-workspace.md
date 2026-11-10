@@ -41,7 +41,10 @@ active filters, and page actions on the right.
 
 [[src/ui/pickers.ts#PICKERS]] describes every picker in one table: boards,
 sprints, filters, models, the command palette and the rest. Each item carries
-the action it runs, so choosing one just runs it.
+the action it runs. [[src/ui/picker.ts#Picker]] owns the grouped row window,
+highlight, search, and navigation. Catalog refreshes preserve the highlight
+by choice value. Keyboard, wheel, and clicks all use that projection, and
+the dialog only draws the visible rows.
 
 [[src/ui/issue-list.ts#IssueList]] owns the projection for grouping, folded
 rows, selected issue identity, and scrolling. Paging uses display rows so

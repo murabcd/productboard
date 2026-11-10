@@ -3,6 +3,7 @@ import { View } from "../jira/query";
 import { type Issue, issueProject, type TodaySection } from "../jira/types";
 import type { Workspace } from "../state/workspace";
 import type { Style } from "./canvas";
+import { rowOffset } from "./layout";
 import { STAGES, stage, statusIcon } from "./status";
 
 type Grouping = "status" | "assignee";
@@ -133,10 +134,7 @@ export class IssueList {
   window(capacity: number) {
     const { rows, issues } = this.project();
     const selected = issues[this.cursor];
-    const row = selected?.row ?? 0;
-    if (row < this.offset) this.offset = Math.max(0, row - 1);
-    if (row >= this.offset + capacity) this.offset = row - capacity + 1;
-    this.offset = Math.max(0, Math.min(this.offset, rows.length - capacity));
+    this.offset = rowOffset(this.offset, selected?.row ?? 0, rows.length, capacity);
     return { rows: rows.slice(this.offset, this.offset + capacity), count: issues.length, selected: selected?.issue };
   }
 

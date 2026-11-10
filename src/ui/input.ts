@@ -70,8 +70,7 @@ export type Target =
   | { kind: "group"; label: string }
   | { kind: "view"; view: View }
   | { kind: "issue"; key: string }
-  /** A picker choice, by its index among the visible choices. */
-  | { kind: "choice"; index: number }
+  | { kind: "choice"; value: string }
   /** The search box above the list. */
   | { kind: "box" }
   | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "sprint" | "board" }

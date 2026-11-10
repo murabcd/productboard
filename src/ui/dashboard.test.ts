@@ -140,9 +140,9 @@ describe("dashboard", () => {
     const { dashboard, work } = setup();
     work.projects = [{ value: "EX", label: "Example", detail: "", state: "" }];
     dashboard.handle({ text: "p" });
-    dashboard.click({ kind: "choice", index: 1 });
-    expect(dashboard.picker?.index).toBe(1);
-    dashboard.click({ kind: "choice", index: 1 });
+    dashboard.click({ kind: "choice", value: "EX" });
+    expect(dashboard.picker?.selected?.value).toBe("EX");
+    dashboard.click({ kind: "choice", value: "EX" });
     expect(work.query.project).toBe("EX");
   });
 
@@ -286,11 +286,11 @@ describe("picker", () => {
       ],
       { tabs: ["active", "future", "closed", "all"] },
     );
-    expect(picker.visible()[0]?.value).toBe("1");
+    expect(picker.selected?.value).toBe("1");
     picker.handle({ name: "tab" }, 5);
-    expect(picker.visible()[0]?.value).toBe("2");
+    expect(picker.selected?.value).toBe("2");
     picker.handle({ name: "tab" }, 5);
-    expect(picker.handle(ENTER, 5)?.value).toBe("3");
+    expect(picker.handle(ENTER, 5)).toMatchObject({ value: "3" });
   });
 
   test("the sprint picker opens on the first tab that has sprints", () => {
@@ -299,7 +299,36 @@ describe("picker", () => {
     work.sprints = [{ id: 1, name: "Old", state: "closed", start: "", end: "", goal: "" }];
     dashboard.openPicker("sprint");
     expect(dashboard.picker?.tabName).toBe("closed");
-    expect(dashboard.picker?.visible().map((c) => c.label)).toEqual(["Old"]);
+    expect(dashboard.picker?.selected?.label).toBe("Old");
+  });
+
+  test("a board refresh preserves the highlighted choice when the order changes", () => {
+    const { dashboard, work } = setup();
+    const first = { value: "1", label: "First", detail: "", state: "" };
+    const second = { value: "2", label: "Second", detail: "", state: "" };
+    work.board = first.value;
+    work.boards = [first, second];
+    dashboard.openPicker("board");
+    dashboard.handle({ name: "down" });
+    work.boards = [second, first];
+    work.refresh();
+    dashboard.handle(ENTER);
+    expect(work.board).toBe(second.value);
+  });
+
+  test("a picker page counts group headings and separators", () => {
+    const choices = Array.from({ length: 6 }, (_, i) => ({
+      value: String(i),
+      label: `Choice ${i}`,
+      detail: "",
+      group: i < 2 ? "First" : "Second",
+      run: () => {},
+    }));
+    const picker = new Picker("commands", "Commands", choices);
+    picker.handle({ name: "pagedown" }, 4);
+    expect(picker.handle(ENTER, 4)).toMatchObject({ value: "2" });
+    picker.move(-1);
+    expect(picker.handle(ENTER, 4)).toMatchObject({ value: "1" });
   });
 
   test("page keys move exactly one visible page", () => {
@@ -311,7 +340,7 @@ describe("picker", () => {
     }));
     const picker = new Picker("board", "Choose board", choices);
     picker.handle({ name: "pagedown" }, pickerRows(40));
-    expect(picker.index).toBe(pickerRows(40));
+    expect(picker.selected?.value).toBe(String(pickerRows(40)));
   });
 });
 
@@ -615,7 +644,7 @@ describe("concept layout", () => {
     dashboard.agent.send();
     await settle();
     dashboard.handle({ name: "agent-cited" });
-    expect(dashboard.picker?.visible().map((c) => c.label)).toEqual(["EX-7"]);
+    expect(dashboard.picker?.selected?.label).toBe("EX-7");
     dashboard.handle(ENTER);
     expect(dashboard.modal?.issue?.key).toBe("EX-7");
   });
@@ -687,7 +716,7 @@ describe("frame", () => {
     expect(screen).toMatch(/● HR Team - Sprint 36 +Active · Nov 3–17/);
     expect(screen).toMatch(/ HR Team - Sprint 35 +Active · Oct 20–Nov 2/);
     expect(screen).toMatch(/tab active sprints/);
-    expect(dashboard.picker?.index).toBe(0); // focused on the current sprint
+    expect(dashboard.picker?.selected?.value).toBe("36");
     dashboard.click({ kind: "issue", key: "EX-1" }); // a click outside closes the dialog
     expect(dashboard.picker).toBeNull();
   });

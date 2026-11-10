@@ -27,7 +27,7 @@ import {
 import { currentPage, NAVIGATION, type NavItem } from "./navigation";
 import type { Panel } from "./panel";
 import { drawPeek } from "./peek";
-import { filterChips } from "./pickers";
+import { filterChips, PICKERS } from "./pickers";
 import { currentImage, type Preview } from "./preview";
 import { priorityMark, statusIcon } from "./status";
 
@@ -46,7 +46,7 @@ export function frame(d: Dashboard): Canvas {
   canvas.paste(content, sidebar, 0);
   if (sidebar) drawSidebar(canvas, d, sidebar);
   drawTopBar(canvas, d, sidebar);
-  if (layer.kind === "picker") drawDialog(canvas, d, layer.picker);
+  if (layer.kind === "picker") drawDialog(canvas, layer.picker, PICKERS[layer.picker.kind].empty?.(d) ?? "No matches");
 
   return canvas;
 }
