@@ -6,9 +6,12 @@ the terminal to draw.
 
 ## Refresh and scope
 
-The current list stays visible during refresh and on refresh failure. A new
-scope starts loading immediately, and earlier results cannot replace it.
-Board and sprint discovery runs separately from issue loading.
+The current list stays visible during refresh and on refresh failure. Earlier
+results cannot replace a new scope.
+
+A scope starts loading as soon as it is ready. Clearing server filters applies
+one scope change. Board and project discovery and the selected board's sprint
+catalog track their own failures and retry independently of the issue list.
 
 ## Interaction and rendering
 

@@ -61,6 +61,21 @@ describe("workspace", () => {
     expect(source.snapshot).toHaveBeenCalledTimes(2);
   });
 
+  test("an unselected scope stops waiting and drops an older response", async () => {
+    const { work, requests, team, advance } = setup();
+    work.refresh();
+    work.change(initialQuery);
+    expect(work.pending).toBe(false);
+    advance(REFRESH_MS);
+    work.tick();
+    expect(requests).toHaveLength(1);
+    work.change(team);
+    requests[0]?.reply.resolve(snapshot(team, ["EX-OLD"]));
+    await settle();
+    expect(work.pending).toBe(true);
+    expect(work.issues.map((i) => i.key)).toEqual(["EX-1", "EX-2"]);
+  });
+
   test("loading more keeps the list visible and works during a refresh", () => {
     const { work, requests } = setup();
     work.refresh();
@@ -97,6 +112,25 @@ describe("workspace", () => {
     work.tick();
     expect(source.catalog).toHaveBeenCalledTimes(2);
     expect(work.catalogError).toBe("");
+  });
+
+  test("a sprint failure survives a catalog refresh and retries only sprints", async () => {
+    const { work, source, advance } = setup();
+    source.sprints.mockRejectedValueOnce(new Error("sprints failed"));
+    work.chooseBoard("2");
+    await settle();
+    expect(work.catalogError).toBe("sprints failed");
+    source.catalog.mockResolvedValueOnce({
+      boards: [{ value: "2", label: "Team board", detail: "", state: "" }],
+      projects: [],
+    });
+    work.loadCatalog();
+    await settle();
+    expect(work.catalogError).toBe("sprints failed");
+    advance(REFRESH_MS);
+    work.tick();
+    expect(source.catalog).toHaveBeenCalledTimes(1);
+    expect(source.sprints).toHaveBeenCalledTimes(2);
   });
 
   test("without a remembered board, the one with the most active sprints opens", async () => {

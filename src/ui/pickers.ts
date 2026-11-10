@@ -8,14 +8,12 @@ import type { PickerItem, PickerKind, PickerOptions } from "./picker";
 
 const STATUS_LABELS: Record<StatusFilter, string> = { all: "All statuses", open: "Open", done: "Done" };
 
-export type FilterChip = "project" | "assignee" | "status";
-
-export function filterChips(d: Dashboard): [FilterChip, string][] {
+export function filterChips(d: Dashboard): string[] {
   const { project, assignee, status, view } = d.workspace.query;
-  const chips: [FilterChip, string][] = [];
-  if (project) chips.push(["project", `Project: ${project}`]);
-  if (assignee && !isPersonal(view)) chips.push(["assignee", `Assignee: ${d.personLabel}`]);
-  if (status !== "all") chips.push(["status", `Status: ${STATUS_LABELS[status]}`]);
+  const chips: string[] = [];
+  if (project) chips.push(`Project: ${project}`);
+  if (assignee && !isPersonal(view)) chips.push(`Assignee: ${d.personLabel}`);
+  if (status !== "all") chips.push(`Status: ${STATUS_LABELS[status]}`);
   return chips;
 }
 
@@ -73,10 +71,8 @@ function modelItems(d: Dashboard): PickerItem[] {
     );
 }
 
-function catalogStatus(d: Dashboard): string {
-  const work = d.workspace;
-  if (work.catalogError) return work.catalogError;
-  return work.catalogPending || work.sprintsPending ? "Loading…" : "No matches";
+function catalogStatus(error: string, pending: boolean): string {
+  return error || (pending ? "Loading…" : "No matches");
 }
 
 function commandItems(d: Dashboard): PickerItem[] {
@@ -118,7 +114,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
     load: (d) => {
       if (d.workspace.boards.length === 0) d.workspace.loadCatalog();
     },
-    empty: catalogStatus,
+    empty: ({ workspace }) => catalogStatus(workspace.boardCatalogError, workspace.catalogPending),
   },
   sprint: {
     title: "Choose sprint",
@@ -129,7 +125,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       );
     },
     load: (d) => {
-      if (d.workspace.sprints.length === 0 && !d.workspace.sprintsPending) d.workspace.loadSprints();
+      if (d.workspace.sprints.length === 0) d.workspace.loadSprints();
     },
     // Tabs start on the first state that has sprints: active, then planned, then closed.
     options: (d) => {
@@ -142,7 +138,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
         ),
       };
     },
-    empty: catalogStatus,
+    empty: ({ workspace }) => catalogStatus(workspace.sprintCatalogError, workspace.sprintsPending),
   },
   project: {
     title: "Choose project",
@@ -155,7 +151,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
     load: (d) => {
       if (d.workspace.boards.length === 0) d.workspace.loadCatalog();
     },
-    empty: catalogStatus,
+    empty: ({ workspace }) => catalogStatus(workspace.boardCatalogError, workspace.catalogPending),
   },
   assignee: {
     title: "People in loaded issues",

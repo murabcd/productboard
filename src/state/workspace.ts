@@ -21,8 +21,6 @@ export class Workspace {
   query: IssueQuery = initialQuery;
   snapshot: Snapshot | null = null;
   updated: Date | null = null;
-  /** The scope being loaded, if any. */
-  pendingQuery: IssueQuery | null = null;
   error = "";
   boards: Choice[] = [];
   projects: Choice[] = [];
@@ -30,11 +28,13 @@ export class Workspace {
   sprints: Sprint[] = [];
   catalogPending = false;
   sprintsPending = false;
-  catalogError = "";
+  boardCatalogError = "";
+  sprintCatalogError = "";
 
-  private request = 0;
+  private request: { query: IssueQuery } | undefined;
   private nextRefresh = Number.POSITIVE_INFINITY;
-  private nextCatalogRetry = Number.POSITIVE_INFINITY;
+  private catalogRetryAt = Number.POSITIVE_INFINITY;
+  private sprintsRetryAt = Number.POSITIVE_INFINITY;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -73,55 +73,49 @@ export class Workspace {
   }
 
   get pending(): boolean {
-    return this.pendingQuery !== null;
+    return this.request !== undefined;
+  }
+
+  get catalogError(): string {
+    return this.boardCatalogError || this.sprintCatalogError;
   }
 
   change(query: IssueQuery): void {
     if (sameQuery(query, this.query)) return;
     this.query = query;
+    this.request = undefined;
     this.error = "";
-    this.nextRefresh = 0;
-    this.load();
-    this.changed();
+    this.nextRefresh = Number.POSITIVE_INFINITY;
+    this.refresh();
   }
 
   refresh(): void {
-    this.load();
+    void this.load();
     this.changed();
   }
 
   /** Load the current scope, unless that exact request is already running.
    * A request for an older scope is dropped rather than waited for. */
-  private load(): void {
-    if (!isReady(this.query)) return;
-    if (this.pendingQuery && sameQuery(this.pendingQuery, this.query)) return;
-    const id = ++this.request;
-    const requested = this.query;
+  private async load(): Promise<void> {
+    if (!isReady(this.query) || this.request) return;
+    const request = { query: this.query };
+    this.request = request;
     this.error = "";
-    this.pendingQuery = requested;
-    this.source.snapshot(requested).then(
-      (snapshot) =>
-        this.settle(id, requested, () => {
-          if (sameQuery(snapshot.query, this.query)) {
-            this.snapshot = snapshot;
-            this.updated = new Date(this.now());
-          }
-        }),
-      (error: unknown) =>
-        this.settle(id, requested, () => {
-          if (sameQuery(requested, this.query)) this.error = message(error);
-        }),
-    );
-  }
-
-  private settle(id: number, requested: IssueQuery, apply: () => void): void {
-    if (id !== this.request) return; // superseded by a newer request
-    apply();
-    this.pendingQuery = null;
-    const stale = !sameQuery(requested, this.query);
-    this.nextRefresh = stale ? 0 : this.now() + REFRESH_MS;
-    this.tick();
-    this.changed();
+    try {
+      const snapshot = await this.source.snapshot(request.query);
+      if (this.request === request && sameQuery(snapshot.query, request.query)) {
+        this.snapshot = snapshot;
+        this.updated = new Date(this.now());
+      }
+    } catch (error) {
+      if (this.request === request) this.error = message(error);
+    } finally {
+      if (this.request === request) {
+        this.request = undefined;
+        this.nextRefresh = this.now() + REFRESH_MS;
+        this.changed();
+      }
+    }
   }
 
   /** Called every second: refresh on schedule and retry failed catalogs.
@@ -129,10 +123,8 @@ export class Workspace {
   tick(): void {
     const now = this.now();
     if (!this.pending && now >= this.nextRefresh) this.refresh();
-    if (this.catalogError && now >= this.nextCatalogRetry) {
-      this.nextCatalogRetry = Number.POSITIVE_INFINITY;
-      this.retryCatalogs();
-    }
+    if (now >= this.catalogRetryAt) this.loadCatalog();
+    if (now >= this.sprintsRetryAt) this.loadSprints();
   }
 
   loadMore(): void {
@@ -144,7 +136,8 @@ export class Workspace {
   loadCatalog(): void {
     if (this.catalogPending) return;
     this.catalogPending = true;
-    this.catalogError = "";
+    this.boardCatalogError = "";
+    this.catalogRetryAt = Number.POSITIVE_INFINITY;
     this.changed();
     this.source
       .catalog()
@@ -154,7 +147,10 @@ export class Workspace {
           this.projects = catalog.projects;
           if (!this.board) this.openDefaultBoard();
         },
-        (error: unknown) => this.catalogFailed(error),
+        (error: unknown) => {
+          this.boardCatalogError = message(error);
+          this.catalogRetryAt = this.now() + REFRESH_MS;
+        },
       )
       .finally(() => {
         this.catalogPending = false;
@@ -197,7 +193,8 @@ export class Workspace {
   private openBoard(board: string, sprints?: Sprint[]): void {
     this.board = board;
     this.sprints = sprints ?? [];
-    this.catalogError = "";
+    this.sprintCatalogError = "";
+    this.sprintsRetryAt = Number.POSITIVE_INFINITY;
     this.change(scoped(this.query, { sprint: null }));
     if (sprints) this.changed();
     else this.loadSprints();
@@ -207,6 +204,8 @@ export class Workspace {
     if (!this.board || this.sprintsPending) return;
     const board = this.board;
     this.sprintsPending = true;
+    this.sprintCatalogError = "";
+    this.sprintsRetryAt = Number.POSITIVE_INFINITY;
     this.changed();
     this.source
       .sprints(board)
@@ -215,7 +214,10 @@ export class Workspace {
           if (board === this.board) this.sprints = sprints;
         },
         (error: unknown) => {
-          if (board === this.board) this.catalogFailed(error);
+          if (board === this.board) {
+            this.sprintCatalogError = message(error);
+            this.sprintsRetryAt = this.now() + REFRESH_MS;
+          }
         },
       )
       .finally(() => {
@@ -227,14 +229,8 @@ export class Workspace {
 
   /** Reload whichever board, project or sprint list failed or is missing. */
   retryCatalogs(): void {
-    const failed = Boolean(this.catalogError);
-    if (failed || this.boards.length === 0) this.loadCatalog();
-    if (this.board && (failed || this.sprints.length === 0)) this.loadSprints();
-  }
-
-  private catalogFailed(error: unknown): void {
-    this.catalogError = message(error);
-    this.nextCatalogRetry = this.now() + REFRESH_MS;
+    if (this.boardCatalogError || this.boards.length === 0) this.loadCatalog();
+    if (this.sprintCatalogError || this.sprints.length === 0) this.loadSprints();
   }
 
   sprint(): Sprint | undefined {

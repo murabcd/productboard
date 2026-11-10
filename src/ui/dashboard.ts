@@ -14,7 +14,7 @@ import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigat
 import { helpPanel, type Panel, sprintPanel } from "./panel";
 import type { Peek } from "./peek";
 import { Picker, type PickerItem, type PickerKind } from "./picker";
-import { type FilterChip, filterChips, PICKERS } from "./pickers";
+import { PICKERS } from "./pickers";
 import { currentImage, ImageCache, type Preview, previewOf } from "./preview";
 
 export interface Opener {
@@ -214,20 +214,12 @@ export class Dashboard {
     }
   }
 
-  private removeFilter(chip: FilterChip): void {
-    const { query } = this.workspace;
-    if (chip === "project") this.workspace.change(scoped(query, { project: "" }));
-    else if (chip === "status") this.workspace.change(scoped(query, { status: "all" }));
-    else {
-      this.personLabel = "All people";
-      this.workspace.change(withAssignee(query, ""));
-    }
-    this.list.first();
-  }
-
   clearFilters(): void {
-    for (const [chip] of filterChips(this)) this.removeFilter(chip);
+    const { query } = this.workspace;
     this.list.filter("");
+    if (!query.project && !query.assignee && query.status === "all") return;
+    this.personLabel = "All people";
+    this.workspace.change(scoped(query, { project: "", assignee: "", status: "all" }));
   }
 
   openAgent(): void {

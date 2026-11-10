@@ -75,7 +75,7 @@ function issuesHeader(d: Dashboard): PageHeader {
       style: active.length ? "accent" : "muted",
     },
     // Active filters show as labels; Clear filters in the Filter menu removes them.
-    ...active.map(([, label]): Control => ({ label })),
+    ...active.map((label): Control => ({ label })),
   ];
   const header: PageHeader = {
     title: pageOf(view).name,

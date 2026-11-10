@@ -445,7 +445,7 @@ describe("concept layout", () => {
   });
 
   test("active filters show beside Filter; Clear filters in its menu removes them", () => {
-    const { dashboard, work } = setup();
+    const { dashboard, work, source } = setup();
     work.query = { ...work.query, project: "WEB", status: "open" };
     const canvas = draw(dashboard, 120, 30);
     // One toolbar: filters on the left, Display on the right; no web-style × on the labels.
@@ -455,6 +455,7 @@ describe("concept layout", () => {
     dashboard.click({ kind: "action", action: "filter" });
     for (const key of [...text("clear"), ENTER]) dashboard.handle(key);
     expect(work.query).toMatchObject({ project: "", status: "all" });
+    expect(source.snapshot).toHaveBeenCalledTimes(1);
   });
 
   test("a folded group hides its rows and the selection skips them", () => {
