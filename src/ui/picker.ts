@@ -6,6 +6,7 @@ export type PickerKind =
   | "sprint-filter-board"
   | "sprint"
   | "sprint-filter"
+  | "sprint-context"
   | "project"
   | "assignee"
   | "status"

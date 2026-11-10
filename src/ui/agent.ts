@@ -1,6 +1,7 @@
 /** The Agent page: the conversation and its text box, under the shared header. */
 
 import type { Turn } from "../agent/chat";
+import { draftImages } from "../agent/draft";
 import { choiceLabel } from "../agent/models";
 import { cells } from "../text";
 import type { Canvas, ScannerStyle, Style } from "./canvas";
@@ -29,7 +30,7 @@ export function drawAgent(canvas: Canvas, dashboard: Dashboard, editing: boolean
     canvas.put(y, left, "┃", thread.pending ? "muted" : "accent");
   }
   // A dialog over Agent takes the keys, so the text box steps aside while it is open.
-  if (editing) canvas.reserve("composer", { left: left + 2, top: boxTop + 1, width: room - 3, height: rows });
+  if (editing) canvas.reserve("composer", { left: left + 2, top: boxBottom - rows, width: room - 3, height: rows });
 
   const bodyTop = 1;
   const available = boxTop - bodyTop - 1;
@@ -51,6 +52,8 @@ export function drawAgent(canvas: Canvas, dashboard: Dashboard, editing: boolean
     canvas.put(status, left + 1 + SCANNER_WIDTH + 6, "interrupt", "muted");
   } else if (thread.error) {
     canvas.put(status, left + 1, thread.error, "error", room - 1);
+  } else if (draftImages(thread.draft).some(({ state }) => state.kind === "loading")) {
+    canvas.put(status, left + 1, "Attaching image…", "muted", room - 1);
   } else if (!chat.configured) {
     canvas.put(status, left + 1, "Set up Agent with board --agent-login", "muted", room - 1);
   }
@@ -114,7 +117,9 @@ function turnRows(canvas: Canvas, turn: Turn, issues: ReadonlyMap<string, unknow
       draw(y);
     };
   rows.push(prompt(blank));
-  for (const line of wrapSpans([{ text: turn.prompt, style: "plain" }], room - 5)) {
+  const context = turn.sprint?.name;
+  if (context) rows.push(prompt((y) => canvas.put(y, indent, context, "muted", room - 5)));
+  for (const line of wrapSpans([{ text: turn.displayPrompt, style: "plain" }], room - 5)) {
     rows.push(prompt((y) => drawLine(canvas, y, indent, line)));
   }
   rows.push(prompt(blank), blank);

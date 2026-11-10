@@ -500,6 +500,9 @@ export class Dashboard {
       case "new":
         chat.start();
         return;
+      case "sprint-context":
+        this.openPicker("sprint-context");
+        return;
       case "previous":
       case "next":
         chat.select(action === "previous" ? -1 : 1);

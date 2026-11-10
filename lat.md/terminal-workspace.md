@@ -105,11 +105,20 @@ return to the conversation.
 provider with a key. Choosing one, then a reasoning level, restarts the Eve process with both
 and saves them; each reply records the model and level that wrote it.
 
-[[src/agent/eve.ts#EveAgent]] starts a local Eve subprocess and sends questions
-using ACP. Eve's Jira search tool calls [[src/agent/jira-search.ts#openJiraSearch]]
+[[src/agent/eve.ts#EveAgent]] starts a local Eve subprocess and sends messages
+through its authenticated loopback HTTP API. Eve's ACP adapter accepts only
+text, while the HTTP client supports image parts and per-turn context. Eve
+stages sent images in its local just-bash sandbox.
+[[src/ui/composer.ts#AgentComposer]] maps the ordered text and attachment parts
+of a draft to OpenTUI extmarks. Pasted local image paths and long or multiline
+text appear as numbered inline tokens that can be edited as a unit. Sending
+expands pasted text and passes staged images as separate parts. A sprint attached
+from the current board applies to the next message without changing the Jira view.
+
+Eve's Jira search tool calls [[src/agent/jira-search.ts#openJiraSearch]]
 over an authenticated loopback connection owned by the dashboard. The tool can
 only search Jira and returns at most 50 matches per call. It sends a projection
-of the results to the model and emits the issue records through ACP for
+of the results to the model and emits the issue records through the event stream for
 terminal citations. Jira credentials stay in the dashboard. Provider
 credentials come from the shell or macOS Keychain. The dashboard keeps
 conversation history in memory and cancels pending work on exit. Sessions,

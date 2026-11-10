@@ -6,11 +6,11 @@ import {
   type OptimizedBuffer,
   Renderable,
   TextAttributes,
-  TextareaRenderable,
 } from "@opentui/core";
 import { cells, splitGraphemes } from "../text";
 import { COMPOSER_MAX_ROWS, SCANNER_FRAME_MS } from "./agent";
 import type { Canvas, Rect } from "./canvas";
+import { AgentComposer } from "./composer";
 import type { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key, KeyName } from "./input";
@@ -30,17 +30,9 @@ const COMPOSER_KEYS = new Set<KeyName>([
   "pagedown",
 ]);
 
-/** Enter sends; Shift+Enter or Ctrl+J starts a new line. */
-const COMPOSER_BINDINGS = [
-  { name: "return", action: "submit" },
-  { name: "kpenter", action: "submit" },
-  { name: "return", shift: true, action: "newline" },
-  { name: "linefeed", action: "newline" },
-] as const;
-
 class DashboardView extends Renderable {
   private readonly image: ImageRenderable;
-  private readonly composer: TextareaRenderable;
+  readonly composer: AgentComposer;
   private theme: ReturnType<typeof resolveTheme>;
   private animation: ReturnType<typeof setTimeout> | undefined;
   /** The last frame drawn, which knows what each click hits. */
@@ -70,22 +62,9 @@ class DashboardView extends Renderable {
     this.theme = resolveTheme(dashboard.theme);
     renderer.setBackgroundColor(this.theme.surfaces.workspace);
     this.image = new ImageRenderable(renderer, { id: "preview", position: "absolute", fit: "fit", visible: false });
-    this.composer = new TextareaRenderable(renderer, {
-      id: "composer",
-      position: "absolute",
-      visible: false,
-      wrapMode: "word",
-      ...this.theme.composer,
-      keyBindings: [...COMPOSER_BINDINGS],
-      onContentChange: () => {
-        dashboard.agent.chat.current.draft = this.composer.plainText;
-        this.fitComposer();
-        this.requestRender();
-      },
-      onSubmit: () => {
-        dashboard.agent.send();
-        this.requestRender();
-      },
+    this.composer = new AgentComposer(renderer, dashboard.agent.chat, this.theme.composer, () => {
+      this.fitComposer();
+      this.requestRender();
     });
     this.add(this.image);
     this.add(this.composer);
@@ -123,7 +102,7 @@ class DashboardView extends Renderable {
   }
 
   /** Show `renderable` over `area`, or hide it; returns whether it is shown. */
-  private place(renderable: ImageRenderable | TextareaRenderable, area: Rect | undefined): boolean {
+  private place(renderable: ImageRenderable | AgentComposer, area: Rect | undefined): boolean {
     if (!area) {
       if (renderable.visible) {
         renderable.visible = false;
@@ -156,13 +135,7 @@ class DashboardView extends Renderable {
       this.composer.blur();
       return;
     }
-    const { chat } = this.dashboard.agent;
-    // The draft changes outside the box too: sending clears it, a failed send restores it.
-    if (this.composer.plainText !== chat.current.draft) {
-      this.composer.setText(chat.current.draft);
-      this.fitComposer();
-    }
-    this.composer.placeholder = chat.configured ? "Message Agent…" : "Agent is not set up";
+    this.composer.sync();
     this.composer.focus();
   }
 
@@ -227,7 +200,8 @@ export function textKeys(text: string): Key[] {
 
 /** Attach the dashboard to a renderer; `quit` runs when the user exits. */
 export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => void): void {
-  renderer.root.add(new DashboardView(renderer, dashboard));
+  const view = new DashboardView(renderer, dashboard);
+  renderer.root.add(view);
   const feed = (keys: Key[]) => {
     for (const next of keys) {
       if (!dashboard.handle(next)) {
@@ -239,16 +213,21 @@ export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => v
   };
   renderer.keyInput.on("keypress", (key) => {
     const keys = toKeys(key);
-    const dashboardKeys =
-      dashboard.layer().kind === "agent" ? keys.filter((k) => "name" in k && COMPOSER_KEYS.has(k.name)) : keys;
+    const editing = dashboard.layer().kind === "agent";
+    if (editing) view.composer.sync();
+    const dashboardKeys = editing ? keys.filter((k) => "name" in k && COMPOSER_KEYS.has(k.name)) : keys;
     if (dashboardKeys.length === 0) return;
     key.preventDefault();
     feed(dashboardKeys);
   });
   renderer.keyInput.on("paste", (event) => {
-    if (dashboard.layer().kind === "agent") return;
+    const text = new TextDecoder().decode(event.bytes);
+    if (dashboard.layer().kind === "agent") {
+      if (view.composer.paste(text)) event.preventDefault();
+      return;
+    }
     event.preventDefault();
-    feed(textKeys(new TextDecoder().decode(event.bytes)));
+    feed(textKeys(text));
   });
   renderer.requestRender();
 }

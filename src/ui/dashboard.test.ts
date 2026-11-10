@@ -585,7 +585,7 @@ describe("concept layout", () => {
       { agent: fakeAgent(ask) },
     );
     dashboard.handle({ text: "4" });
-    dashboard.agent.chat.current.draft = "Any risks?";
+    dashboard.agent.chat.current.draft = ["Any risks?"];
     dashboard.agent.send();
     await settle();
     const canvas = draw(dashboard, 120, 30);
@@ -614,7 +614,7 @@ describe("concept layout", () => {
       { agent },
     );
     dashboard.handle({ text: "4" });
-    dashboard.agent.chat.current.draft = "First?";
+    dashboard.agent.chat.current.draft = ["First?"];
     dashboard.agent.send();
     await settle();
     expect(draw(dashboard, 120, 30).text(4)).toContain("Test Model · Medium ▾");
@@ -692,7 +692,7 @@ describe("concept layout", () => {
       { agent: fakeAgent(ask) },
     );
     dashboard.handle({ text: "4" });
-    dashboard.agent.chat.current.draft = "Risks?";
+    dashboard.agent.chat.current.draft = ["Risks?"];
     dashboard.agent.send();
     await settle();
     dashboard.handle({ name: "agent-cited" });

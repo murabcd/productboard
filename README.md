@@ -71,10 +71,20 @@ project, sprint, or issue you can access in Jira. The message box grows as you t
 switch between chats, and `Ctrl+O` to open an issue Agent
 mentioned.
 
-Agent sends your prompt to your provider and searches Jira when the question
-needs issue data. Each search shares up to 50 matching issue summaries with
+Drop an image file into the Agent composer or paste its local path. Images
+and long or multiline pastes appear inline as numbered labels. Press
+Backspace after a label to remove it. You can attach up to four PNG, JPEG, GIF,
+or WebP files, up to 3 MB each and 6 MB total. Use **+ Context** to attach a
+sprint from the current board to the next message. Without an attachment,
+Agent searches across Jira as usual.
+
+Agent sends your prompt and attached images to your provider when you press
+Enter. It searches Jira when the question needs issue data. Each search shares
+up to 50 matching issue summaries with
 current fields such as status, assignee, and priority. Its answers can link back
-to Jira issues in the terminal. Productboard keeps chat history for the current run.
+to Jira issues in the terminal. Productboard keeps chat history for the current
+run. Reattach images if you switch models or reasoning levels and want to refer
+to them again.
 
 For Anthropic, set `PRODUCTBOARD_AGENT_PROVIDER=anthropic` and supply
 `ANTHROPIC_API_KEY` or run `board --agent-login` with that provider set.

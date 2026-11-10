@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { mkdtemp, rmdir, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { RGBA, TextareaRenderable } from "@opentui/core";
 import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testing";
 import type { AgentBackend } from "../agent/chat";
+import { draftImages, draftText } from "../agent/draft";
 import type { JiraClient } from "../jira/client";
 import { initialQuery, View } from "../jira/query";
 import { Workspace } from "../state/workspace";
@@ -71,7 +75,7 @@ describe("OpenTUI shell", () => {
     await setup.renderOnce();
 
     expect(rememberTheme).toHaveBeenCalledWith("vercel-light");
-    expect(dashboard.agent.chat.current.draft).toBe("Draft");
+    expect(draftText(dashboard.agent.chat.current.draft)).toBe("Draft");
     const composer = setup.renderer.root.getRenderable("dashboard")?.getRenderable("composer");
     if (!(composer instanceof TextareaRenderable)) throw new Error("Expected the Agent composer");
     expect(composer.visible).toBe(true);
@@ -207,6 +211,70 @@ describe("OpenTUI shell", () => {
     expect(dashboard.agent.tab).toBe(true);
   });
 
+  test("Agent sends the contents of inline tokens and the selected sprint", async () => {
+    const ask = mock<AgentBackend["ask"]>(async ({ onText }) => onText("Got it."));
+    const { setup, dashboard } = await start(100, { agent: fakeAgent(ask) });
+    const directory = await mkdtemp(join(tmpdir(), "productboard-image-"));
+    const filename = "Sprint screenshot.png";
+    const path = join(directory, filename);
+    try {
+      await Bun.write(path, PNG);
+      dashboard.workspace.board = "1";
+      dashboard.workspace.sprints = [
+        { id: 31, name: "Web - Sprint 31", state: "active", start: "", end: "", goal: "" },
+      ];
+      await setup.mockMouse.click(6, 6);
+      await setup.renderOnce();
+      setup.mockInput.pressKey("k", { ctrl: true });
+      await setup.mockInput.typeText("attach sprint context");
+      setup.mockInput.pressEnter();
+      setup.mockInput.pressEnter();
+      await setup.renderOnce();
+
+      await setup.mockInput.pasteBracketedText("Compare 🧪 結果: ");
+      await setup.mockInput.pasteBracketedText(path.replaceAll(" ", "\\ "));
+      for (
+        let attempt = 0;
+        attempt < 50 && draftImages(dashboard.agent.chat.current.draft).some(({ state }) => state.kind === "loading");
+        attempt++
+      ) {
+        await Bun.sleep(5);
+      }
+      const pasted = "first $&\nsecond\nthird\nfourth\nfifth\nsixth  ";
+      await setup.mockInput.pasteBracketedText(pasted);
+      await setup.renderOnce();
+      expect(setup.captureCharFrame()).toContain("Compare 🧪 結果: [Image #1] [Pasted text #2 +5 lines]");
+      expect(setup.captureCharFrame()).not.toContain(filename);
+      await setup.mockInput.pasteBracketedText("remove me\nplease");
+      setup.mockInput.pressBackspace();
+      await settle();
+      expect(draftText(dashboard.agent.chat.current.draft)).toEndWith("[Pasted text #2 +5 lines]");
+
+      await setup.mockInput.pasteBracketedText(join(directory, "missing.png"));
+      for (let attempt = 0; attempt < 50 && !dashboard.agent.chat.current.error; attempt++) {
+        await Bun.sleep(5);
+      }
+      expect(dashboard.agent.chat.current.error).toBe("Could not read the image.");
+      await setup.mockInput.typeText(" — explain");
+      setup.mockInput.pressEnter();
+      await settle();
+      expect(ask.mock.calls[0]?.[0]).toMatchObject({
+        prompt: `Compare 🧪 結果: ${pasted} — explain`,
+        sprint: { id: 31, name: "Web - Sprint 31" },
+        images: [{ filename, mediaType: "image/png", bytes: Buffer.from(PNG) }],
+      });
+      expect(dashboard.workspace.query.view).toBe(View.All);
+      await setup.renderOnce();
+      await setup.mockInput.pasteBracketedText("And across Jira?");
+      setup.mockInput.pressEnter();
+      await settle();
+      expect(ask.mock.calls[1]?.[0]).toMatchObject({ prompt: "And across Jira?", sprint: undefined, images: [] });
+    } finally {
+      await unlink(path);
+      await rmdir(directory);
+    }
+  });
+
   test("the Agent box takes all typing, grows with lines, sends on Enter; Esc interrupts", async () => {
     const ask = mock<AgentBackend["ask"]>(
       ({ signal }) => new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve())),
@@ -219,13 +287,13 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("second line");
     await setup.renderOnce();
     expect(quit).not.toHaveBeenCalled();
-    expect(dashboard.agent.chat.current.draft).toBe("quick 1 line\nsecond line");
+    expect(draftText(dashboard.agent.chat.current.draft)).toBe("quick 1 line\nsecond line");
     expect(dashboard.agent.composerRows).toBe(2);
     setup.mockInput.pressEnter();
     await settle();
     await setup.renderOnce();
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(dashboard.agent.chat.current.draft).toBe("");
+    expect(draftText(dashboard.agent.chat.current.draft)).toBe("");
     expect(setup.captureCharFrame()).toContain("esc interrupt");
     setup.mockInput.pressEscape();
     await Bun.sleep(30); // a lone Esc is recognized after a short wait
@@ -250,8 +318,8 @@ describe("OpenTUI shell", () => {
       await setup.renderOnce();
       expect(dashboard.picker).toBeNull();
       await setup.mockInput.typeText("resumed");
-      expect(dashboard.agent.chat.current.draft.endsWith("resumed")).toBe(true);
-      dashboard.agent.chat.current.draft = "";
+      expect(draftText(dashboard.agent.chat.current.draft)).toEndWith("resumed");
+      dashboard.agent.chat.current.draft = [];
       await setup.renderOnce();
     }
   });

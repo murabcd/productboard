@@ -1,7 +1,14 @@
 import { type AgentModel, modelName, PROVIDER_NAMES, REASONING_NAMES } from "../agent/models";
 import { REASONING_LEVELS, type Reasoning } from "../auth";
 import { isPersonal, STATUSES, type StatusFilter, View } from "../jira/query";
-import { type Choice, describeAttachment, SPRINT_STATES, shortSprintName, sprintChoice } from "../jira/types";
+import {
+  type Choice,
+  describeAttachment,
+  SPRINT_STATES,
+  type Sprint,
+  shortSprintName,
+  sprintChoice,
+} from "../jira/types";
 import { THEME_IDS, THEMES } from "../theme";
 import type { Dashboard } from "./dashboard";
 import { NAVIGATION, navKey } from "./navigation";
@@ -95,35 +102,76 @@ function boardPicker(next: "sprint" | "sprint-filter"): PickerSource {
   };
 }
 
-function sprintPicker(mode: "scope" | "filter"): PickerSource {
-  const filter = mode === "filter";
-  const selected = ({ query }: Dashboard["workspace"]) => (filter ? query.sprintFilter : query.sprint);
+interface SprintPickerMode {
+  title: string;
+  selected(d: Dashboard): number | null;
+  choose(d: Dashboard, sprint: Sprint): void;
+  clear?(d: Dashboard): PickerItem | undefined;
+}
+
+const SPRINT_PICKERS = {
+  scope: {
+    title: "Choose sprint",
+    selected: (d) => d.workspace.query.sprint,
+    choose: (d, sprint) => d.changeQuery({ view: View.Sprint, sprint: sprint.id }),
+  },
+  filter: {
+    title: "Filter by sprint",
+    selected: (d) => d.workspace.query.sprintFilter,
+    choose: (d, sprint) => d.changeQuery({ sprintFilter: sprint.id }),
+    clear: (d) => {
+      const current = d.workspace.query.sprintFilter === null;
+      if (!current || d.workspace.sprints.length) {
+        return item("Any sprint", "", () => d.changeQuery({ sprintFilter: null }), { current });
+      }
+    },
+  },
+  context: {
+    title: "Attach sprint context",
+    selected: (d) => d.agent.chat.current.sprint?.id ?? null,
+    choose: (d, sprint) => {
+      d.agent.chat.current.sprint = sprint;
+    },
+    clear: (d) => {
+      if (d.agent.chat.current.sprint) {
+        return item("Remove sprint context", "", () => {
+          d.agent.chat.current.sprint = undefined;
+        });
+      }
+    },
+  },
+} satisfies Record<string, SprintPickerMode>;
+
+function sprintPicker({ title, selected, choose, clear }: SprintPickerMode): PickerSource {
   return {
-    title: filter ? "Filter by sprint" : "Choose sprint",
+    title,
     items: (d) => {
-      const current = selected(d.workspace);
+      const current = selected(d);
       const sprints = d.workspace.sprints.map(
         (sprint): PickerItem => ({
           ...sprintChoice(sprint),
           current: sprint.id === current,
-          run: () => d.changeQuery(filter ? { sprintFilter: sprint.id } : { view: View.Sprint, sprint: sprint.id }),
+          run: () => choose(d, sprint),
         }),
       );
-      if (filter && (sprints.length > 0 || current !== null)) {
-        sprints.unshift(
-          item("Any sprint", "", () => d.changeQuery({ sprintFilter: null }), { current: current === null }),
-        );
-      }
+      const reset = clear?.(d);
+      if (reset) sprints.unshift(reset);
       return sprints;
     },
     load: ({ workspace }) => {
-      if (workspace.sprints.length === 0) workspace.loadSprints();
+      if (!workspace.board) workspace.loadCatalog();
+      else if (workspace.sprints.length === 0) workspace.loadSprints();
     },
-    options: ({ workspace }) => {
-      const state = workspace.sprint(selected(workspace))?.state ?? workspace.sprints[0]?.state;
+    options: (d) => {
+      const { workspace } = d;
+      const state = workspace.sprint(selected(d))?.state ?? workspace.sprints[0]?.state;
       return { tabs: [...SPRINT_STATES, "all"], tab: state ? SPRINT_STATES.indexOf(state) : SPRINT_STATES.length };
     },
-    empty: ({ workspace }) => catalogStatus(workspace.sprintCatalogError, workspace.sprintsPending),
+    empty: ({ workspace }) =>
+      catalogStatus(
+        workspace.sprintCatalogError || workspace.boardCatalogError,
+        workspace.sprintsPending || workspace.catalogPending,
+      ),
   };
 }
 
@@ -137,7 +185,7 @@ function commandItems(d: Dashboard): PickerItem[] {
     ),
     item("Go to Created", "My issues tab", () => d.showView(View.Created), page),
     ...(d.agent.tab
-      ? []
+      ? [item("Attach sprint context", "Next message", () => d.openPicker("sprint-context"), act)]
       : [
           item("Filter…", "F", () => d.openPicker("filter"), act),
           item("Choose board", "b", () => d.openPicker("board"), act),
@@ -167,8 +215,9 @@ function commandItems(d: Dashboard): PickerItem[] {
 export const PICKERS: Record<PickerKind, PickerSource> = {
   board: boardPicker("sprint"),
   "sprint-filter-board": boardPicker("sprint-filter"),
-  sprint: sprintPicker("scope"),
-  "sprint-filter": sprintPicker("filter"),
+  sprint: sprintPicker(SPRINT_PICKERS.scope),
+  "sprint-filter": sprintPicker(SPRINT_PICKERS.filter),
+  "sprint-context": sprintPicker(SPRINT_PICKERS.context),
   project: {
     title: "Choose project",
     items: (d) =>
