@@ -8,7 +8,6 @@ import {
   describeAttachment,
   type Issue,
   isImage,
-  mentionNote,
   SPRINT_STATES,
   sprintChoice,
 } from "../jira/types";
@@ -562,9 +561,10 @@ export class Dashboard {
     n: () => this.workspace.loadMore(),
   });
 
-  /** Why a row is listed: Today's reason, or who mentioned you and when. Empty otherwise. */
+  /** Why Today lists a row. Mentions leaves it out: the headings say when,
+   * and the footer shows who mentioned you and what they said. */
   note(issue: Issue): string {
-    return issue.reason ?? (issue.mention ? mentionNote(issue.mention) : "");
+    return issue.reason ?? "";
   }
 
   personScope(): string {
