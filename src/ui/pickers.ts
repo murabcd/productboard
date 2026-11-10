@@ -236,7 +236,6 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("Group by assignee", "One group per person", () => d.list.groupBy("assignee"), {
         current: d.list.grouping === "assignee",
       }),
-      item("Theme", THEMES[d.theme].label, () => d.openPicker("theme")),
     ],
   },
   theme: {

@@ -32,9 +32,9 @@ widths.
 
 ## Themes
 
-[[src/theme.ts]] defines the built-in palettes. Choose one in the command
-palette or the Display menu. [[src/auth.ts]] saves the selected theme in the
-local preferences.
+[[src/theme.ts]] defines the built-in palettes. The command palette is the
+only entry point for changing themes. [[src/auth.ts]] saves the selected
+theme in the local preferences.
 
 [[src/ui/theme.ts]] resolves the palette into semantic colors for the frame,
 selection, and Agent composer. Switching themes recolors the existing renderer
