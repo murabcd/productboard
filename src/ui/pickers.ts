@@ -149,7 +149,7 @@ function sprintPicker({ title, selected, choose, clear }: SprintPickerMode): Pic
     },
     load: ({ workspace }) => {
       if (!workspace.board) workspace.loadCatalog();
-      else if (workspace.sprints.length === 0) workspace.loadSprints();
+      else if (workspace.sprints.length === 0) void workspace.loadSprints();
     },
     options: (d) => {
       const { workspace } = d;
@@ -169,7 +169,7 @@ const agentContext: PickerSource = {
   options: () => ({ placeholder: "Search tasks and sprints", filterChoices: false }),
   load: ({ workspace }) => {
     if (!workspace.board) workspace.loadCatalog();
-    else if (!workspace.sprints.length) workspace.loadSprints();
+    else if (!workspace.sprints.length) void workspace.loadSprints();
   },
   queryChanged: ({ agent }, query) => void agent.searchContext(query),
   close: ({ agent }) => agent.clearContextSearch(),

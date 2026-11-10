@@ -15,7 +15,9 @@ one scope change. Board and project discovery and the selected board's sprint
 catalog track their own failures and retry independently of the issue list.
 The Filter menu uses the selected board's sprint catalog. Its optional sprint
 filter carries across issue lists and is separate from the sprint selected on
-the Sprints page. Changing boards clears both selections.
+the Sprints page. Changing boards clears both selections and starts the new
+board’s sprint read immediately. Only the current request can publish sprint
+results or schedule a retry.
 
 ## Interaction and rendering
 

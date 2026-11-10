@@ -133,6 +133,35 @@ describe("workspace", () => {
     expect(source.sprints).toHaveBeenCalledTimes(2);
   });
 
+  test("switching boards starts a sprint read immediately and ignores earlier requests for the same board", async () => {
+    const { work, source } = setup();
+    const first = deferred<Sprint[]>();
+    const second = deferred<Sprint[]>();
+    const third = deferred<Sprint[]>();
+    source.sprints
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+      .mockReturnValueOnce(third.promise);
+
+    work.chooseBoard("1");
+    work.chooseBoard("2");
+    work.chooseBoard("1");
+    work.loadSprints();
+    expect(source.sprints.mock.calls).toEqual([["1"], ["2"], ["1"]]);
+
+    first.resolve([{ id: 1, name: "Old sprint", state: "active", start: "", end: "", goal: "" }]);
+    second.reject(new Error("Previous board failed"));
+    await settle();
+    expect(work.sprints).toEqual([]);
+    expect(work.sprintsPending).toBe(true);
+    expect(work.sprintCatalogError).toBe("");
+
+    third.resolve([{ id: 3, name: "Current sprint", state: "active", start: "", end: "", goal: "" }]);
+    await settle();
+    expect(work.sprints.map(({ id }) => id)).toEqual([3]);
+    expect(work.sprintsPending).toBe(false);
+  });
+
   test("without a remembered board, the one with the most active sprints opens", async () => {
     const { source } = setup();
     const sprint = (id: number, state: "active" | "closed") => ({

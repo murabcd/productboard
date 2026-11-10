@@ -27,11 +27,11 @@ export class Workspace {
   board = "";
   sprints: Sprint[] = [];
   catalogPending = false;
-  sprintsPending = false;
   boardCatalogError = "";
   sprintCatalogError = "";
 
   private request: { query: IssueQuery } | undefined;
+  private sprintRequest: { board: string } | undefined;
   private nextRefresh = Number.POSITIVE_INFINITY;
   private catalogRetryAt = Number.POSITIVE_INFINITY;
   private sprintsRetryAt = Number.POSITIVE_INFINITY;
@@ -74,6 +74,10 @@ export class Workspace {
 
   get pending(): boolean {
     return this.request !== undefined;
+  }
+
+  get sprintsPending(): boolean {
+    return this.sprintRequest !== undefined;
   }
 
   get catalogError(): string {
@@ -124,7 +128,7 @@ export class Workspace {
     const now = this.now();
     if (!this.pending && now >= this.nextRefresh) this.refresh();
     if (now >= this.catalogRetryAt) this.loadCatalog();
-    if (now >= this.sprintsRetryAt) this.loadSprints();
+    if (now >= this.sprintsRetryAt) void this.loadSprints();
   }
 
   loadMore(): void {
@@ -193,45 +197,42 @@ export class Workspace {
 
   private openBoard(board: string, sprints?: Sprint[]): void {
     this.board = board;
+    this.sprintRequest = undefined;
     this.sprints = sprints ?? [];
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
     this.change(scoped(this.query, { sprint: null, sprintFilter: null }));
     if (sprints) this.changed();
-    else this.loadSprints();
+    else void this.loadSprints();
   }
 
-  loadSprints(): void {
-    if (!this.board || this.sprintsPending) return;
-    const board = this.board;
-    this.sprintsPending = true;
+  async loadSprints(): Promise<void> {
+    if (!this.board || this.sprintRequest) return;
+    const request = { board: this.board };
+    this.sprintRequest = request;
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
     this.changed();
-    this.source
-      .sprints(board)
-      .then(
-        (sprints) => {
-          if (board === this.board) this.sprints = sprints;
-        },
-        (error: unknown) => {
-          if (board === this.board) {
-            this.sprintCatalogError = message(error);
-            this.sprintsRetryAt = this.now() + REFRESH_MS;
-          }
-        },
-      )
-      .finally(() => {
-        this.sprintsPending = false;
-        if (board !== this.board) this.loadSprints();
+    try {
+      const sprints = await this.source.sprints(request.board);
+      if (this.sprintRequest === request) this.sprints = sprints;
+    } catch (error) {
+      if (this.sprintRequest === request) {
+        this.sprintCatalogError = message(error);
+        this.sprintsRetryAt = this.now() + REFRESH_MS;
+      }
+    } finally {
+      if (this.sprintRequest === request) {
+        this.sprintRequest = undefined;
         this.changed();
-      });
+      }
+    }
   }
 
   /** Reload whichever board, project or sprint list failed or is missing. */
   retryCatalogs(): void {
     if (this.boardCatalogError || this.boards.length === 0) this.loadCatalog();
-    if (this.sprintCatalogError || this.sprints.length === 0) this.loadSprints();
+    if (this.sprintCatalogError || this.sprints.length === 0) void this.loadSprints();
   }
 
   sprint(id = this.query.sprint): Sprint | undefined {
