@@ -13,6 +13,7 @@ export type PickerKind =
   | "cited"
   | "filter"
   | "display"
+  | "theme"
   | "commands";
 
 export interface PickerItem {

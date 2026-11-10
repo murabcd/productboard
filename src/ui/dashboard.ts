@@ -5,6 +5,7 @@ import type { JiraClient } from "../jira/client";
 import { type IssueQuery, STATUSES, scoped, View, withAssignee, withView } from "../jira/query";
 import { type Attachment, type Issue, isImage } from "../jira/types";
 import { message, type Workspace } from "../state/workspace";
+import { DEFAULT_THEME, type ThemeId } from "../theme";
 import { AgentPanel } from "./agent-panel";
 import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
 import { IssueDetails, type IssueRead } from "./issue-details";
@@ -20,6 +21,11 @@ import { ImagePreviews, type Preview } from "./preview";
 export interface Opener {
   open(url: string): Promise<void>;
   copy(text: string): Promise<void>;
+}
+
+export interface DashboardOptions {
+  agent?: AgentBackend;
+  appearance?: { initial?: ThemeId; save(theme: ThemeId): void };
 }
 
 const NOTICE_MS = 4000;
@@ -60,6 +66,7 @@ export class Dashboard {
   peekOpen = false;
   peek: Peek | null = null;
   readonly agent: AgentPanel;
+  private selectedTheme: ThemeId;
   private autoSprintPicker = true;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly images: ImagePreviews;
@@ -71,11 +78,12 @@ export class Dashboard {
     private readonly client: Pick<JiraClient, "detail" | "attachment" | "site">,
     private readonly opener: Opener,
     private readonly redraw: () => void,
-    agentBackend?: AgentBackend,
+    private readonly options: DashboardOptions = {},
   ) {
+    this.selectedTheme = options.appearance?.initial ?? DEFAULT_THEME;
     this.list = new IssueList(workspace);
     this.images = new ImagePreviews((id) => client.attachment(id), redraw);
-    this.agent = new AgentPanel(workspace, agentBackend, redraw, () => this.update());
+    this.agent = new AgentPanel(workspace, options.agent, redraw, () => this.update());
     this.details = new IssueDetails(
       (key) => client.detail(key),
       (read) => {
@@ -97,6 +105,21 @@ export class Dashboard {
 
   get site(): string {
     return this.client.site;
+  }
+
+  get theme(): ThemeId {
+    return this.selectedTheme;
+  }
+
+  chooseTheme(theme: ThemeId): void {
+    this.selectedTheme = theme;
+    try {
+      this.options.appearance?.save(theme);
+    } catch (error) {
+      this.notify(`Could not save theme: ${message(error)}`);
+      return;
+    }
+    this.redraw();
   }
 
   dispose(): void {

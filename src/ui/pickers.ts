@@ -2,6 +2,7 @@ import { type AgentModel, modelName, PROVIDER_NAMES, REASONING_NAMES } from "../
 import { REASONING_LEVELS, type Reasoning } from "../auth";
 import { isPersonal, STATUSES, type StatusFilter, View } from "../jira/query";
 import { type Choice, describeAttachment, SPRINT_STATES, sprintChoice } from "../jira/types";
+import { THEME_IDS, THEMES } from "../theme";
 import type { Dashboard } from "./dashboard";
 import { NAVIGATION, navKey } from "./navigation";
 import type { PickerItem, PickerKind, PickerOptions } from "./picker";
@@ -86,6 +87,7 @@ function commandItems(d: Dashboard): PickerItem[] {
     item("Go to Created", "My issues tab", () => d.showView(View.Created), page),
     item("Filter issues…", "F", () => d.openPicker("filter"), act),
     item("Display options…", "D", () => d.openPicker("display"), act),
+    item("Change theme", THEMES[d.theme].label, () => d.openPicker("theme"), act),
     item("Choose board", "b", () => d.openPicker("board"), act),
     item("Choose sprint", "s", () => d.openPicker("sprint"), act),
     item("Sprint brief", "t", () => d.runAction("brief"), act),
@@ -234,7 +236,15 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("Group by assignee", "One group per person", () => d.list.groupBy("assignee"), {
         current: d.list.grouping === "assignee",
       }),
+      item("Theme", THEMES[d.theme].label, () => d.openPicker("theme")),
     ],
+  },
+  theme: {
+    title: "Choose theme",
+    items: (d) =>
+      THEME_IDS.map((theme) =>
+        item(THEMES[theme].label, "", () => d.chooseTheme(theme), { value: theme, current: d.theme === theme }),
+      ),
   },
   commands: { title: "Commands", items: commandItems },
 };

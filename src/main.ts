@@ -5,6 +5,7 @@ import {
   loadCredentials,
   readConfig,
   rememberBoard,
+  rememberTheme,
   saveAgentKey,
   saveCredentials,
   validate,
@@ -38,7 +39,7 @@ async function main(args: string[]): Promise<number> {
     if (args.includes("--check")) return await check(client);
     if (args.length) return fail(`Unknown option ${args[0]}\n\n${USAGE}`);
     if (!process.stdin.isTTY || !process.stdout.isTTY) return fail("Run board in a terminal, or use board --check.");
-    await dashboard(client, readConfig()?.board);
+    await dashboard(client);
     return 0;
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error));
@@ -56,13 +57,17 @@ async function check(client: JiraClient): Promise<number> {
   );
 }
 
-async function dashboard(client: JiraClient, preferredBoard: string | undefined): Promise<void> {
+async function dashboard(client: JiraClient): Promise<void> {
+  const config = readConfig();
   const screen = await openScreen();
-  const workspace = new Workspace(client, { preferredBoard, rememberBoard });
+  const workspace = new Workspace(client, { preferredBoard: config?.board, rememberBoard });
   // Scheduled refreshes and retries; the screen redraws only when state changes.
   const timer = setInterval(() => workspace.tick(), 1000);
   const agent = EveAgent.create(client);
-  const board = new Dashboard(workspace, client, macOpener, screen.redraw, agent);
+  const board = new Dashboard(workspace, client, macOpener, screen.redraw, {
+    agent,
+    appearance: { initial: config?.theme, save: rememberTheme },
+  });
   try {
     workspace.loadCatalog();
     await screen.show(board);

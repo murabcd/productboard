@@ -47,6 +47,13 @@ ln -s "$PWD/bin/board" ~/.local/bin/board
 - Read comments and preview image attachments in the terminal.
 - Ask Agent about a sprint from its page in the sidebar.
 
+Press `1` for Search, `2` for Inbox, `3` for My issues, `4` for Agent,
+`5` for Team focus, `6` for Sprints, or `7` for All issues.
+
+To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel
+Light**, **Vercel Dark**, or **Default**. The choice is saved for the next
+launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/geist/terminal).
+
 ## Agent
 
 Install Node.js 24 or newer for the local [Eve](https://github.com/vercel/eve) runtime.
@@ -54,7 +61,7 @@ In Rex, run `board --agent-login` once to save your OpenAI API key to macOS
 Keychain. An existing `OPENAI_API_KEY` in your shell works too.
 
 Open `board`, choose a sprint, then select **Agent** in the sidebar (or press
-`3`). The message box grows as you type:
+`4`). The message box grows as you type:
 `Enter` sends and `Shift+Enter` (or `Ctrl+J`) adds a line. While Agent answers,
 `Esc` interrupts it. Use `Ctrl+N` to start a chat, `Ctrl+↑` / `Ctrl+↓` to
 switch between chats for that sprint, and `Ctrl+O` to open an issue Agent

@@ -13,27 +13,29 @@ export interface NavItem {
   icon: string;
   /** The narrow top bar's tab label. */
   short: string;
-  /** The sidebar section heading; the personal pages at the top have none. */
-  section: string;
 }
 
-const item = (section: string, to: Destination, icon: string, name: string, short: string): NavItem => ({
+const item = (to: Destination, icon: string, name: string, short: string): NavItem => ({
   to,
   icon,
   name,
   short,
-  section,
 });
 
-const INBOX = item("", View.Mentions, "◉", "Inbox", "Inbox");
-const MY_ISSUES = item("", View.Mine, "◫", "My issues", "Me");
-export const AGENT = item("", "agent", "✦", "Agent", "Agent");
-const TEAM_FOCUS = item("Workspace", View.Today, "◇", "Team focus", "Focus");
-const SPRINTS = item("Workspace", View.Sprint, "◷", "Sprints", "Sprints");
-const ALL_ISSUES = item("Workspace", View.All, "≡", "All issues", "All");
-const SEARCH = item("Workspace", View.Search, "⌕", "Search", "Find");
+const SEARCH = item(View.Search, "⌕", "Search", "Find");
+const INBOX = item(View.Mentions, "◉", "Inbox", "Inbox");
+const MY_ISSUES = item(View.Mine, "◫", "My issues", "Me");
+export const AGENT = item("agent", "✦", "Agent", "Agent");
+const TEAM_FOCUS = item(View.Today, "◇", "Team focus", "Focus");
+const SPRINTS = item(View.Sprint, "◷", "Sprints", "Sprints");
+const ALL_ISSUES = item(View.All, "≡", "All issues", "All");
 
-export const NAVIGATION: readonly NavItem[] = [INBOX, MY_ISSUES, AGENT, TEAM_FOCUS, SPRINTS, ALL_ISSUES, SEARCH];
+export const NAV_GROUPS: readonly (readonly NavItem[])[] = [
+  [SEARCH],
+  [INBOX, MY_ISSUES, AGENT],
+  [TEAM_FOCUS, SPRINTS, ALL_ISSUES],
+];
+export const NAVIGATION: readonly NavItem[] = NAV_GROUPS.flat();
 
 /** The page each view belongs to; Created is a tab of My issues. */
 const PAGES: Record<View, NavItem> = {
@@ -54,7 +56,7 @@ export const MY_ISSUES_TABS: readonly [View, string][] = [
   [View.Created, "Created"],
 ];
 
-/** The number key for an item: 1 for Inbox through 7 for Search. */
+/** The number key for an item in sidebar order. */
 export const navKey = (nav: NavItem): string => String(NAVIGATION.indexOf(nav) + 1);
 
 /** Views in navigation order, for Tab. */

@@ -24,7 +24,7 @@ import {
   peekWidth,
   sidebarWidth,
 } from "./layout";
-import { currentPage, NAVIGATION, type NavItem } from "./navigation";
+import { currentPage, NAV_GROUPS, NAVIGATION, type NavItem } from "./navigation";
 import { detailBlocks, type Panel } from "./panel";
 import { drawPeek } from "./peek";
 import { filterChips, PICKERS } from "./pickers";
@@ -81,17 +81,14 @@ function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
   for (let y = 1; y < canvas.height; y++) canvas.put(y, width - 1, "│", "line");
   const here = currentPage(d.workspace.query.view, d.agent.tab);
   let row = 2;
-  let section = "";
-  for (const item of NAVIGATION) {
-    if (item.section !== section) {
-      section = item.section;
-      canvas.put(row + 1, 2, section, "muted");
-      row += 2;
+  for (const group of NAV_GROUPS) {
+    for (const item of group) {
+      const active = item === here;
+      if (active) canvas.paint(row, 1, width - 3, "selected");
+      canvas.put(row, 2, `${item.icon} ${item.name}`, active ? "accentBold" : "muted", width - 4);
+      canvas.mark(row, 1, width - 3, navTarget(item));
+      row += 1;
     }
-    const active = item === here;
-    if (active) canvas.paint(row, 1, width - 3, "selected");
-    canvas.put(row, 2, `${item.icon} ${item.name}`, active ? "accentBold" : "muted", width - 4);
-    canvas.mark(row, 1, width - 3, navTarget(item));
     row += 1;
   }
 }
@@ -121,7 +118,8 @@ function drawAgentFooter(canvas: Canvas, d: Dashboard): void {
     ["⇧↵", "New line"],
     ["^N", "New chat", { kind: "agent", action: "new" }],
   ];
-  drawFooter(canvas, d, current ? choiceLabel(current) : "Agent is not set up", hints, ["", "muted"]);
+  const label = d.notice || (current ? choiceLabel(current) : "Agent is not set up");
+  drawFooter(canvas, d, label, hints, ["", "muted"]);
 }
 
 function drawFooter(

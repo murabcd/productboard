@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { Credentials } from "./jira/http";
+import { THEME_IDS, type ThemeId } from "./theme";
 
 const KEYCHAIN_SERVICE = "productboard";
 const CONFIG_PATH = join(homedir(), ".config", "productboard", "config.json");
@@ -36,6 +37,7 @@ const Config = z.object({
   /** The board chosen last, opened again on the next start. */
   board: z.string().optional(),
   agent: AgentChoice.optional(),
+  theme: z.enum(THEME_IDS).optional().catch(undefined),
 });
 type Config = z.infer<typeof Config>;
 
@@ -62,6 +64,12 @@ export function rememberBoard(board: string): void {
   if (config && config.board !== board) writeConfig({ ...config, board });
 }
 
+export function rememberTheme(theme: ThemeId): void {
+  const config = readConfig();
+  if (!config) throw new Error("Preferences are unavailable");
+  if (config.theme !== theme) writeConfig({ ...config, theme });
+}
+
 /** The saved sign-in, or a sentence telling the user how to create one. */
 export function loadCredentials(): Credentials | string {
   const config = readConfig();
@@ -83,10 +91,9 @@ export function saveCredentials(credentials: Credentials): void {
   const { site, email, token } = credentials;
   saveToken(KEYCHAIN_SERVICE, email, `productboard (${site})`, token);
   // A board belongs to one site, so it is kept only when the site stays the same.
-  // The Agent model belongs to the user, so it is always kept.
   const previous = readConfig();
   const board = previous?.site === site ? previous.board : undefined;
-  writeConfig({ site, email, ...(board && { board }), ...(previous?.agent && { agent: previous.agent }) });
+  writeConfig({ ...previous, site, email, board });
 }
 
 const AGENT_SERVICE = "productboard-agent";

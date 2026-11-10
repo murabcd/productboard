@@ -29,14 +29,25 @@ screen owns its quit shortcut even when Agent was active.
 Use [[src/text.ts]] for remote text sanitization, grapheme handling, and cell
 widths.
 
+## Themes
+
+[[src/theme.ts]] defines the built-in palettes. Choose one in the command
+palette or the Display menu. [[src/auth.ts]] saves the selected theme in the
+local preferences.
+
+[[src/ui/theme.ts]] resolves the palette into semantic colors for the frame,
+selection, and Agent composer. Switching themes recolors the existing renderer
+and composer while preserving the active page and draft.
+
 ## Screen layout
 
 The frame has a top bar, navigation sidebar, page header, body, and footer.
 The footer shows counts, sync status, and shortcuts.
 
-[[src/ui/navigation.ts#NAVIGATION]] lists the pages in sidebar order and is
-the one source for page names, number keys, Tab and the command palette. The
-sidebar moves into the top bar on narrow panes.
+[[src/ui/navigation.ts#NAV_GROUPS]] groups Search, the personal pages, and the
+team pages in sidebar order with a blank row between groups.
+[[src/ui/navigation.ts#NAVIGATION]] flattens that order for number keys, Tab,
+and the command palette. On narrow panes, the same order appears in the top bar.
 
 [[src/ui/header.ts#drawHeader]] draws the same header on every page: the title,
 a description, and one toolbar with tabs, board and sprint, the Filter menu,

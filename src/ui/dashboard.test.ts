@@ -116,7 +116,7 @@ describe("dashboard", () => {
 
   test("an empty Search view asks for words", () => {
     const { dashboard } = setup();
-    dashboard.handle({ text: "7" });
+    dashboard.handle({ text: "1" });
     expect(dashboard.finding).toBe("");
   });
 
@@ -479,22 +479,25 @@ describe("concept layout", () => {
     const { dashboard, work } = setup();
     const view = () => work.query.view;
     const order: [string, View][] = [
-      ["1", View.Mentions],
-      ["2", View.Mine],
-      ["4", View.Today],
-      ["5", View.Sprint],
-      ["6", View.All],
-      ["7", View.Search],
+      ["1", View.Search],
+      ["2", View.Mentions],
+      ["3", View.Mine],
+      ["5", View.Today],
+      ["6", View.Sprint],
+      ["7", View.All],
     ];
     for (const [key, expected] of order) {
       dashboard.handle({ text: key });
       dashboard.handle(ESC); // close the sprint picker or search prompt a view may open
       expect(view()).toBe(expected);
     }
-    dashboard.handle({ text: "3" });
+    dashboard.handle({ text: "4" });
     expect(dashboard.agent.tab).toBe(true);
     dashboard.handle(ESC);
     dashboard.handle({ text: "1" });
+    dashboard.handle(ESC); // leave the Search input
+    dashboard.handle({ name: "tab" });
+    expect(view()).toBe(View.Mentions);
     dashboard.handle({ name: "tab" });
     expect(view()).toBe(View.Mine);
     dashboard.handle({ name: "tab" });
@@ -519,7 +522,7 @@ describe("concept layout", () => {
 
   test("the Agent page shows its title once and no issue filters", () => {
     const { dashboard } = setup();
-    dashboard.handle({ text: "3" });
+    dashboard.handle({ text: "4" });
     const canvas = draw(dashboard, 120, 30);
     const rows = Array.from({ length: 29 }, (_, y) =>
       canvas
@@ -540,7 +543,7 @@ describe("concept layout", () => {
       { site: "x", detail: mock(), attachment: mock() },
       { open: mock(), copy: mock() },
       () => {},
-      fakeAgent(ask),
+      { agent: fakeAgent(ask) },
     );
     expect(dashboard.agent.scope).toBeNull();
     dashboard.agent.chat.current.draft = "Any risks?";
@@ -564,9 +567,9 @@ describe("concept layout", () => {
       { site: "x", detail: mock(), attachment: mock() },
       { open: mock(), copy: mock() },
       () => {},
-      fakeAgent(ask),
+      { agent: fakeAgent(ask) },
     );
-    dashboard.handle({ text: "3" });
+    dashboard.handle({ text: "4" });
     dashboard.agent.chat.current.draft = "Any risks?";
     dashboard.agent.send();
     await settle();
@@ -593,9 +596,9 @@ describe("concept layout", () => {
       { site: "x", detail: mock(), attachment: mock() },
       { open: mock(), copy: mock() },
       () => {},
-      agent,
+      { agent },
     );
-    dashboard.handle({ text: "3" });
+    dashboard.handle({ text: "4" });
     dashboard.agent.chat.current.draft = "First?";
     dashboard.agent.send();
     await settle();
@@ -652,7 +655,7 @@ describe("concept layout", () => {
     dashboard.handle({ text: "J" });
     expect(dashboard.peek?.scroll).toBe(3);
     dashboard.handle(ESC);
-    dashboard.handle({ text: "2" });
+    dashboard.handle({ text: "3" });
     dashboard.handle({ name: "right" });
     expect(work.query.view).toBe(View.Created);
     dashboard.handle({ name: "left" });
@@ -671,9 +674,9 @@ describe("concept layout", () => {
       { site: "x", detail: mock(() => new Promise<never>(() => {})), attachment: mock() },
       { open: mock(), copy: mock() },
       () => {},
-      fakeAgent(ask),
+      { agent: fakeAgent(ask) },
     );
-    dashboard.handle({ text: "3" });
+    dashboard.handle({ text: "4" });
     dashboard.agent.chat.current.draft = "Risks?";
     dashboard.agent.send();
     await settle();

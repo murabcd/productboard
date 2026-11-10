@@ -5,81 +5,16 @@ import {
   type KeyEvent,
   type OptimizedBuffer,
   Renderable,
-  type RenderContext,
-  RGBA,
   TextAttributes,
   TextareaRenderable,
 } from "@opentui/core";
 import { cells, splitGraphemes } from "../text";
 import { COMPOSER_MAX_ROWS, SCANNER_FRAME_MS } from "./agent";
-import type { Canvas, Rect, ScannerStyle, Style, Surface, TextStyle } from "./canvas";
+import type { Canvas, Rect } from "./canvas";
 import type { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key, KeyName } from "./input";
-
-const NONE = RGBA.fromValues(0, 0, 0, 0);
-const hex = (value: string) => RGBA.fromHex(value);
-const SELECTION = hex("#292d40");
-const SURFACES: Record<Surface, RGBA> = {
-  workspace: hex("#151619"),
-  chrome: hex("#111215"),
-  raised: hex("#22253a"),
-  selected: SELECTION,
-  panel: hex("#1a1b21"),
-};
-
-const ACCENT = hex("#b8c1ff");
-const GLARE = RGBA.fromValues(
-  Math.min(1, ACCENT.r * 1.15),
-  Math.min(1, ACCENT.g * 1.15),
-  Math.min(1, ACCENT.b * 1.15),
-  1,
-);
-
-/** Resting blocks pulse between 30% and 100% of their base brightness. */
-const SCANNER: Record<ScannerStyle, [color: RGBA, alpha: number]> = {
-  trail0: [ACCENT, 1],
-  trail1: [GLARE, 0.9],
-  trail2: [ACCENT, 0.65],
-  trail3: [ACCENT, 0.65 ** 2],
-  trail4: [ACCENT, 0.65 ** 3],
-  trail5: [ACCENT, 0.65 ** 4],
-  idle0: [ACCENT, 0.6 * 0.3],
-  idle1: [ACCENT, 0.6 * 0.53],
-  idle2: [ACCENT, 0.6 * 0.77],
-  idle3: [ACCENT, 0.6],
-};
-
-/** A scanner shade blended over the background it sits on, since terminals have no transparency. */
-function blend([color, alpha]: [RGBA, number], background: RGBA): RGBA {
-  const mix = (front: number, back: number) => front * alpha + back * (1 - alpha);
-  return RGBA.fromValues(mix(color.r, background.r), mix(color.g, background.g), mix(color.b, background.b), 1);
-}
-
-const isScanner = (style: Style): style is ScannerStyle => style in SCANNER;
-
-const STYLES: Record<TextStyle, { fg: RGBA; bg: RGBA; attributes: number }> = {
-  line: { fg: hex("#353743"), bg: NONE, attributes: TextAttributes.NONE },
-  text: { fg: hex("#e3e4ec"), bg: NONE, attributes: TextAttributes.NONE },
-  title: { fg: hex("#e3e4ec"), bg: NONE, attributes: TextAttributes.BOLD },
-  muted: { fg: hex("#a2a5b5"), bg: NONE, attributes: TextAttributes.NONE },
-  mutedBold: { fg: hex("#a2a5b5"), bg: NONE, attributes: TextAttributes.BOLD },
-  accent: { fg: hex("#b8c1ff"), bg: NONE, attributes: TextAttributes.NONE },
-  accentBold: { fg: hex("#b8c1ff"), bg: NONE, attributes: TextAttributes.BOLD },
-  done: { fg: hex("#96d8b7"), bg: NONE, attributes: TextAttributes.NONE },
-  italic: { fg: hex("#e3e4ec"), bg: NONE, attributes: TextAttributes.ITALIC },
-  code: { fg: hex("#d7af87"), bg: hex("#262626"), attributes: TextAttributes.NONE },
-  link: { fg: hex("#b8c1ff"), bg: NONE, attributes: TextAttributes.UNDERLINE },
-  strike: { fg: hex("#a2a5b5"), bg: NONE, attributes: TextAttributes.STRIKETHROUGH },
-  status: { fg: hex("#1c1c1c"), bg: hex("#b8c1ff"), attributes: TextAttributes.BOLD },
-  review: { fg: hex("#cbb6f4"), bg: NONE, attributes: TextAttributes.NONE },
-  ship: { fg: hex("#5fd7d7"), bg: NONE, attributes: TextAttributes.NONE },
-  warning: { fg: hex("#d7af5f"), bg: NONE, attributes: TextAttributes.NONE },
-  mention: { fg: hex("#d7af5f"), bg: NONE, attributes: TextAttributes.BOLD },
-  error: { fg: hex("#f0a4a8"), bg: NONE, attributes: TextAttributes.NONE },
-  selection: { fg: hex("#e3e4ec"), bg: SELECTION, attributes: TextAttributes.NONE },
-  selectedBold: { fg: hex("#e3e4ec"), bg: SELECTION, attributes: TextAttributes.BOLD },
-};
+import { isScanner, resolveTheme } from "./theme";
 
 /** Keys the dashboard keeps while the Agent text box has focus; the rest are typing. */
 const COMPOSER_KEYS = new Set<KeyName>([
@@ -106,15 +41,16 @@ const COMPOSER_BINDINGS = [
 class DashboardView extends Renderable {
   private readonly image: ImageRenderable;
   private readonly composer: TextareaRenderable;
+  private theme: ReturnType<typeof resolveTheme>;
   private animation: ReturnType<typeof setTimeout> | undefined;
   /** The last frame drawn, which knows what each click hits. */
   private canvas: Canvas | undefined;
 
   constructor(
-    ctx: RenderContext,
+    private readonly renderer: CliRenderer,
     private readonly dashboard: Dashboard,
   ) {
-    super(ctx, {
+    super(renderer, {
       id: "dashboard",
       width: "100%",
       height: "100%",
@@ -131,19 +67,15 @@ class DashboardView extends Renderable {
         this.requestRender();
       },
     });
-    this.image = new ImageRenderable(ctx, { id: "preview", position: "absolute", fit: "fit", visible: false });
-    this.composer = new TextareaRenderable(ctx, {
+    this.theme = resolveTheme(dashboard.theme);
+    renderer.setBackgroundColor(this.theme.surfaces.workspace);
+    this.image = new ImageRenderable(renderer, { id: "preview", position: "absolute", fit: "fit", visible: false });
+    this.composer = new TextareaRenderable(renderer, {
       id: "composer",
       position: "absolute",
       visible: false,
       wrapMode: "word",
-      placeholderColor: STYLES.muted.fg,
-      textColor: STYLES.text.fg,
-      focusedTextColor: STYLES.text.fg,
-      backgroundColor: SURFACES.raised,
-      focusedBackgroundColor: SURFACES.raised,
-      cursorColor: STYLES.accent.fg,
-      selectionBg: SELECTION,
+      ...this.theme.composer,
       keyBindings: [...COMPOSER_BINDINGS],
       onContentChange: () => {
         dashboard.agent.chat.current.draft = this.composer.plainText;
@@ -161,6 +93,12 @@ class DashboardView extends Renderable {
 
   protected override renderSelf(buffer: OptimizedBuffer): void {
     const { width, height } = buffer;
+    if (this.theme.id !== this.dashboard.theme) {
+      this.theme = resolveTheme(this.dashboard.theme);
+      this.renderer.setBackgroundColor(this.theme.surfaces.workspace);
+      Object.assign(this.composer, this.theme.composer);
+    }
+    const { surfaces, styles, scanner } = this.theme;
     if (this.composer.visible) this.fitComposer();
     this.dashboard.resize(width, height);
     const canvas = frame(this.dashboard);
@@ -168,12 +106,12 @@ class DashboardView extends Renderable {
     for (let y = 0; y < height; y++) {
       let x = 0;
       for (const run of canvas.runs(y)) {
-        const surface = SURFACES[run.surface ?? "workspace"];
+        const surface = surfaces[run.surface ?? "workspace"];
         if (isScanner(run.style)) {
-          buffer.drawText(run.text, x, y, blend(SCANNER[run.style], surface), surface, TextAttributes.NONE);
+          buffer.drawText(run.text, x, y, scanner(run.style, surface), surface, TextAttributes.NONE);
         } else {
-          const style = STYLES[run.style];
-          const background = style.bg === NONE ? surface : style.bg;
+          const style = styles[run.style];
+          const background = style.bg ?? surface;
           buffer.drawText(run.text, x, y, style.fg, background, style.attributes);
         }
         x += cells(run.text);

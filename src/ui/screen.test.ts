@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { RGBA, TextareaRenderable } from "@opentui/core";
 import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testing";
 import type { AgentBackend } from "../agent/chat";
 import type { JiraClient } from "../jira/client";
 import { initialQuery, View } from "../jira/query";
 import { Workspace } from "../state/workspace";
 import { deferred, fakeAgent, settle, snapshot } from "../testing";
-import { Dashboard } from "./dashboard";
+import { Dashboard, type DashboardOptions } from "./dashboard";
 import { MIN_WIDTH } from "./layout";
 import { mount, toKeys } from "./screen";
 
@@ -23,8 +24,7 @@ afterEach(async () => {
 
 async function start(
   width = 100,
-  agent?: AgentBackend,
-  reads: Partial<Pick<JiraClient, "detail" | "attachment">> = {},
+  { reads, ...options }: DashboardOptions & { reads?: Partial<Pick<JiraClient, "detail" | "attachment">> } = {},
 ) {
   const source = {
     snapshot: mock(() => deferred<never>().promise),
@@ -32,7 +32,7 @@ async function start(
     sprints: mock(() => deferred<never>().promise),
   };
   const work = new Workspace(source);
-  work.query = { ...initialQuery, view: View.All, sprint: agent ? 25 : null };
+  work.query = { ...initialQuery, view: View.All, sprint: options.agent ? 25 : null };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
   const client = {
     site: "example.atlassian.net",
@@ -40,7 +40,7 @@ async function start(
     attachment: mock(() => deferred<never>().promise),
     ...reads,
   };
-  const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {}, agent);
+  const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {}, options);
   setup = await createTestRenderer({ width, height: 30, exitOnCtrlC: false });
   const quit = mock(() => {});
   mount(setup.renderer, dashboard, quit);
@@ -49,6 +49,64 @@ async function start(
 }
 
 describe("OpenTUI shell", () => {
+  test("the theme command recolors the screen and the focused Agent composer", async () => {
+    const rememberTheme = mock(() => {});
+    const { setup, dashboard } = await start(100, { appearance: { initial: "vercel-dark", save: rememberTheme } });
+    const selectedBackground = () =>
+      setup
+        .captureSpans()
+        .lines.flatMap((line) => line.spans)
+        .find((span) => span.text.includes("EX-1"))?.bg;
+    expect(selectedBackground()?.equals(RGBA.fromHex("#2e2e2e"))).toBe(true);
+
+    await setup.mockMouse.click(6, 6);
+    await setup.renderOnce();
+    await setup.mockInput.typeText("Draft");
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("change theme");
+    setup.mockInput.pressEnter();
+    expect(dashboard.picker?.selected?.value).toBe("vercel-dark");
+    await setup.mockInput.typeText("vercel light");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+
+    expect(rememberTheme).toHaveBeenCalledWith("vercel-light");
+    expect(dashboard.agent.chat.current.draft).toBe("Draft");
+    const composer = setup.renderer.root.getRenderable("dashboard")?.getRenderable("composer");
+    if (!(composer instanceof TextareaRenderable)) throw new Error("Expected the Agent composer");
+    expect(composer.visible).toBe(true);
+    expect(composer.textColor.equals(RGBA.fromHex("#24292f"))).toBe(true);
+    expect(composer.selectionBg?.equals(RGBA.fromHex("#dce3ec"))).toBe(true);
+    await setup.mockMouse.click(6, 10);
+    await setup.renderOnce();
+    expect(selectedBackground()?.equals(RGBA.fromHex("#dce3ec"))).toBe(true);
+  });
+
+  test("Agent shows when a theme could not be saved", async () => {
+    const { setup, dashboard } = await start(80, {
+      appearance: {
+        save: () => {
+          throw new Error("Preferences are unavailable");
+        },
+      },
+    });
+    try {
+      await setup.mockInput.typeText("4");
+      await setup.renderOnce();
+      setup.mockInput.pressKey("k", { ctrl: true });
+      await setup.mockInput.typeText("change theme");
+      setup.mockInput.pressEnter();
+      await setup.mockInput.typeText("vercel light");
+      setup.mockInput.pressEnter();
+      await setup.renderOnce();
+
+      expect(dashboard.theme).toBe("vercel-light");
+      expect(setup.captureCharFrame()).toContain("Could not save theme: Preferences are unavailable");
+    } finally {
+      dashboard.dispose();
+    }
+  });
+
   test("draws the list and moves the selection with keys", async () => {
     const { setup, dashboard } = await start();
     expect(setup.captureCharFrame()).toMatch(/› EX-1/);
@@ -66,7 +124,7 @@ describe("OpenTUI shell", () => {
     await setup.mockMouse.scroll(30, 8, "up");
     await setup.renderOnce();
     expect(dashboard.list.selected?.key).toBe("EX-1");
-    await setup.mockMouse.click(6, 3); // My issues in the sidebar
+    await setup.mockMouse.click(6, 5); // My issues in the sidebar
     expect(dashboard.workspace.query.view).toBe(View.Mine);
   });
 
@@ -92,17 +150,22 @@ describe("OpenTUI shell", () => {
 
   test("the last tab stays visible and clickable at the minimum pane width", async () => {
     const { setup, dashboard } = await start(MIN_WIDTH);
-    const search = setup.captureCharFrame().split("\n")[0]?.indexOf("Find") ?? -1;
-    expect(search).toBeGreaterThan(0);
-    await setup.mockMouse.click(search, 0);
-    expect(dashboard.workspace.query.view).toBe(View.Search);
+    await setup.mockInput.typeText("2");
+    expect(dashboard.workspace.query.view).toBe(View.Mentions);
+    await setup.renderOnce();
+    const allIssues = setup.captureCharFrame().split("\n")[0]?.indexOf(" All ") ?? -1;
+    expect(allIssues).toBeGreaterThan(0);
+    await setup.mockMouse.click(allIssues + 1, 0);
+    expect(dashboard.workspace.query.view).toBe(View.All);
   });
 
   test("a previewed image is shown in its area and hidden afterwards", async () => {
     const image = { id: "1", filename: "dot.png", mimeType: "image/png", size: 70, author: "D", created: "" };
-    const { setup } = await start(100, undefined, {
-      detail: async () => ({ attachments: [image], description: [], comments: [], facts: [] }),
-      attachment: async () => PNG,
+    const { setup } = await start(100, {
+      reads: {
+        detail: async () => ({ attachments: [image], description: [], comments: [], facts: [] }),
+        attachment: async () => PNG,
+      },
     });
     await setup.mockInput.pressEnter();
     await settle();
@@ -127,8 +190,8 @@ describe("OpenTUI shell", () => {
       onIssues(snapshot({ ...initialQuery, sprint: scope.sprint }, ["EX-1"]).issues);
       onText("Review EX-1 before release.");
     });
-    const { setup, dashboard } = await start(100, fakeAgent(ask));
-    await setup.mockMouse.click(6, 4); // Agent in the sidebar
+    const { setup, dashboard } = await start(100, { agent: fakeAgent(ask) });
+    await setup.mockMouse.click(6, 6); // Agent in the sidebar
     await setup.mockInput.typeText("Any risks?");
     await setup.mockInput.pressEnter();
     await settle();
@@ -149,8 +212,8 @@ describe("OpenTUI shell", () => {
     const ask = mock<AgentBackend["ask"]>(
       ({ signal }) => new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve())),
     );
-    const { setup, dashboard, quit } = await start(100, fakeAgent(ask));
-    await setup.mockMouse.click(6, 4); // Agent in the sidebar
+    const { setup, dashboard, quit } = await start(100, { agent: fakeAgent(ask) });
+    await setup.mockMouse.click(6, 6); // Agent in the sidebar
     await setup.renderOnce();
     await setup.mockInput.typeText("quick 1 line"); // q and 1 are text here, not keys
     setup.mockInput.pressKey("j", { ctrl: true });
@@ -174,7 +237,7 @@ describe("OpenTUI shell", () => {
 
   test("the command palette opens over Agent from the shortcut and top bar", async () => {
     const { setup, dashboard } = await start();
-    await setup.mockMouse.click(6, 4);
+    await setup.mockMouse.click(6, 6);
     await setup.renderOnce();
     const command = setup.captureCharFrame().split("\n")[0]?.indexOf("^K") ?? -1;
     expect(command).toBeGreaterThan(0);
@@ -196,7 +259,7 @@ describe("OpenTUI shell", () => {
 
   test("q quits from the minimum-size screen when Agent was active", async () => {
     const { setup, quit } = await start();
-    await setup.mockMouse.click(6, 4);
+    await setup.mockMouse.click(6, 6);
     await setup.renderOnce();
     setup.resize(MIN_WIDTH - 1, 15);
     await setup.renderOnce();
