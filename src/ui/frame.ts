@@ -18,18 +18,18 @@ import { priorityMark, statusGlyph, statusLabel, statusStyle } from "./status";
 export function frame(d: Dashboard, width: number, height: number): Canvas {
   const canvas = new Canvas(width, height);
   if (height < MIN_HEIGHT || width < MIN_WIDTH) {
-    canvas.put(1, 1, `Boardbeat · make this pane at least ${MIN_WIDTH} × ${MIN_HEIGHT}`, "warning");
+    canvas.put(1, 1, `productboard · make this pane at least ${MIN_WIDTH} × ${MIN_HEIGHT}`, "warning");
     canvas.put(3, 1, "q quit", "text");
     return canvas;
   }
   const work = d.workspace;
   const line = (y: number) => canvas.put(y, 2, "─".repeat(Math.max(0, width - 4)), "muted");
 
-  const title = "◆ Boardbeat";
+  const title = "◆ productboard";
   canvas.put(1, 2, title, "title");
   const tabGap = width >= 80 ? 3 : 1;
   let x = 2 + cells(title) + Math.min(tabGap, 2);
-  const labels = width >= 96 ? VIEW_LABELS : VIEW_SHORT_LABELS;
+  const labels = width >= 100 ? VIEW_LABELS : VIEW_SHORT_LABELS;
   for (const [n, view] of VIEWS.entries()) {
     const text = `${n + 1} ${labels[view]}`;
     canvas.put(1, x, text, view === work.query.view ? "accentBold" : "muted");

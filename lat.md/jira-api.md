@@ -7,9 +7,9 @@ normalizes them before they reach workspace state.
 
 ## Credentials and transport
 
-[[src/auth.ts]] keeps the API token under the `boardbeat` service in macOS
+[[src/auth.ts]] keeps the API token under the `productboard` service in macOS
 Keychain and stores the site, email, and last board in
-`~/.config/boardbeat/config.json`.
+`~/.config/productboard/config.json`.
 
 [[src/jira/http.ts#JiraHttp]] sends authorization to the configured Jira site
 and follows attachment redirects without forwarding it. Search uses POST as a

@@ -1,7 +1,7 @@
-# Boardbeat Knowledge Graph
+# productboard Knowledge Graph
 
-Boardbeat is a local read-only terminal workspace for product management. The
-[launcher](../bin/boardbeat) runs [[src/main.ts]] with Bun. The entry point connects
+productboard is a local read-only terminal workspace for product management. The
+[launcher](../bin/board) runs [[src/main.ts]] with Bun. The entry point connects
 local credentials, the Jira client, workspace state, and the terminal UI.
 
 - [[jira-api]] covers authentication, the read boundary, and issue queries.

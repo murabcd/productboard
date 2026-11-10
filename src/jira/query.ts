@@ -24,9 +24,9 @@ export const VIEW_LABELS: Record<View, string> = {
 export const VIEW_SHORT_LABELS: Record<View, string> = {
   [View.Sprint]: "Spr",
   [View.All]: "All",
-  [View.Mine]: "Mine",
+  [View.Mine]: "Me",
   [View.Created]: "New",
-  [View.Today]: "Today",
+  [View.Today]: "Day",
   [View.Mentions]: "@me",
   [View.Search]: "Find",
 };
