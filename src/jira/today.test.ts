@@ -72,7 +72,8 @@ function source(
       if (jql.includes("creator = currentUser()")) return (extra.created ?? []).map((key) => timed(key));
       return (extra.assigned ?? []).map((item) => (typeof item === "string" ? timed(item) : item));
     },
-    mentions: async () => {
+    mentions: async (jql: string) => {
+      searches.push(jql);
       const mention = toComments([rawComment("Check ", "2026-11-09T09:00:00.000+0300", "me")], "me")[0];
       return { issues: [{ ...toIssue(rawIssue("EX-50")), mention }], more: false, scanned: 1 };
     },
@@ -153,11 +154,14 @@ describe("Today", () => {
     ]);
   });
 
-  test("the project filter narrows every search", async () => {
+  test("project and sprint filters narrow every search, including mentions", async () => {
     const fake = source([]);
-    await today(fake, { ...query, project: "EX" }, NOW);
-    expect(fake.searches.length).toBe(4);
-    for (const jql of fake.searches) expect(jql).toContain('project = "EX"');
+    await today(fake, { ...query, project: "EX", sprintFilter: 42 }, NOW);
+    expect(fake.searches).toHaveLength(5);
+    for (const jql of fake.searches) {
+      expect(jql).toContain('project = "EX"');
+      expect(jql).toContain("sprint = 42");
+    }
   });
 });
 

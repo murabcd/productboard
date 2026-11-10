@@ -13,6 +13,10 @@ Startup opens Inbox and loads mentions alongside the board catalog.
 A scope starts loading as soon as it is ready. Clearing server filters applies
 one scope change. Board and project discovery and the selected board's sprint
 catalog track their own failures and retry independently of the issue list.
+The Filter menu uses the selected board's sprint catalog. Its optional sprint
+filter carries across issue lists and is separate from the sprint selected for
+Sprints and Agent. On the Sprints page, the Filter menu and toolbar open the
+same sprint selector. Changing boards clears both selections.
 
 ## Interaction and rendering
 

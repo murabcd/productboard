@@ -471,6 +471,49 @@ describe("concept layout", () => {
     expect(source.snapshot).toHaveBeenCalledTimes(1);
   });
 
+  test("Filter can select and clear a sprint without changing the page or the sprint scope", () => {
+    const { dashboard, work, source } = setup();
+    work.board = "1";
+    work.query = { ...work.query, view: View.Mentions, sprint: 36 };
+    work.sprints = [
+      { id: 36, name: "Platform - Sprint 36", state: "active", start: "", end: "", goal: "" },
+      { id: 35, name: "Platform - Sprint 35", state: "closed", start: "", end: "", goal: "" },
+    ];
+    const openSprintFilter = () => {
+      dashboard.handle({ text: "F" });
+      for (const key of [...text("sprint"), ENTER]) dashboard.handle(key);
+      expect(dashboard.picker?.kind).toBe("sprint-filter");
+    };
+    openSprintFilter();
+    for (const key of [{ name: "tab" }, { name: "tab" }, ...text("35"), ENTER] satisfies Key[]) dashboard.handle(key);
+    expect(source.snapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: View.Mentions, sprintFilter: 35 }),
+    );
+    expect(work.sprint()?.id).toBe(36);
+    expect(frame(dashboard).text(4)).toContain("Filter 1 ▾");
+
+    openSprintFilter();
+    expect(dashboard.picker?.selected?.value).toBe("35");
+    for (const key of [...text("any sprint"), ENTER]) dashboard.handle(key);
+    expect(work.query.sprintFilter).toBeNull();
+
+    openSprintFilter();
+    for (const key of [...text("36"), ENTER]) dashboard.handle(key);
+    expect(work.query.sprintFilter).toBe(36);
+    dashboard.showView(View.Sprint);
+    dashboard.handle({ text: "F" });
+    for (const key of [...text("sprint"), ENTER]) dashboard.handle(key);
+    expect(dashboard.picker?.kind).toBe("sprint");
+    for (const key of [{ name: "tab" }, { name: "tab" }, ...text("35"), ENTER] satisfies Key[]) dashboard.handle(key);
+    expect(work.query).toMatchObject({ view: View.Sprint, sprint: 35, sprintFilter: 36 });
+
+    dashboard.showView(View.Mentions);
+    dashboard.handle({ text: "F" });
+    for (const key of [...text("clear"), ENTER]) dashboard.handle(key);
+    expect(work.query.sprintFilter).toBeNull();
+    expect(work.sprint()?.id).toBe(35);
+  });
+
   test("a folded group hides its rows and the selection skips them", () => {
     const { dashboard, work } = setup();
     withStatuses(work, [

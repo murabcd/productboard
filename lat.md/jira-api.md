@@ -27,6 +27,10 @@ queued reads and aborts active requests.
 team-wide scope. Assigned and Created match the current user against the issue's
 assignee and creator fields, respectively. The local filter searches loaded rows.
 
+The Sprints page queries its selected sprint. The sprint filter on other
+issue lists adds a Jira sprint ID to the existing view's query. Team focus
+applies that filter to each of its searches.
+
 Each site stores sprints in its own custom field, so [[src/jira/client.ts#JiraClient]]
 looks up the field ID once per session and asks for it with every search. Lists
 still load without sprints when that lookup fails.

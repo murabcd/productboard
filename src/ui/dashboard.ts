@@ -160,7 +160,11 @@ export class Dashboard {
 
   openPicker(requested: PickerKind): void {
     // A sprint belongs to a board, so without one the board comes first.
-    const kind = requested === "sprint" && !this.workspace.board ? "board" : requested;
+    let kind = requested;
+    if (!this.workspace.board) {
+      if (kind === "sprint") kind = "board";
+      if (kind === "sprint-filter") kind = "sprint-filter-board";
+    }
     const source = PICKERS[kind];
     this.picker = new Picker(kind, source.title, source.items(this), source.options?.(this));
     source.load?.(this);
@@ -177,10 +181,10 @@ export class Dashboard {
     this.workspace.change(scoped(this.workspace.query, change));
   }
 
-  chooseBoard(board: string): void {
+  chooseBoard(board: string, next: "sprint" | "sprint-filter" = "sprint"): void {
     this.list.filter("");
     this.workspace.chooseBoard(board);
-    this.openPicker("sprint");
+    this.openPicker(next);
   }
 
   chooseAssignee(assignee: string, label: string): void {
@@ -239,10 +243,11 @@ export class Dashboard {
 
   clearFilters(): void {
     const { query } = this.workspace;
+    const sprintFilter = query.view === View.Sprint ? query.sprintFilter : null;
     this.list.filter("");
-    if (!query.project && !query.assignee && query.status === "all") return;
+    if (!query.project && !query.assignee && query.status === "all" && sprintFilter === query.sprintFilter) return;
     this.personLabel = "All people";
-    this.workspace.change(scoped(query, { project: "", assignee: "", status: "all" }));
+    this.workspace.change(scoped(query, { project: "", assignee: "", status: "all", sprintFilter }));
   }
 
   openAgent(): void {

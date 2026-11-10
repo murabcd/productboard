@@ -160,6 +160,7 @@ export class Workspace {
 
   /** The user picked a board: open it now and on the next start. */
   chooseBoard(board: string): void {
+    if (board === this.board) return;
     this.options.rememberBoard?.(board);
     this.openBoard(board);
   }
@@ -195,7 +196,7 @@ export class Workspace {
     this.sprints = sprints ?? [];
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
-    this.change(scoped(this.query, { sprint: null }));
+    this.change(scoped(this.query, { sprint: null, sprintFilter: null }));
     if (sprints) this.changed();
     else this.loadSprints();
   }
@@ -233,7 +234,7 @@ export class Workspace {
     if (this.sprintCatalogError || this.sprints.length === 0) this.loadSprints();
   }
 
-  sprint(): Sprint | undefined {
-    return this.sprints.find((sprint) => sprint.id === this.query.sprint);
+  sprint(id = this.query.sprint): Sprint | undefined {
+    return this.sprints.find((sprint) => sprint.id === id);
   }
 }

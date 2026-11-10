@@ -119,6 +119,14 @@ describe("scopes", () => {
     expect(() => jql(initialQuery)).toThrow("Choose a sprint");
   });
 
+  test("the sprint filter narrows the current view without overriding the Sprints page", () => {
+    const filtered = { ...initialQuery, sprint: 24, sprintFilter: 42 };
+    expect(jql({ ...filtered, view: View.Mine })).toBe(
+      "sprint = 42 AND assignee = currentUser() ORDER BY updated DESC",
+    );
+    expect(jql(filtered)).toBe("sprint = 24 ORDER BY updated DESC");
+  });
+
   test("filters run on Jira and values are quoted", () => {
     const query = jql({
       ...initialQuery,

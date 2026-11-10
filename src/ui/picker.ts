@@ -3,7 +3,9 @@ import { rowOffset } from "./layout";
 
 export type PickerKind =
   | "board"
+  | "sprint-filter-board"
   | "sprint"
+  | "sprint-filter"
   | "project"
   | "assignee"
   | "status"
@@ -83,7 +85,7 @@ export class Picker {
     let current = -1;
     let retained = -1;
     for (const choice of this.choices) {
-      if (tab && tab !== "all" && choice.state !== tab) continue;
+      if (tab && tab !== "all" && choice.state && choice.state !== tab) continue;
       if (!`${choice.label} ${choice.detail} ${choice.group ?? ""}`.toLocaleLowerCase().includes(needle)) continue;
       if (choice.group && choice.group !== group) {
         if (this.rows.length) this.rows.push(null);

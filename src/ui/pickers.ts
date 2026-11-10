@@ -1,7 +1,7 @@
 import { type AgentModel, modelName, PROVIDER_NAMES, REASONING_NAMES } from "../agent/models";
 import { REASONING_LEVELS, type Reasoning } from "../auth";
 import { isPersonal, STATUSES, type StatusFilter, View } from "../jira/query";
-import { type Choice, describeAttachment, SPRINT_STATES, sprintChoice } from "../jira/types";
+import { type Choice, describeAttachment, SPRINT_STATES, shortSprintName, sprintChoice } from "../jira/types";
 import { THEME_IDS, THEMES } from "../theme";
 import type { Dashboard } from "./dashboard";
 import { NAVIGATION, navKey } from "./navigation";
@@ -10,9 +10,12 @@ import type { PickerItem, PickerKind, PickerOptions } from "./picker";
 const STATUS_LABELS: Record<StatusFilter, string> = { all: "All statuses", open: "Open", done: "Done" };
 
 export function filterChips(d: Dashboard): string[] {
-  const { project, assignee, status, view } = d.workspace.query;
+  const { project, assignee, status, view, sprintFilter } = d.workspace.query;
   const chips: string[] = [];
   if (project) chips.push(`Project: ${project}`);
+  if (view !== View.Sprint && sprintFilter !== null) {
+    chips.push(shortSprintName(sprintFilterName(d)));
+  }
   if (assignee && !isPersonal(view)) chips.push(`Assignee: ${d.personLabel}`);
   if (status !== "all") chips.push(`Status: ${STATUS_LABELS[status]}`);
   return chips;
@@ -76,6 +79,54 @@ function catalogStatus(error: string, pending: boolean): string {
   return error || (pending ? "Loading…" : "No matches");
 }
 
+function sprintFilterName({ workspace }: Dashboard): string {
+  const { sprintFilter } = workspace.query;
+  return sprintFilter === null ? "Any sprint" : (workspace.sprint(sprintFilter)?.name ?? `Sprint ${sprintFilter}`);
+}
+
+function boardPicker(next: "sprint" | "sprint-filter"): PickerSource {
+  return {
+    title: "Choose board",
+    items: (d) => fromChoices(d.workspace.boards, d.workspace.board, (board) => d.chooseBoard(board.value, next)),
+    load: (d) => {
+      if (d.workspace.boards.length === 0) d.workspace.loadCatalog();
+    },
+    empty: ({ workspace }) => catalogStatus(workspace.boardCatalogError, workspace.catalogPending),
+  };
+}
+
+function sprintPicker(mode: "scope" | "filter"): PickerSource {
+  const filter = mode === "filter";
+  const selected = ({ query }: Dashboard["workspace"]) => (filter ? query.sprintFilter : query.sprint);
+  return {
+    title: filter ? "Filter by sprint" : "Choose sprint",
+    items: (d) => {
+      const current = selected(d.workspace);
+      const sprints = d.workspace.sprints.map(
+        (sprint): PickerItem => ({
+          ...sprintChoice(sprint),
+          current: sprint.id === current,
+          run: () => d.changeQuery(filter ? { sprintFilter: sprint.id } : { view: View.Sprint, sprint: sprint.id }),
+        }),
+      );
+      if (filter && (sprints.length > 0 || current !== null)) {
+        sprints.unshift(
+          item("Any sprint", "", () => d.changeQuery({ sprintFilter: null }), { current: current === null }),
+        );
+      }
+      return sprints;
+    },
+    load: ({ workspace }) => {
+      if (workspace.sprints.length === 0) workspace.loadSprints();
+    },
+    options: ({ workspace }) => {
+      const state = workspace.sprint(selected(workspace))?.state ?? workspace.sprints[0]?.state;
+      return { tabs: [...SPRINT_STATES, "all"], tab: state ? SPRINT_STATES.indexOf(state) : SPRINT_STATES.length };
+    },
+    empty: ({ workspace }) => catalogStatus(workspace.sprintCatalogError, workspace.sprintsPending),
+  };
+}
+
 function commandItems(d: Dashboard): PickerItem[] {
   const { current } = d.agent;
   const page = { group: "Pages" };
@@ -110,38 +161,10 @@ function commandItems(d: Dashboard): PickerItem[] {
 }
 
 export const PICKERS: Record<PickerKind, PickerSource> = {
-  board: {
-    title: "Choose board",
-    items: (d) => fromChoices(d.workspace.boards, d.workspace.board, (board) => d.chooseBoard(board.value)),
-    load: (d) => {
-      if (d.workspace.boards.length === 0) d.workspace.loadCatalog();
-    },
-    empty: ({ workspace }) => catalogStatus(workspace.boardCatalogError, workspace.catalogPending),
-  },
-  sprint: {
-    title: "Choose sprint",
-    items: (d) => {
-      const { sprint } = d.workspace.query;
-      return fromChoices(d.workspace.sprints.map(sprintChoice), sprint === null ? null : String(sprint), (choice) =>
-        d.changeQuery({ view: View.Sprint, sprint: Number(choice.value) }),
-      );
-    },
-    load: (d) => {
-      if (d.workspace.sprints.length === 0) d.workspace.loadSprints();
-    },
-    // Tabs start on the first state that has sprints: active, then planned, then closed.
-    options: (d) => {
-      const present = new Set(d.workspace.sprints.map((s) => s.state));
-      return {
-        tabs: [...SPRINT_STATES, "all"],
-        tab: Math.max(
-          0,
-          SPRINT_STATES.findIndex((state) => present.has(state)),
-        ),
-      };
-    },
-    empty: ({ workspace }) => catalogStatus(workspace.sprintCatalogError, workspace.sprintsPending),
-  },
+  board: boardPicker("sprint"),
+  "sprint-filter-board": boardPicker("sprint-filter"),
+  sprint: sprintPicker("scope"),
+  "sprint-filter": sprintPicker("filter"),
   project: {
     title: "Choose project",
     items: (d) =>
@@ -215,9 +238,14 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
     items: (d) => {
       const { query } = d.workspace;
       const person = isPersonal(query.view) ? "You" : query.assignee ? d.personLabel : "Anyone";
+      const sprint =
+        query.view === View.Sprint
+          ? item("Sprint", d.workspace.sprint()?.name ?? "Choose a sprint", () => d.openPicker("sprint"))
+          : item("Sprint", sprintFilterName(d), () => d.openPicker("sprint-filter"));
       const active = filterChips(d).length;
       return [
         item("Project", query.project || "Any project", () => d.openPicker("project")),
+        sprint,
         item("Assignee", person, () => d.openPicker("assignee")),
         item("Status", STATUS_LABELS[query.status], () => d.openPicker("status")),
         item("Filter loaded issues", d.list.search ? `“${d.list.search}”` : "Type to narrow the list", () => {

@@ -42,6 +42,9 @@ ln -s "$PWD/bin/board" ~/.local/bin/board
 ## Features
 
 - Browse team sprints and filter by project, assignee, or status.
+- Narrow issue lists with **Filter → Sprint**. Choose **Any sprint** to remove
+  the sprint filter. On the Sprints page, both **Filter → Sprint** and the
+  toolbar's **Sprint** selector switch the sprint you are viewing.
 - Find issues assigned to you or created by you, and search across Jira.
 - See blockers, overdue issues, and mentions in one place.
 - Read comments and preview image attachments in the terminal.

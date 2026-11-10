@@ -63,8 +63,7 @@ export async function today(
   query: IssueQuery,
   now = Date.now(),
 ): Promise<{ issues: Issue[]; more: boolean }> {
-  // The project filter narrows every section, e.g. to one team's project.
-  const scope = { ...initialQuery, view: View.All, project: query.project };
+  const scope = { ...initialQuery, view: View.All, project: query.project, sprintFilter: query.sprintFilter };
   const where = (...terms: string[]) => jql(scope, ...terms);
   const inSprint = ["sprint in openSprints()", "statusCategory != Done"];
   const [sprintWork, flagged, mentioned, created, assigned] = await Promise.all([

@@ -25,6 +25,7 @@ export type StatusFilter = (typeof STATUSES)[number];
 export interface IssueQuery {
   readonly view: View;
   readonly sprint: number | null;
+  readonly sprintFilter: number | null;
   readonly project: string;
   /** An account ID, "unassigned", or "" for everyone. */
   readonly assignee: string;
@@ -37,6 +38,7 @@ export interface IssueQuery {
 export const initialQuery: IssueQuery = {
   view: View.Sprint,
   sprint: null,
+  sprintFilter: null,
   project: "",
   assignee: "",
   status: "all",
@@ -69,6 +71,7 @@ export function sameScope(a: IssueQuery, b: IssueQuery): boolean {
   return (
     a.view === b.view &&
     a.sprint === b.sprint &&
+    a.sprintFilter === b.sprintFilter &&
     a.project === b.project &&
     a.assignee === b.assignee &&
     a.status === b.status &&
@@ -81,10 +84,9 @@ export const sameQuery = (a: IssueQuery, b: IssueQuery): boolean => sameScope(a,
 /** This scope as JQL; `extra` terms narrow it further. */
 export function jql(query: IssueQuery, ...extra: string[]): string {
   const terms = [...extra];
-  if (query.view === View.Sprint) {
-    if (query.sprint === null) throw new Error("Choose a sprint first");
-    terms.push(`sprint = ${query.sprint}`);
-  }
+  const sprint = query.view === View.Sprint ? query.sprint : query.sprintFilter;
+  if (query.view === View.Sprint && sprint === null) throw new Error("Choose a sprint first");
+  if (sprint !== null) terms.push(`sprint = ${sprint}`);
   if (isPersonal(query.view)) terms.push("assignee = currentUser()");
   if (query.view === View.Created) terms.push("creator = currentUser()");
   if (query.view === View.Mentions) terms.push(`updated >= -${MENTION_DAYS}d`);
