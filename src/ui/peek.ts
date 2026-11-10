@@ -31,7 +31,7 @@ export function drawPeek(canvas: Canvas, peek: Peek, x: number, top: number, wid
   for (let y = top + 1; y < bottom; y++) canvas.mark(y, x, width, { kind: "peek" });
   const left = x + 2;
   const room = width - 4;
-  canvas.put(top, left, "ISSUE PEEK", "muted");
+  canvas.put(top, left, "Issue peek", "muted");
 
   const rows = peekRows(canvas, peek, left, room);
   const available = bottom - top - 2;

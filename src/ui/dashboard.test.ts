@@ -390,7 +390,7 @@ describe("concept layout", () => {
     expect(client.detail).toHaveBeenCalledTimes(1);
     pending[0]?.resolve(detail("EX-1 description"));
     await settle();
-    expect(draw(dashboard, 120, 30).text(5)).toContain("ISSUE PEEK");
+    expect(draw(dashboard, 120, 30).text(5)).toContain("Issue peek");
     dashboard.handle({ name: "down" });
     expect(dashboard.peek?.issue.key).toBe("EX-2");
     dashboard.handle({ name: "up" });

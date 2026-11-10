@@ -319,7 +319,7 @@ function drawModal(canvas: Canvas, d: Dashboard, panel: Panel): void {
   if (panel.kind === "issue") {
     const { issue } = panel;
     const { state } = panel.read;
-    canvas.put(BODY_TOP - 3, 2, "ISSUE DETAILS", "muted");
+    canvas.put(BODY_TOP - 3, 2, "Issue details", "muted");
     canvas.put(BODY_TOP - 2, 2, issue.summary, "title", width - 4);
     canvas.put(BODY_TOP - 1, 2, `${issue.key} · ${issue.status} · ${issue.assignee}`, "accent", width - 4);
     lines = state.data ? layoutCached(detailBlocks(state.data), textWidth) : [];
