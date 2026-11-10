@@ -18,17 +18,29 @@ type Ask = Parameters<AgentBackend["ask"]>[0];
 
 interface EveProcess {
   ready: Promise<Client>;
+  exited: Promise<void>;
   sessions: Map<string, ClientSession>;
   close(): Promise<void>;
 }
 
-interface AgentSettings {
+interface EveConfig {
+  choice: AgentChoice;
+  apiKey: string;
+}
+
+interface EveDependencies {
   read: typeof agentChoice;
   key: typeof loadAgentKey;
   remember: typeof rememberAgentChoice;
+  start: typeof openEveProcess;
 }
 
-const localSettings: AgentSettings = { read: agentChoice, key: loadAgentKey, remember: rememberAgentChoice };
+const localDependencies: EveDependencies = {
+  read: agentChoice,
+  key: loadAgentKey,
+  remember: rememberAgentChoice,
+  start: openEveProcess,
+};
 
 export class EveAgent implements AgentBackend {
   private active?: EveProcess;
@@ -36,40 +48,39 @@ export class EveAgent implements AgentBackend {
 
   private constructor(
     private readonly jira: Pick<JiraClient, "search">,
-    private choice: AgentChoice,
-    private apiKey: string,
-    private readonly settings: AgentSettings,
+    private config: EveConfig,
+    private readonly deps: EveDependencies,
   ) {}
 
-  static create(jira: Pick<JiraClient, "search">, settings = localSettings): EveAgent | undefined {
-    const choice = settings.read();
-    const key = settings.key(choice.provider);
-    return key ? new EveAgent(jira, choice, key, settings) : undefined;
+  static create(jira: Pick<JiraClient, "search">, deps = localDependencies): EveAgent | undefined {
+    const choice = deps.read();
+    const key = deps.key(choice.provider);
+    return key ? new EveAgent(jira, { choice, apiKey: key }, deps) : undefined;
   }
 
   get current(): AgentChoice {
-    return this.choice;
+    return this.config.choice;
   }
 
   models(): Promise<AgentModel[]> {
-    return listModels({ openai: this.settings.key("openai"), anthropic: this.settings.key("anthropic") });
+    return listModels({ openai: this.deps.key("openai"), anthropic: this.deps.key("anthropic") });
   }
 
   /** Restart Eve with the saved model and reasoning for subsequent turns. */
   async use(choice: AgentChoice): Promise<void> {
-    const key = this.settings.key(choice.provider);
+    const key = this.deps.key(choice.provider);
     if (!key) throw new Error(`No ${PROVIDER_NAMES[choice.provider]} API key: run board --agent-login`);
-    this.settings.remember(choice);
-    const closing = this.close();
-    this.choice = choice;
-    this.apiKey = key;
-    await closing;
+    this.deps.remember(choice);
+    this.config = { choice, apiKey: key };
+    await this.close();
   }
 
   async ask({ thread, prompt, sprint, images, signal, history, onIssues, onText }: Ask): Promise<void> {
+    const config = this.config;
     await this.closing;
     signal.throwIfAborted();
-    const run = this.connect();
+    if (this.config !== config) throw new Error("Agent restarted. Send the question again.");
+    const run = this.connect(config);
     const client = await run.ready;
     signal.throwIfAborted();
     if (this.active !== run) throw new Error("Agent restarted. Send the question again.");
@@ -124,64 +135,15 @@ export class EveAgent implements AgentBackend {
     }
   }
 
-  private connect(): EveProcess {
+  private connect(config: EveConfig): EveProcess {
     if (this.active) return this.active;
-    const search = openJiraSearch(this.jira);
-    const token = randomBytes(32).toString("hex");
-    const child = spawn(
-      "node",
-      [EVE, "dev", "--host", "127.0.0.1", "--port", "0", "--no-ui", "--no-default-extensions"],
-      {
-        cwd: ROOT,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          ...search.env,
-          [agentKeyName(this.choice.provider)]: this.apiKey,
-          PRODUCTBOARD_EVE_TOKEN: token,
-          PRODUCTBOARD_AGENT_PROVIDER: this.choice.provider,
-          PRODUCTBOARD_AGENT_MODEL: this.choice.model,
-          PRODUCTBOARD_AGENT_REASONING: this.choice.reasoning,
-          EVE_TELEMETRY_DISABLED: "1",
-          EVE_TRACES: "off",
-        },
-      },
-    );
-    const { promise: ready, resolve, reject } = Promise.withResolvers<Client>();
-    const { promise: exited, resolve: exit } = Promise.withResolvers<void>();
-    const sessions = new Map<string, ClientSession>();
-    const deadline = AbortSignal.timeout(REQUEST_TIMEOUT);
-    const fail = () => reject(new Error("Could not start Eve. Install Node.js 24 and run bun install."));
-    const run: EveProcess = {
-      ready,
-      sessions,
-      close: async () => {
-        if (child.exitCode === null && child.signalCode === null) {
-          const signal = AbortSignal.timeout(1500);
-          await Promise.allSettled([...sessions.values()].map((session) => session.reset({ signal })));
-        }
-        child.kill();
-        await Promise.all([search.close(), exited]);
-      },
-    };
-    const onLine = (line: string) => {
-      const host = LISTENING.exec(line)?.[1];
-      if (host) resolve(new Client({ host, headers: { Authorization: `Bearer ${token}` }, redirect: "error" }));
-    };
-    for (const stream of [child.stdout, child.stderr]) createInterface({ input: stream }).on("line", onLine);
-    child.once("close", () => {
-      fail();
-      exit();
-      if (this.active === run) void this.close();
-    });
-    child.once("error", fail);
-    deadline.addEventListener("abort", fail, { once: true });
-    void ready
-      .catch(() => {
-        if (this.active === run) void this.close();
-      })
-      .finally(() => deadline.removeEventListener("abort", fail));
+    const run = this.deps.start(this.jira, config);
     this.active = run;
+    const retire = () => {
+      if (this.active === run) void this.close();
+    };
+    void run.ready.catch(retire);
+    void run.exited.then(retire);
     return run;
   }
 
@@ -195,4 +157,60 @@ export class EveAgent implements AgentBackend {
     await closing;
     if (this.closing === closing) this.closing = undefined;
   }
+}
+
+function openEveProcess(jira: Pick<JiraClient, "search">, { choice, apiKey }: EveConfig): EveProcess {
+  const search = openJiraSearch(jira);
+  const token = randomBytes(32).toString("hex");
+  const child = spawn(
+    "node",
+    [EVE, "dev", "--host", "127.0.0.1", "--port", "0", "--no-ui", "--no-default-extensions"],
+    {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        ...search.env,
+        [agentKeyName(choice.provider)]: apiKey,
+        PRODUCTBOARD_EVE_TOKEN: token,
+        PRODUCTBOARD_AGENT_PROVIDER: choice.provider,
+        PRODUCTBOARD_AGENT_MODEL: choice.model,
+        PRODUCTBOARD_AGENT_REASONING: choice.reasoning,
+        EVE_TELEMETRY_DISABLED: "1",
+        EVE_TRACES: "off",
+      },
+    },
+  );
+  const { promise: ready, resolve, reject } = Promise.withResolvers<Client>();
+  const { promise: exited, resolve: exit } = Promise.withResolvers<void>();
+  const sessions = new Map<string, ClientSession>();
+  const deadline = AbortSignal.timeout(REQUEST_TIMEOUT);
+  const fail = () => reject(new Error("Could not start Eve. Install Node.js 24 and run bun install."));
+  const run: EveProcess = {
+    ready,
+    exited,
+    sessions,
+    close: async () => {
+      if (child.exitCode === null && child.signalCode === null) {
+        const signal = AbortSignal.timeout(1500);
+        await Promise.allSettled([...sessions.values()].map((session) => session.reset({ signal })));
+      }
+      child.kill();
+      await Promise.all([search.close(), exited]);
+    },
+  };
+  const onLine = (line: string) => {
+    const host = LISTENING.exec(line)?.[1];
+    if (host) resolve(new Client({ host, headers: { Authorization: `Bearer ${token}` }, redirect: "error" }));
+  };
+  for (const stream of [child.stdout, child.stderr]) createInterface({ input: stream }).on("line", onLine);
+  child.once("close", () => {
+    fail();
+    exit();
+  });
+  child.once("error", fail);
+  deadline.addEventListener("abort", fail, { once: true });
+  const clearDeadline = () => deadline.removeEventListener("abort", fail);
+  void ready.then(clearDeadline, clearDeadline);
+  return run;
 }

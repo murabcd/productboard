@@ -106,7 +106,9 @@ return to the conversation.
 
 [[src/agent/models.ts#listModels]] lists GPT-6 and Claude 5 models from each
 provider with a key. Choosing one, then a reasoning level, restarts the Eve process with both
-and saves them; each reply records the model and level that wrote it.
+and saves them. Each turn captures those settings before waiting for Eve. If
+another switch overtakes a waiting turn, the question returns to the draft
+instead of running with a different model or reasoning level.
 
 [[src/agent/eve.ts#EveAgent]] starts a local Eve subprocess and sends messages
 through its authenticated loopback HTTP API. Eve's ACP adapter accepts only
