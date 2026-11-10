@@ -1,7 +1,6 @@
 /** Each view owns its server-side Jira scope. */
 
 export const View = {
-  Sprint: 0,
   All: 1,
   Mine: 2,
   Created: 3,
@@ -24,7 +23,6 @@ export type StatusFilter = (typeof STATUSES)[number];
 
 export interface IssueQuery {
   readonly view: View;
-  readonly sprint: number | null;
   readonly sprintFilter: number | null;
   readonly project: string;
   /** An account ID, "unassigned", or "" for everyone. */
@@ -36,8 +34,7 @@ export interface IssueQuery {
 }
 
 export const initialQuery: IssueQuery = {
-  view: View.Sprint,
-  sprint: null,
+  view: View.All,
   sprintFilter: null,
   project: "",
   assignee: "",
@@ -63,14 +60,12 @@ export function withAssignee(query: IssueQuery, assignee: string): IssueQuery {
   return scoped(query, { view, assignee });
 }
 
-export const isReady = (query: IssueQuery): boolean =>
-  query.view === View.Sprint ? query.sprint !== null : query.view !== View.Search || query.text !== "";
+export const isReady = (query: IssueQuery): boolean => query.view !== View.Search || query.text !== "";
 
 /** Same scope, ignoring how many pages are loaded. */
 export function sameScope(a: IssueQuery, b: IssueQuery): boolean {
   return (
     a.view === b.view &&
-    a.sprint === b.sprint &&
     a.sprintFilter === b.sprintFilter &&
     a.project === b.project &&
     a.assignee === b.assignee &&
@@ -84,9 +79,7 @@ export const sameQuery = (a: IssueQuery, b: IssueQuery): boolean => sameScope(a,
 /** This scope as JQL; `extra` terms narrow it further. */
 export function jql(query: IssueQuery, ...extra: string[]): string {
   const terms = [...extra];
-  const sprint = query.view === View.Sprint ? query.sprint : query.sprintFilter;
-  if (query.view === View.Sprint && sprint === null) throw new Error("Choose a sprint first");
-  if (sprint !== null) terms.push(`sprint = ${sprint}`);
+  if (query.sprintFilter !== null) terms.push(`sprint = ${query.sprintFilter}`);
   if (isPersonal(query.view)) terms.push("assignee = currentUser()");
   if (query.view === View.Created) terms.push("creator = currentUser()");
   if (query.view === View.Mentions) terms.push(`updated >= -${MENTION_DAYS}d`);

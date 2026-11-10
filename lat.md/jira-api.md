@@ -23,13 +23,12 @@ request. Closing the transport cancels all reads.
 
 ## Issue queries
 
-[[src/jira/query.ts#jql]] owns Jira-side filtering. Sprints and All tasks retain
-team-wide scope. Assigned and Created match the current user against the issue's
+[[src/jira/query.ts#jql]] owns Jira-side filtering. All issues retains team-wide
+scope. Assigned and Created match the current user against the issue's
 assignee and creator fields, respectively. The local filter searches loaded rows.
 
-The Sprints page queries its selected sprint. The sprint filter on other
-issue lists adds a Jira sprint ID to the existing view's query. Team focus
-applies that filter to each of its searches.
+The optional sprint filter adds a Jira sprint ID to the current view's query.
+Team focus applies that filter to each of its searches.
 
 Each site stores sprints in its own custom field, so [[src/jira/client.ts#JiraClient]]
 looks up the field ID once per session and asks for it with every search. Lists

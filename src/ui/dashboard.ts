@@ -25,7 +25,7 @@ import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigat
 import { helpPanel, type Panel, sprintPanel } from "./panel";
 import type { Peek } from "./peek";
 import { Picker, type PickerItem, type PickerKind } from "./picker";
-import { PICKERS } from "./pickers";
+import { openSprintFilter, PICKERS } from "./pickers";
 import { ImagePreviews, type Preview } from "./preview";
 
 export interface Opener {
@@ -165,13 +165,7 @@ export class Dashboard {
     if (picker) picker.replace(PICKERS[picker.kind].items(this, picker.query));
   }
 
-  openPicker(requested: PickerKind): void {
-    // A sprint belongs to a board, so without one the board comes first.
-    let kind = requested;
-    if (!this.workspace.board) {
-      if (kind === "sprint") kind = "board";
-      if (kind === "sprint-filter") kind = "sprint-filter-board";
-    }
+  openPicker(kind: PickerKind): void {
     this.closePicker();
     const source = PICKERS[kind];
     this.picker = new Picker(kind, source.title, source.items(this, ""), source.options?.(this));
@@ -195,10 +189,9 @@ export class Dashboard {
     this.workspace.change(scoped(this.workspace.query, change));
   }
 
-  chooseBoard(board: string, next: "sprint" | "sprint-filter" = "sprint"): void {
-    this.list.filter("");
+  chooseBoard(board: string): void {
+    if (board !== this.workspace.board && this.workspace.query.sprintFilter !== null) this.list.filter("");
     this.workspace.chooseBoard(board);
-    this.openPicker(next);
   }
 
   chooseAssignee(assignee: string, label: string): void {
@@ -218,7 +211,6 @@ export class Dashboard {
     switch (action) {
       case "filter":
       case "display":
-      case "board":
       case "commands":
       case "model":
       case "reasoning":
@@ -256,11 +248,10 @@ export class Dashboard {
 
   clearFilters(): void {
     const { query } = this.workspace;
-    const sprintFilter = query.view === View.Sprint ? query.sprintFilter : null;
     this.list.filter("");
-    if (!query.project && !query.assignee && query.status === "all" && sprintFilter === query.sprintFilter) return;
+    if (!query.project && !query.assignee && query.status === "all" && query.sprintFilter === null) return;
     this.personLabel = "All people";
-    this.workspace.change(scoped(query, { project: "", assignee: "", status: "all", sprintFilter }));
+    this.workspace.change(scoped(query, { project: "", assignee: "", status: "all", sprintFilter: null }));
   }
 
   openAgent(): void {
@@ -650,7 +641,7 @@ export class Dashboard {
     o: () => this.openIssue(false),
     y: () => this.openIssue(true),
     b: () => this.openPicker("board"),
-    s: () => this.openPicker("sprint"),
+    s: () => openSprintFilter(this),
     p: () => this.openPicker("project"),
     a: () => this.openPicker("assignee"),
     d: () => this.cycleStatus(),

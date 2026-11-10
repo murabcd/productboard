@@ -2,9 +2,7 @@
 
 import { choiceLabel } from "../agent/models";
 import { MENTION_DAYS, View } from "../jira/query";
-import { SPRINT_STATE_NAMES, type SprintState, shortSprintName, sprintDates } from "../jira/types";
-import { cells } from "../text";
-import type { Canvas, Style } from "./canvas";
+import type { Canvas } from "./canvas";
 import { action, buttons, buttonsRight, type Control } from "./controls";
 import type { Dashboard } from "./dashboard";
 import { AGENT, MY_ISSUES_TABS, pageOf } from "./navigation";
@@ -12,15 +10,13 @@ import { filterChips } from "./pickers";
 
 export interface PageHeader {
   title: string;
-  /** Shown after the title, e.g. "● Active · Nov 3–17". */
-  status?: [text: string, style: Style];
   description: string;
   tabs: Control[];
   filters: Control[];
   actions: Control[];
 }
 
-const DESCRIPTIONS: Record<Exclude<View, typeof View.Sprint>, string> = {
+const DESCRIPTIONS: Record<View, string> = {
   [View.Mentions]: `Comments that mention you, in issues updated in ${MENTION_DAYS} days`,
   [View.Mine]: "Issues assigned to you",
   [View.Created]: "Issues you created",
@@ -28,14 +24,6 @@ const DESCRIPTIONS: Record<Exclude<View, typeof View.Sprint>, string> = {
   [View.All]: "Everyone's issues across projects",
   [View.Search]: "Issue titles, descriptions and comments",
 };
-
-const SPRINT_STATUS: Record<SprintState, [icon: string, style: Style]> = {
-  active: ["●", "done"],
-  future: ["○", "muted"],
-  closed: ["●", "muted"],
-};
-
-const boardControl: Control = { label: "Board ▾", target: action("board") };
 
 function agentHeader(d: Dashboard): PageHeader {
   const { chat } = d.agent;
@@ -73,26 +61,14 @@ function issuesHeader(d: Dashboard): PageHeader {
   ];
   const header: PageHeader = {
     title: pageOf(view).name,
-    description: "",
+    description: DESCRIPTIONS[view],
     tabs: [],
     filters,
     actions: [{ label: "Display ▾", target: action("display") }],
   };
-  if (view === View.Sprint) {
-    const sprint = work.sprint();
-    const board = work.boards.find(({ value }) => value === work.board)?.label;
-    header.description = board ?? "Choose a board";
-    header.filters = [boardControl, ...filters];
-    if (sprint) {
-      const [icon, style] = SPRINT_STATUS[sprint.state];
-      const dates = sprintDates(sprint);
-      header.title = shortSprintName(sprint.name);
-      header.status = [`${icon} ${SPRINT_STATE_NAMES[sprint.state]}${dates ? ` · ${dates}` : ""}`, style];
-      header.actions.unshift({ label: "Sprint brief", target: action("brief") });
-    }
-    return header;
+  if (view === View.All && work.sprint()) {
+    header.actions.unshift({ label: "Sprint brief", target: action("brief") });
   }
-  header.description = DESCRIPTIONS[view];
   if (pageOf(view).to === View.Mine) {
     header.tabs = MY_ISSUES_TABS.map(([tab, label]) => ({
       label,
@@ -107,14 +83,6 @@ const TOOLBAR = 4;
 
 export function pageHeader(d: Dashboard): PageHeader {
   return d.agent.tab ? agentHeader(d) : issuesHeader(d);
-}
-
-export function drawPageTitle(canvas: Canvas, header: PageHeader, left: number, right: number): void {
-  canvas.put(0, left, header.title, "title", right - left);
-  if (header.status) {
-    const x = left + cells(header.title) + 2;
-    canvas.put(0, x, header.status[0], header.status[1], right - x);
-  }
 }
 
 export function drawHeader(canvas: Canvas, header: PageHeader, descriptionRow: number): void {

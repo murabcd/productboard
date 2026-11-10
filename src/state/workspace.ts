@@ -201,7 +201,7 @@ export class Workspace {
     this.sprints = sprints ?? [];
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
-    this.change(scoped(this.query, { sprint: null, sprintFilter: null }));
+    if (this.query.sprintFilter !== null) this.change(scoped(this.query, { sprintFilter: null }));
     if (sprints) this.changed();
     else void this.loadSprints();
   }
@@ -235,7 +235,7 @@ export class Workspace {
     if (this.sprintCatalogError || this.sprints.length === 0) void this.loadSprints();
   }
 
-  sprint(id = this.query.sprint): Sprint | undefined {
-    return this.sprints.find((sprint) => sprint.id === id);
+  sprint(): Sprint | undefined {
+    return this.sprints.find((sprint) => sprint.id === this.query.sprintFilter);
   }
 }

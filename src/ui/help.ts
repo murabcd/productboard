@@ -29,7 +29,7 @@ export const HELP = [
     ["f", "Search all of Jira"],
     ["F", "Filter menu"],
     ["D", "Display menu"],
-    ["b  s", "Board / sprint"],
+    ["b  s", "Sprint board / sprint filter"],
     ["p  a", "Project / person"],
     ["d", "Cycle all / open / done"],
     ["g", "Group by status / assignee"],

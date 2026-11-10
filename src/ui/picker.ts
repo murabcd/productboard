@@ -3,9 +3,8 @@ import { rowOffset } from "./layout";
 
 export type PickerKind =
   | "board"
-  | "sprint-filter-board"
+  | "sprint-board"
   | "sprint"
-  | "sprint-filter"
   | "agent-context"
   | "project"
   | "assignee"

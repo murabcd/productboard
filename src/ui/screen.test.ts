@@ -59,6 +59,18 @@ async function start(
   return { setup, dashboard, quit };
 }
 
+async function clickSidebar(setup: TestRendererSetup, name: string): Promise<void> {
+  const row = setup
+    .captureCharFrame()
+    .split("\n")
+    .findIndex((line) => {
+      const divider = line.indexOf("│");
+      return divider >= 0 && line.slice(0, divider).trimEnd().endsWith(` ${name}`);
+    });
+  expect(row).toBeGreaterThanOrEqual(0);
+  await setup.mockMouse.click(6, row);
+}
+
 describe("OpenTUI shell", () => {
   test("the theme command recolors the screen and the focused Agent composer", async () => {
     const rememberTheme = mock(() => {});
@@ -70,7 +82,7 @@ describe("OpenTUI shell", () => {
         .find((span) => span.text.includes("EX-1"))?.bg;
     expect(selectedBackground()?.equals(RGBA.fromHex("#2e2e2e"))).toBe(true);
 
-    await setup.mockMouse.click(6, 6);
+    await clickSidebar(setup, "Agent");
     await setup.renderOnce();
     await setup.mockInput.typeText("Draft");
     setup.mockInput.pressKey("k", { ctrl: true });
@@ -88,7 +100,7 @@ describe("OpenTUI shell", () => {
     expect(composer.visible).toBe(true);
     expect(composer.textColor.equals(RGBA.fromHex("#24292f"))).toBe(true);
     expect(composer.selectionBg?.equals(RGBA.fromHex("#dce3ec"))).toBe(true);
-    await setup.mockMouse.click(6, 10);
+    await clickSidebar(setup, "All issues");
     await setup.renderOnce();
     expect(selectedBackground()?.equals(RGBA.fromHex("#dce3ec"))).toBe(true);
   });
@@ -102,7 +114,7 @@ describe("OpenTUI shell", () => {
       },
     });
     try {
-      await setup.mockInput.typeText("4");
+      await setup.mockInput.typeText("2");
       await setup.renderOnce();
       setup.mockInput.pressKey("k", { ctrl: true });
       await setup.mockInput.typeText("change theme");
@@ -135,7 +147,7 @@ describe("OpenTUI shell", () => {
     await setup.mockMouse.scroll(30, 8, "up");
     await setup.renderOnce();
     expect(dashboard.list.selected?.key).toBe("EX-1");
-    await setup.mockMouse.click(6, 5); // My issues in the sidebar
+    await clickSidebar(setup, "My issues");
     expect(dashboard.workspace.query.view).toBe(View.Mine);
   });
 
@@ -161,7 +173,7 @@ describe("OpenTUI shell", () => {
 
   test("the last tab stays visible and clickable at the minimum pane width", async () => {
     const { setup, dashboard } = await start(MIN_WIDTH);
-    await setup.mockInput.typeText("2");
+    await setup.mockInput.typeText("3");
     expect(dashboard.workspace.query.view).toBe(View.Mentions);
     await setup.renderOnce();
     const allIssues = setup.captureCharFrame().split("\n")[1]?.indexOf(" All ") ?? -1;
@@ -204,7 +216,7 @@ describe("OpenTUI shell", () => {
       onText("EX-1 before release.");
     });
     const { setup, dashboard } = await start(100, { agent: fakeAgent(ask) });
-    await setup.mockMouse.click(6, 6); // Agent in the sidebar
+    await clickSidebar(setup, "Agent");
     await setup.mockInput.typeText("Any risks?");
     await setup.mockInput.pressEnter();
     await settle();
@@ -229,7 +241,7 @@ describe("OpenTUI shell", () => {
     const answer = Array.from({ length: 60 }, (_, index) => `Transcript row ${index + 1}`).join("\n");
     const ask: AgentBackend["ask"] = async ({ onText }) => onText(`\`\`\`\n${answer}\n\`\`\``);
     const { setup } = await start(100, { agent: fakeAgent(ask) });
-    await setup.mockMouse.click(6, 6);
+    await clickSidebar(setup, "Agent");
     await setup.renderOnce();
     await setup.mockInput.typeText("Show a long reply");
     await setup.mockInput.pressEnter();
@@ -267,7 +279,7 @@ describe("OpenTUI shell", () => {
         { id: 31, name: "Web - Sprint 31", state: "active", start: "", end: "", goal: "" },
         { id: 32, name: "Web - Sprint 32 結果", state: "closed", start: "", end: "", goal: "" },
       ];
-      await setup.mockMouse.click(6, 6);
+      await clickSidebar(setup, "Agent");
       await setup.renderOnce();
       await setup.mockInput.pasteBracketedText("Compare 🧪 結果: ");
       await setup.mockInput.typeText("@");
@@ -353,7 +365,7 @@ describe("OpenTUI shell", () => {
       ...snapshot(dashboard.workspace.query, local),
       issues: local.map((key) => toIssue(rawIssue(key, "new", { title: "Local incident" }))),
     };
-    await setup.mockMouse.click(6, 6);
+    await clickSidebar(setup, "Agent");
     await setup.renderOnce();
     await setup.mockInput.typeText("Review @reindex");
     const signal = await firstRequest.promise;
@@ -390,7 +402,7 @@ describe("OpenTUI shell", () => {
       ({ signal }) => new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve())),
     );
     const { setup, dashboard, quit } = await start(100, { agent: fakeAgent(ask) });
-    await setup.mockMouse.click(6, 6); // Agent in the sidebar
+    await clickSidebar(setup, "Agent");
     await setup.renderOnce();
     await setup.mockInput.typeText("quick 1 line"); // q and 1 are text here, not keys
     setup.mockInput.pressKey("j", { ctrl: true });
@@ -414,7 +426,7 @@ describe("OpenTUI shell", () => {
 
   test("the command palette opens over Agent from the shortcut and top bar", async () => {
     const { setup, dashboard } = await start();
-    await setup.mockMouse.click(6, 6);
+    await clickSidebar(setup, "Agent");
     await setup.renderOnce();
     const command = setup.captureCharFrame().split("\n")[0]?.indexOf("^K") ?? -1;
     expect(command).toBeGreaterThan(0);
@@ -436,7 +448,7 @@ describe("OpenTUI shell", () => {
 
   test("q quits from the minimum-size screen when Agent was active", async () => {
     const { setup, quit } = await start();
-    await setup.mockMouse.click(6, 6);
+    await clickSidebar(setup, "Agent");
     await setup.renderOnce();
     setup.resize(MIN_WIDTH - 1, 15);
     await setup.renderOnce();

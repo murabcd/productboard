@@ -61,10 +61,10 @@ describe("workspace", () => {
     expect(source.snapshot).toHaveBeenCalledTimes(2);
   });
 
-  test("an unselected scope stops waiting and drops an older response", async () => {
+  test("empty Search stops waiting and drops an older response", async () => {
     const { work, requests, team, advance } = setup();
     work.refresh();
-    work.change(initialQuery);
+    work.change({ ...initialQuery, view: View.Search });
     expect(work.pending).toBe(false);
     advance(REFRESH_MS);
     work.tick();
@@ -131,6 +131,24 @@ describe("workspace", () => {
     work.tick();
     expect(source.catalog).toHaveBeenCalledTimes(1);
     expect(source.sprints).toHaveBeenCalledTimes(2);
+  });
+
+  test("switching boards preserves unfiltered issue pages and clears an active sprint filter", async () => {
+    const { work, source, requests } = setup();
+    work.chooseBoard("1");
+    work.loadMore();
+    requests[0]?.reply.resolve(snapshot(work.query, ["EX-1", "EX-2", "EX-3"]));
+    await settle();
+
+    const loadedQuery = work.query;
+    work.chooseBoard("2");
+    expect(work.query).toBe(loadedQuery);
+    expect(work.issues.map((issue) => issue.key)).toEqual(["EX-1", "EX-2", "EX-3"]);
+    expect(source.snapshot).toHaveBeenCalledTimes(1);
+
+    work.change({ ...work.query, sprintFilter: 42 });
+    work.chooseBoard("1");
+    expect(source.snapshot).toHaveBeenLastCalledWith(initialQuery);
   });
 
   test("switching boards starts a sprint read immediately and ignores earlier requests for the same board", async () => {

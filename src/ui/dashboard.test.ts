@@ -173,7 +173,7 @@ describe("dashboard", () => {
   test("a closed issue's late details cannot replace a sprint goal", async () => {
     const { dashboard, work, pending } = setup();
     work.sprints = [{ id: 7, name: "Sprint 7", state: "active", start: "", end: "", goal: "Ship statuses" }];
-    work.query = { ...work.query, sprint: 7 };
+    work.query = { ...work.query, sprintFilter: 7 };
     dashboard.handle(ENTER);
     dashboard.handle(ESC);
     dashboard.handle({ text: "t" });
@@ -292,7 +292,7 @@ describe("picker", () => {
   test("Tab separates active, planned and closed sprints", () => {
     const picker = new Picker(
       "sprint",
-      "Choose sprint",
+      "Filter by sprint",
       [
         { value: "1", label: "Current", detail: "", state: "active", run: () => {} },
         { value: "2", label: "Next", detail: "", state: "future", run: () => {} },
@@ -313,6 +313,8 @@ describe("picker", () => {
     work.sprints = [{ id: 1, name: "Old", state: "closed", start: "", end: "", goal: "" }];
     dashboard.openPicker("sprint");
     expect(dashboard.picker?.tabName).toBe("closed");
+    expect(dashboard.picker?.selected?.label).toBe("Any sprint");
+    dashboard.handle({ name: "down" });
     expect(dashboard.picker?.selected?.label).toBe("Old");
   });
 
@@ -328,6 +330,18 @@ describe("picker", () => {
     work.refresh();
     dashboard.handle(ENTER);
     expect(work.board).toBe(second.value);
+    expect(dashboard.picker).toBeNull();
+  });
+
+  test("filtering by sprint asks for a board only when needed", () => {
+    const { dashboard, work } = setup();
+    work.boards = [{ value: "1", label: "Example", detail: "", state: "" }];
+    dashboard.handle({ text: "s" });
+    expect(dashboard.picker?.title).toBe("Choose board");
+    dashboard.handle(ENTER);
+    expect(work.board).toBe("1");
+    expect(work.query.view).toBe(View.All);
+    expect(dashboard.picker?.title).toBe("Filter by sprint");
   });
 
   test("a picker page counts group headings and separators", () => {
@@ -472,47 +486,27 @@ describe("concept layout", () => {
     expect(source.snapshot).toHaveBeenCalledTimes(1);
   });
 
-  test("Filter can select and clear a sprint without changing the page or the sprint scope", () => {
+  test("All issues shares its optional sprint filter with other issue lists", () => {
     const { dashboard, work, source } = setup();
     work.board = "1";
-    work.query = { ...work.query, view: View.Mentions, sprint: 36 };
-    work.sprints = [
-      { id: 36, name: "Platform - Sprint 36", state: "active", start: "", end: "", goal: "" },
-      { id: 35, name: "Platform - Sprint 35", state: "closed", start: "", end: "", goal: "" },
-    ];
-    const openSprintFilter = () => {
-      dashboard.handle({ text: "F" });
-      for (const key of [...text("sprint"), ENTER]) dashboard.handle(key);
-      expect(dashboard.picker?.kind).toBe("sprint-filter");
-    };
-    openSprintFilter();
-    for (const key of [{ name: "tab" }, { name: "tab" }, ...text("35"), ENTER] satisfies Key[]) dashboard.handle(key);
-    expect(source.snapshot).toHaveBeenLastCalledWith(
-      expect.objectContaining({ view: View.Mentions, sprintFilter: 35 }),
-    );
-    expect(work.sprint()?.id).toBe(36);
+    work.query = { ...work.query, view: View.Mentions };
+    work.sprints = [{ id: 36, name: "Sprint 36", state: "active", start: "", end: "", goal: "" }];
+    dashboard.handle({ text: "6" });
+    expect(dashboard.picker).toBeNull();
+    expect(source.snapshot).toHaveBeenLastCalledWith(expect.objectContaining({ view: View.All, sprintFilter: null }));
+
+    for (const key of [...text("Fsprint"), ENTER, ...text("36"), ENTER]) dashboard.handle(key);
+    expect(source.snapshot).toHaveBeenLastCalledWith(expect.objectContaining({ view: View.All, sprintFilter: 36 }));
     expect(frame(dashboard).text(4)).toContain("Filter 1 ▾");
 
-    openSprintFilter();
-    expect(dashboard.picker?.selected?.value).toBe("35");
-    for (const key of [...text("any sprint"), ENTER]) dashboard.handle(key);
-    expect(work.query.sprintFilter).toBeNull();
-
-    openSprintFilter();
-    for (const key of [...text("36"), ENTER]) dashboard.handle(key);
-    expect(work.query.sprintFilter).toBe(36);
-    dashboard.showView(View.Sprint);
-    dashboard.handle({ text: "F" });
-    for (const key of [...text("sprint"), ENTER]) dashboard.handle(key);
-    expect(dashboard.picker?.kind).toBe("sprint");
-    for (const key of [{ name: "tab" }, { name: "tab" }, ...text("35"), ENTER] satisfies Key[]) dashboard.handle(key);
-    expect(work.query).toMatchObject({ view: View.Sprint, sprint: 35, sprintFilter: 36 });
-
-    dashboard.showView(View.Mentions);
-    dashboard.handle({ text: "F" });
-    for (const key of [...text("clear"), ENTER]) dashboard.handle(key);
-    expect(work.query.sprintFilter).toBeNull();
-    expect(work.sprint()?.id).toBe(35);
+    dashboard.handle({ text: "3" });
+    expect(source.snapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: View.Mentions, sprintFilter: 36 }),
+    );
+    for (const key of [...text("Fsprint"), ENTER, ...text("any sprint"), ENTER]) dashboard.handle(key);
+    expect(source.snapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: View.Mentions, sprintFilter: null }),
+    );
   });
 
   test("a folded group hides its rows and the selection skips them", () => {
@@ -534,18 +528,17 @@ describe("concept layout", () => {
     const view = () => work.query.view;
     const order: [string, View][] = [
       ["1", View.Search],
-      ["2", View.Mentions],
-      ["3", View.Mine],
+      ["3", View.Mentions],
+      ["4", View.Mine],
       ["5", View.Today],
-      ["6", View.Sprint],
-      ["7", View.All],
+      ["6", View.All],
     ];
     for (const [key, expected] of order) {
       dashboard.handle({ text: key });
       dashboard.handle(ESC); // close the Search prompt
       expect(view()).toBe(expected);
     }
-    dashboard.handle({ text: "4" });
+    dashboard.handle({ text: "2" });
     expect(dashboard.agent.tab).toBe(true);
     dashboard.handle(ESC);
     dashboard.handle({ text: "1" });
@@ -577,7 +570,6 @@ describe("concept layout", () => {
   test("a turn shows the prompt, Markdown reply, and model", async () => {
     const ask = mock<AgentBackend["ask"]>(async ({ onText }) => onText("## Risks\n- **FL-1** is blocked"));
     const { work } = setup();
-    work.query = { ...initialQuery, view: View.Sprint, sprint: 7 };
     const dashboard = new Dashboard(
       work,
       { site: "x", detail: mock(), attachment: mock(), findIssues: mock() },
@@ -585,7 +577,7 @@ describe("concept layout", () => {
       () => {},
       { agent: fakeAgent(ask) },
     );
-    dashboard.handle({ text: "4" });
+    dashboard.handle({ text: "2" });
     dashboard.agent.chat.current.draft.replace(["Any risks?"]);
     dashboard.agent.send();
     await settle();
@@ -606,7 +598,6 @@ describe("concept layout", () => {
     const ask = mock<AgentBackend["ask"]>(async ({ onText }) => onText("Done."));
     const agent = fakeAgent(ask);
     const { work } = setup();
-    work.query = { ...initialQuery, view: View.Sprint, sprint: 7 };
     const dashboard = new Dashboard(
       work,
       { site: "x", detail: mock(), attachment: mock(), findIssues: mock() },
@@ -614,7 +605,7 @@ describe("concept layout", () => {
       () => {},
       { agent },
     );
-    dashboard.handle({ text: "4" });
+    dashboard.handle({ text: "2" });
     dashboard.agent.chat.current.draft.replace(["First?"]);
     dashboard.agent.send();
     await settle();
@@ -671,7 +662,7 @@ describe("concept layout", () => {
     dashboard.handle({ text: "J" });
     expect(dashboard.peek?.scroll).toBe(3);
     dashboard.handle(ESC);
-    dashboard.handle({ text: "3" });
+    dashboard.handle({ text: "4" });
     dashboard.handle({ name: "right" });
     expect(work.query.view).toBe(View.Created);
     dashboard.handle({ name: "left" });
@@ -684,7 +675,6 @@ describe("concept layout", () => {
       onText("Look at EX-7.");
     });
     const { work } = setup();
-    work.query = { ...initialQuery, view: View.Sprint, sprint: 7 };
     const dashboard = new Dashboard(
       work,
       { site: "x", detail: mock(() => new Promise<never>(() => {})), attachment: mock(), findIssues: mock() },
@@ -692,7 +682,7 @@ describe("concept layout", () => {
       () => {},
       { agent: fakeAgent(ask) },
     );
-    dashboard.handle({ text: "4" });
+    dashboard.handle({ text: "2" });
     dashboard.agent.chat.current.draft.replace(["Risks?"]);
     dashboard.agent.send();
     await settle();
@@ -757,7 +747,7 @@ describe("frame", () => {
   test("pickers open as a dialog over the page, the current choice marked", () => {
     const { dashboard, work } = setup();
     work.board = "1";
-    work.query = { ...work.query, view: View.Sprint, sprint: 36 };
+    work.query = { ...work.query, sprintFilter: 36 };
     work.sprints = [
       { id: 36, name: "HR Team - Sprint 36", state: "active", start: "2026-11-03", end: "2026-11-17", goal: "" },
       { id: 35, name: "HR Team - Sprint 35", state: "active", start: "2026-10-20", end: "2026-11-02", goal: "" },
@@ -765,7 +755,7 @@ describe("frame", () => {
     dashboard.openPicker("sprint");
     const canvas = draw(dashboard, 100, 30);
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
-    expect(screen).toMatch(/Choose sprint +esc/);
+    expect(screen).toMatch(/Filter by sprint +esc/);
     for (const [width, height] of [
       [60, 18],
       [121, 60],

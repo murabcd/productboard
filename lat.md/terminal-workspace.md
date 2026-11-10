@@ -14,9 +14,10 @@ A scope starts loading as soon as it is ready. Clearing server filters applies
 one scope change. Board and project discovery and the selected board's sprint
 catalog track their own failures and retry independently of the issue list.
 The Filter menu uses the selected board's sprint catalog. Its optional sprint
-filter carries across issue lists and is separate from the sprint selected on
-the Sprints page. Changing boards clears both selections and starts the new
-board’s sprint read immediately. Only the current request can publish sprint
+filter carries across issue lists. Changing the sprint board in Filter clears
+an active sprint filter and starts the new board’s sprint read immediately.
+When no sprint filter is active, the board change leaves the loaded issue
+pages and local filter intact. Only the current sprint request can publish
 results or schedule a retry.
 
 ## Interaction and rendering
@@ -50,8 +51,8 @@ and composer while preserving the active page and draft.
 The frame has a top bar, navigation sidebar, page header, body, and footer.
 The footer shows counts, sync status, and shortcuts.
 
-[[src/ui/navigation.ts#NAV_GROUPS]] groups Search, the personal pages, and the
-team pages in sidebar order with a blank row between groups.
+[[src/ui/navigation.ts#NAV_GROUPS]] puts one blank row between Search and Agent
+and the rest of the sidebar pages.
 [[src/ui/navigation.ts#NAVIGATION]] flattens that order for number keys, Tab,
 and the command palette. On narrow panes, the same order appears as tabs
 below the title bar.

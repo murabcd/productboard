@@ -11,7 +11,7 @@ import { action, buttons } from "./controls";
 import type { Dashboard, Layer } from "./dashboard";
 import { drawDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
-import { drawHeader, drawPageTitle, type PageHeader, pageHeader } from "./header";
+import { drawHeader, type PageHeader, pageHeader } from "./header";
 import type { Target } from "./input";
 import {
   BODY_TOP,
@@ -71,7 +71,7 @@ function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number, header: PageH
   canvas.put(0, right, shortcut, "muted");
   canvas.mark(0, right, cells(shortcut), action("commands"));
   const titleStart = sidebar ? sidebar + 2 : boardStart + cells(board) + 3;
-  drawPageTitle(canvas, header, titleStart, right - 2);
+  canvas.put(0, titleStart, header.title, "title", right - 2 - titleStart);
   if (sidebar) return;
 
   const here = currentPage(d.workspace.query.view, d.agent.tab);
@@ -249,7 +249,6 @@ function drawList(canvas: Canvas, d: Dashboard): void {
 
 function emptyText(d: Dashboard): string {
   const work = d.workspace;
-  if (work.query.view === View.Sprint && work.query.sprint === null) return "Choose a sprint in Filter → Sprint";
   if (work.query.view === View.Search && !work.query.text) {
     return d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
   }
@@ -275,8 +274,7 @@ function rowColumns(d: Dashboard, issues: Issue[], width: number) {
     reason: fitOrNone(26, (i) => i.reason ?? ""),
     // Assigned is all yours; assignee grouping puts names in the headings.
     person: view === View.Mine || d.list.grouping === "assignee" ? 0 : fit(18, (i) => i.assignee),
-    // Every row of the Sprints view is in the chosen sprint.
-    sprint: view === View.Sprint ? 0 : fitOrNone(14, (i) => shortSprintName(i.sprint)),
+    sprint: fitOrNone(14, (i) => shortSprintName(i.sprint)),
   };
   const title = 4 + key + 2;
   const PRI = 4;

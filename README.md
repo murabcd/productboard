@@ -1,11 +1,11 @@
 <p align="center">
-  <img alt="productboard showing a fictional storefront sprint grouped by assignee" src="./preview/productboard-sprint.png" width="760">
+  <img alt="productboard showing the All issues view with fictional Jira issues" src="./preview/productboard.png" width="760">
 </p>
 
 <h1 align="center">productboard</h1>
 
 <p align="center">
-  Browse team sprints, track your issues, and search Jira Cloud from your terminal.
+  Browse team issues, track your work, and search Jira Cloud from your terminal.
 </p>
 
 <p align="center">
@@ -41,18 +41,17 @@ ln -s "$PWD/bin/board" ~/.local/bin/board
 
 ## Features
 
-- Browse team sprints and filter by project, assignee, or status.
-- Narrow issue lists with **Filter → Sprint**. Choose **Any sprint** to remove
-  the sprint filter. On the Sprints page, **Filter → Sprint** switches the
-  sprint you are viewing.
+- Browse **All issues** and filter by project, assignee, or status.
+- Use **Filter → Sprint** to narrow issue lists to one sprint, and **Any sprint**
+  to clear the selection. Use **Sprint board** to switch which board supplies the
+  sprint choices.
 - Find issues assigned to you or created by you, and search across Jira.
 - See blockers, overdue issues, and mentions in one place.
 - Read comments and preview image attachments in the terminal.
 - Ask Agent about issues across Jira from its page in the sidebar.
 
-The dashboard opens in Inbox. Press `1` for Search, `2` for Inbox,
-`3` for My issues, `4` for Agent, `5` for Team focus, `6` for Sprints, or
-`7` for All issues.
+The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,
+`3` for Inbox, `4` for My issues, `5` for Team focus, or `6` for All issues.
 
 To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel
 Light**, **Vercel Dark**, or **Default**. The choice is saved for the next

@@ -46,7 +46,6 @@ export function editLine(value: string, key: Key, max: number): string | undefin
 export type Action =
   | "filter"
   | "display"
-  | "board"
   | "brief"
   | "peek"
   | "details"

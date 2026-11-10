@@ -113,18 +113,12 @@ describe("scopes", () => {
     expect(query).not.toContain("assignee");
   });
 
-  test("team and sprint scopes do not inherit personal restrictions", () => {
-    expect(jql({ ...initialQuery, view: View.All })).not.toContain("currentUser()");
-    expect(jql({ ...initialQuery, sprint: 24 })).toContain("sprint = 24");
-    expect(() => jql(initialQuery)).toThrow("Choose a sprint");
-  });
-
-  test("the sprint filter narrows the current view without overriding the Sprints page", () => {
-    const filtered = { ...initialQuery, sprint: 24, sprintFilter: 42 };
-    expect(jql({ ...filtered, view: View.Mine })).toBe(
+  test("All issues is team-wide and the optional sprint filter narrows that scope", () => {
+    expect(jql(initialQuery)).toBe("statusCategory IS NOT EMPTY ORDER BY updated DESC");
+    expect(jql({ ...initialQuery, sprintFilter: 42 })).toBe("sprint = 42 ORDER BY updated DESC");
+    expect(jql({ ...initialQuery, view: View.Mine, sprintFilter: 42 })).toBe(
       "sprint = 42 AND assignee = currentUser() ORDER BY updated DESC",
     );
-    expect(jql(filtered)).toBe("sprint = 24 ORDER BY updated DESC");
   });
 
   test("filters run on Jira and values are quoted", () => {
