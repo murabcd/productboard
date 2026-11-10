@@ -136,12 +136,16 @@ function commandItems(d: Dashboard): PickerItem[] {
       item(`Go to ${nav.name}`, navKey(nav), () => (nav.to === "agent" ? d.openAgent() : d.showView(nav.to)), page),
     ),
     item("Go to Created", "My issues tab", () => d.showView(View.Created), page),
-    item("Filter issues…", "F", () => d.openPicker("filter"), act),
-    item("Display options…", "D", () => d.openPicker("display"), act),
+    ...(d.agent.tab
+      ? []
+      : [
+          item("Filter…", "F", () => d.openPicker("filter"), act),
+          item("Choose board", "b", () => d.openPicker("board"), act),
+          item("Choose sprint", "s", () => d.openPicker("sprint"), act),
+          item("Sprint brief", "t", () => d.runAction("brief"), act),
+          item("Display options…", "D", () => d.openPicker("display"), act),
+        ]),
     item("Change theme", THEMES[d.theme].label, () => d.openPicker("theme"), act),
-    item("Choose board", "b", () => d.openPicker("board"), act),
-    item("Choose sprint", "s", () => d.openPicker("sprint"), act),
-    item("Sprint brief", "t", () => d.runAction("brief"), act),
     item("Select Agent model", current ? modelName(current.model) : "Not set up", () => d.openPicker("model"), act),
     item(
       "Select reasoning",
@@ -234,7 +238,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       ),
   },
   filter: {
-    title: "Filter issues",
+    title: "Filter",
     items: (d) => {
       const { query } = d.workspace;
       const person = isPersonal(query.view) ? "You" : query.assignee ? d.personLabel : "Anyone";

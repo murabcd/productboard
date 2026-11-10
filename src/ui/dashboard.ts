@@ -67,7 +67,6 @@ export class Dashboard {
   peek: Peek | null = null;
   readonly agent: AgentPanel;
   private selectedTheme: ThemeId;
-  private autoSprintPicker = true;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly images: ImagePreviews;
   private readonly details: IssueDetails;
@@ -83,7 +82,7 @@ export class Dashboard {
     this.selectedTheme = options.appearance?.initial ?? DEFAULT_THEME;
     this.list = new IssueList(workspace);
     this.images = new ImagePreviews((id) => client.attachment(id), redraw);
-    this.agent = new AgentPanel(workspace, options.agent, redraw, () => this.update());
+    this.agent = new AgentPanel(options.agent, redraw, () => this.update());
     this.details = new IssueDetails(
       (key) => client.detail(key),
       (read) => {
@@ -138,18 +137,6 @@ export class Dashboard {
   private update(): void {
     this.refreshPicker();
     this.syncPeek();
-    const { sprints, query } = this.workspace;
-    if (
-      this.autoSprintPicker &&
-      sprints.length &&
-      query.view === View.Sprint &&
-      query.sprint === null &&
-      !this.picker &&
-      !this.agent.tab
-    ) {
-      this.openPicker("sprint");
-      this.autoSprintPicker = false;
-    }
     this.redraw();
   }
 
@@ -205,7 +192,6 @@ export class Dashboard {
       case "filter":
       case "display":
       case "board":
-      case "sprint":
       case "commands":
       case "model":
       case "reasoning":
@@ -364,7 +350,6 @@ export class Dashboard {
     const work = this.workspace;
     work.change(withView(work.query, view));
     this.list.filter("");
-    if (view === View.Sprint && work.query.sprint === null) this.openPicker("sprint");
     if (view === View.Search && !work.query.text) this.finding = "";
   }
 
@@ -423,13 +408,8 @@ export class Dashboard {
 
   private handlePicker(picker: Picker, key: Key): void {
     const picked = picker.handle(key, pickerRows(this.height));
-    if (picked === "dismiss") this.closePicker();
+    if (picked === "dismiss") this.picker = null;
     else if (picked) this.pick(picked);
-  }
-
-  private closePicker(): void {
-    this.picker = null;
-    this.autoSprintPicker = false;
   }
 
   private handleSearch(key: Key): void {
@@ -458,7 +438,7 @@ export class Dashboard {
   click(target: Target): void {
     // A dialog takes the clicks: a choice picks, a click elsewhere closes it.
     if (this.picker && target.kind !== "choice" && target.kind !== "dialog") {
-      this.closePicker();
+      this.picker = null;
       return;
     }
     this.clickTarget(target);
@@ -523,10 +503,6 @@ export class Dashboard {
       case "previous":
       case "next":
         chat.select(action === "previous" ? -1 : 1);
-        return;
-      case "board":
-      case "sprint":
-        this.openPicker(action);
         return;
     }
   }

@@ -35,13 +35,10 @@ const SPRINT_STATUS: Record<SprintState, [icon: string, style: Style]> = {
   closed: ["●", "muted"],
 };
 
-const scopeControls: Control[] = [
-  { label: "Board ▾", target: action("board") },
-  { label: "Sprint ▾", target: action("sprint") },
-];
+const boardControl: Control = { label: "Board ▾", target: action("board") };
 
 function agentHeader(d: Dashboard): PageHeader {
-  const { chat, scope } = d.agent;
+  const { chat } = d.agent;
   const actions: Control[] = [];
   if (chat.size > 1) {
     actions.push(
@@ -54,9 +51,9 @@ function agentHeader(d: Dashboard): PageHeader {
   if (current) actions.push({ label: `${choiceLabel(current)} ▾`, target: action("model") });
   return {
     title: AGENT.name,
-    description: scope?.label ?? "Choose a sprint to give Agent context",
+    description: "Search across Jira",
     tabs: [],
-    filters: scopeControls,
+    filters: [],
     actions,
   };
 }
@@ -85,7 +82,7 @@ function issuesHeader(d: Dashboard): PageHeader {
     const sprint = work.sprint();
     const board = work.boards.find(({ value }) => value === work.board)?.label;
     header.description = board ?? "Choose a board";
-    header.filters = [...scopeControls, ...filters];
+    header.filters = [boardControl, ...filters];
     if (sprint) {
       const [icon, style] = SPRINT_STATUS[sprint.state];
       const dates = sprintDates(sprint);

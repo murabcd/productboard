@@ -251,7 +251,7 @@ function drawList(canvas: Canvas, d: Dashboard): void {
 
 function emptyText(d: Dashboard): string {
   const work = d.workspace;
-  if (work.query.view === View.Sprint && work.query.sprint === null) return "Press s to choose a sprint";
+  if (work.query.view === View.Sprint && work.query.sprint === null) return "Choose a sprint in Filter → Sprint";
   if (work.query.view === View.Search && !work.query.text) {
     return d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
   }

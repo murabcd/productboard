@@ -3,11 +3,6 @@ import type { Issue } from "../jira/types";
 import { clean } from "../text";
 import type { AgentModel } from "./models";
 
-export interface AgentScope {
-  sprint: number;
-  label: string;
-}
-
 export interface AgentBackend {
   /** The model and reasoning that answer, shown under each reply. */
   readonly current: AgentChoice;
@@ -15,7 +10,6 @@ export interface AgentBackend {
   /** Answer with another model or reasoning from now on. */
   use(choice: AgentChoice): Promise<void>;
   ask(request: {
-    scope: AgentScope;
     thread: string;
     prompt: string;
     signal: AbortSignal;
@@ -98,13 +92,13 @@ export class AgentChat {
     for (const thread of this.threads) thread.pending?.abort();
   }
 
-  async send(scope: AgentScope | null): Promise<void> {
+  async send(): Promise<void> {
     const thread = this.current;
     const prompt = thread.draft.trim();
     if (!prompt || thread.pending) return;
     // Say why nothing was sent rather than ignoring Enter.
-    if (!this.backend || !scope) {
-      thread.error = this.backend ? "Choose a sprint first: Sprint ▾" : "Agent is not set up: run board --agent-login";
+    if (!this.backend) {
+      thread.error = "Agent is not set up: run board --agent-login";
       this.redraw();
       return;
     }
@@ -118,7 +112,6 @@ export class AgentChat {
     thread.turns.push(turn);
     try {
       const reply = this.backend.ask({
-        scope,
         thread: thread.id,
         prompt,
         signal: pending.signal,

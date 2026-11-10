@@ -16,10 +16,10 @@ and follows attachment redirects without forwarding it. Search uses POST as a
 read operation.
 
 Transport owns timeouts, retries, rate limit handling, and request priority.
-Board, project, and sprint pagination runs at background priority so catalog
-loads leave room for issue reads.
-The timeout starts when a read receives a slot. Closing the transport rejects
-queued reads and aborts active requests.
+Catalog pagination and Agent searches run at background priority, leaving
+slots for interactive reads. The timeout starts when a read receives a slot.
+Canceling an Agent search removes it from the queue or aborts the active
+request. Closing the transport cancels all reads.
 
 ## Issue queries
 

@@ -541,7 +541,7 @@ describe("concept layout", () => {
     ];
     for (const [key, expected] of order) {
       dashboard.handle({ text: key });
-      dashboard.handle(ESC); // close the sprint picker or search prompt a view may open
+      dashboard.handle(ESC); // close the Search prompt
       expect(view()).toBe(expected);
     }
     dashboard.handle({ text: "4" });
@@ -571,39 +571,6 @@ describe("concept layout", () => {
       expect(description.length).toBeGreaterThan(0);
       dashboard.agent.tab = false;
     }
-  });
-
-  test("the Agent page shows its title once and no issue filters", () => {
-    const { dashboard } = setup();
-    dashboard.handle({ text: "4" });
-    const canvas = draw(dashboard, 120, 30);
-    const rows = Array.from({ length: 30 }, (_, y) => canvas.text(y).slice(20).trim());
-    expect(rows.filter((row) => /^(✦ )?Agent\s*(\^K)?$/.test(row))).toHaveLength(1);
-    expect(rows.join("\n")).not.toContain("Filter");
-  });
-
-  test("Agent talks about the board's active sprint when the page has none", async () => {
-    const ask = mock(async () => {});
-    const { work } = setup();
-    work.query = { ...initialQuery, view: View.Mine };
-    const dashboard = new Dashboard(
-      work,
-      { site: "x", detail: mock(), attachment: mock() },
-      { open: mock(), copy: mock() },
-      () => {},
-      { agent: fakeAgent(ask) },
-    );
-    expect(dashboard.agent.scope).toBeNull();
-    dashboard.agent.chat.current.draft = "Any risks?";
-    dashboard.agent.send();
-    expect(ask).not.toHaveBeenCalled();
-    expect(dashboard.agent.chat.current.error).toBe("Choose a sprint first: Sprint ▾"); // Enter is never silent
-    work.sprints = [{ id: 7, name: "Team - Sprint 7", state: "active", start: "", end: "", goal: "" }];
-    expect(dashboard.agent.scope).toEqual({ sprint: 7, label: "Team - Sprint 7" });
-    dashboard.agent.chat.current.draft = "Any risks?";
-    dashboard.agent.send();
-    await settle();
-    expect(ask).toHaveBeenCalledTimes(1);
   });
 
   test("a turn shows the prompt, Markdown reply, and model", async () => {

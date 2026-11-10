@@ -1,10 +1,10 @@
-/** Agent's place on screen: its page, and one conversation list per sprint.
+/** Agent's place on screen: its page and conversation history.
  * The dashboard routes input here. */
 
-import { type AgentBackend, AgentChat, type AgentScope } from "../agent/chat";
+import { type AgentBackend, AgentChat } from "../agent/chat";
 import type { AgentModel } from "../agent/models";
 import type { AgentChoice, ModelRef, Reasoning } from "../auth";
-import { message, type Workspace } from "../state/workspace";
+import { message } from "../state/workspace";
 import { type Key, keyId } from "./input";
 
 const WHEEL_LINES = 3;
@@ -17,34 +17,16 @@ export class AgentPanel {
   models: AgentModel[] = [];
   modelsPending = false;
   modelsError = "";
-  private readonly chats = new Map<number | null, AgentChat>();
+  readonly chat: AgentChat;
 
   constructor(
-    private readonly workspace: Workspace,
     private readonly backend: AgentBackend | undefined,
     /** Schedules a new frame after a reply streams in. */
-    private readonly redraw: () => void,
+    redraw: () => void,
     /** Runs when the model list or the model changes, so open pickers refresh. */
     private readonly changed: () => void,
-  ) {}
-
-  /** The sprint the agent talks about: the one on screen, else the board's active sprint. */
-  get scope(): AgentScope | null {
-    const { sprint } = this.workspace.query;
-    if (sprint !== null) return { sprint, label: this.workspace.sprint()?.name ?? `Sprint ${sprint}` };
-    const active = this.workspace.sprints.find((s) => s.state === "active");
-    return active ? { sprint: active.id, label: active.name } : null;
-  }
-
-  /** The conversations about the current scope's sprint. */
-  get chat(): AgentChat {
-    const scope = this.scope?.sprint ?? null;
-    let chat = this.chats.get(scope);
-    if (!chat) {
-      chat = new AgentChat(this.backend, this.redraw);
-      this.chats.set(scope, chat);
-    }
-    return chat;
+  ) {
+    this.chat = new AgentChat(backend, redraw);
   }
 
   get current(): AgentChoice | undefined {
@@ -95,7 +77,7 @@ export class AgentPanel {
   }
 
   send(): void {
-    void this.chat.send(this.scope);
+    void this.chat.send();
   }
 
   /** Keys while Agent is active. Typing goes to the text box; these are the rest. */
@@ -131,6 +113,6 @@ export class AgentPanel {
   }
 
   dispose(): void {
-    for (const chat of this.chats.values()) chat.dispose();
+    this.chat.dispose();
   }
 }

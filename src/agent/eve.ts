@@ -2,24 +2,26 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { type ClientConnection, client, ndJsonStream, PROTOCOL_VERSION } from "@agentclientprotocol/sdk";
+import { JiraSearchResult } from "../../agent/lib/jira-search";
 import { type AgentChoice, agentChoice, agentKeyName, loadAgentKey, rememberAgentChoice } from "../auth";
 import type { JiraClient } from "../jira/client";
-import { initialQuery } from "../jira/query";
 import type { AgentBackend } from "./chat";
+import { openJiraSearch } from "./jira-search";
 import { type AgentModel, listModels, PROVIDER_NAMES } from "./models";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const EVE = fileURLToPath(new URL("../../node_modules/eve/bin/eve.js", import.meta.url));
 const REQUEST_TIMEOUT = 120_000;
-const CONTEXT_LIMIT = 200;
 type Ask = Parameters<AgentBackend["ask"]>[0];
+type ResponseHandlers = Pick<Ask, "onText" | "onIssues">;
 
 interface EveProcess {
   child: ChildProcessWithoutNullStreams;
   connection: ClientConnection;
   ready: Promise<void>;
   sessions: Map<string, string>;
-  responses: Map<string, Ask["onText"]>;
+  responses: Map<string, ResponseHandlers>;
+  closeSearch: ReturnType<typeof openJiraSearch>["close"];
 }
 
 interface AgentSettings {
@@ -34,13 +36,13 @@ export class EveAgent implements AgentBackend {
   private active?: EveProcess;
 
   private constructor(
-    private readonly jira: Pick<JiraClient, "snapshot">,
+    private readonly jira: Pick<JiraClient, "search">,
     private choice: AgentChoice,
     private apiKey: string,
     private readonly settings: AgentSettings,
   ) {}
 
-  static create(jira: Pick<JiraClient, "snapshot">, settings = localSettings): EveAgent | undefined {
+  static create(jira: Pick<JiraClient, "search">, settings = localSettings): EveAgent | undefined {
     const choice = settings.read();
     const key = settings.key(choice.provider);
     return key ? new EveAgent(jira, choice, key, settings) : undefined;
@@ -67,12 +69,8 @@ export class EveAgent implements AgentBackend {
     await closing;
   }
 
-  async ask({ scope, thread, prompt, signal, history, onIssues, onText }: Ask): Promise<void> {
-    const choice = this.choice;
-    const { issues, more } = await this.jira.snapshot({ ...initialQuery, sprint: scope.sprint, limit: CONTEXT_LIMIT });
+  async ask({ thread, prompt, signal, history, onIssues, onText }: Ask): Promise<void> {
     signal.throwIfAborted();
-    if (choice !== this.choice) throw new Error("Agent settings changed. Send the question again.");
-    onIssues(issues);
     const process = this.connect();
     const { connection, sessions, responses } = process;
     await process.ready;
@@ -96,25 +94,13 @@ export class EveAgent implements AgentBackend {
     sessions.set(thread, sessionId);
     const cancel = () => {
       if (sessions.get(thread) === sessionId) sessions.delete(thread);
-      void connection.agent.notify("session/cancel", { sessionId }).catch(() => {});
+      responses.delete(sessionId);
     };
     const deadline = AbortSignal.timeout(REQUEST_TIMEOUT);
     const cancellationSignal = AbortSignal.any([signal, deadline]);
     cancellationSignal.addEventListener("abort", cancel, { once: true });
-    responses.set(sessionId, onText);
+    responses.set(sessionId, { onIssues, onText });
     try {
-      const snapshot = JSON.stringify({
-        sprint: scope.label,
-        more,
-        issues: issues.map(({ key, summary, status, category, assignee, priority }) => ({
-          key,
-          summary: summary.slice(0, 300),
-          status,
-          category,
-          assignee,
-          priority,
-        })),
-      });
       const prior =
         existing || history.length === 0
           ? ""
@@ -126,7 +112,7 @@ export class EveAgent implements AgentBackend {
             )}\n\n`;
       const response = await connection.agent.request(
         "session/prompt",
-        { sessionId, prompt: [{ type: "text", text: `${prior}Question: ${prompt}\n\nJira snapshot: ${snapshot}` }] },
+        { sessionId, prompt: [{ type: "text", text: `${prior}Question: ${prompt}` }] },
         { cancellationSignal, stopWaitingOnCancel: true },
       );
       if (response.stopReason === "cancelled" && !signal.aborted) throw new Error("Agent stopped before replying.");
@@ -143,11 +129,13 @@ export class EveAgent implements AgentBackend {
 
   private connect(): EveProcess {
     if (this.active) return this.active;
+    const search = openJiraSearch(this.jira);
     const child = spawn("node", [EVE, "acp"], {
       cwd: ROOT,
       stdio: "pipe",
       env: {
         ...process.env,
+        ...search.env,
         [agentKeyName(this.choice.provider)]: this.apiKey,
         // The agent definition reads these, so the dashboard decides the model in one place.
         PRODUCTBOARD_AGENT_PROVIDER: this.choice.provider,
@@ -157,12 +145,18 @@ export class EveAgent implements AgentBackend {
         EVE_TRACES: "off",
       },
     });
-    const responses = new Map<string, Ask["onText"]>();
+    const responses = new Map<string, ResponseHandlers>();
     child.stderr.resume();
     const connection = client()
       .onNotification("session/update", ({ params: { sessionId, update } }) => {
-        if (this.active === run && update.sessionUpdate === "agent_message_chunk" && update.content.type === "text")
-          responses.get(sessionId)?.(update.content.text);
+        const handlers = this.active === run ? responses.get(sessionId) : undefined;
+        if (!handlers) return;
+        if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text")
+          handlers.onText(update.content.text);
+        if (update.sessionUpdate === "tool_call_update" && update.status === "completed") {
+          const result = JiraSearchResult.safeParse(update.rawOutput);
+          if (result.success) handlers.onIssues(result.data.issues);
+        }
       })
       .connect(ndJsonStream(Writable.toWeb(child.stdin), Readable.toWeb(child.stdout)));
     child.on("error", (error) => connection.close(error));
@@ -182,7 +176,7 @@ export class EveAgent implements AgentBackend {
           throw new Error("Could not start Eve. Install Node.js 24 and run bun install.");
         },
       );
-    const run: EveProcess = { child, connection, ready, sessions: new Map(), responses };
+    const run: EveProcess = { child, connection, ready, sessions: new Map(), responses, closeSearch: search.close };
     this.active = run;
     return run;
   }
@@ -205,6 +199,7 @@ export class EveAgent implements AgentBackend {
     if (!run) return;
     this.active = undefined;
     const { child, connection, sessions } = run;
+    const searchClosed = run.closeSearch();
     try {
       if (!connection.signal.aborted) {
         await Promise.all([...sessions.values()].map((id) => this.closeSession(connection, id)));
@@ -212,6 +207,7 @@ export class EveAgent implements AgentBackend {
       }
     } finally {
       child.kill();
+      await searchClosed;
     }
   }
 }

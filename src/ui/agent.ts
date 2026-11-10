@@ -153,8 +153,7 @@ function drawWelcome(canvas: Canvas, left: number, width: number, top: number, h
   const center = (text: string) => left + Math.max(0, Math.floor((width - cells(text)) / 2));
   const welcome = Math.max(top, top + Math.floor((height - 2) / 2));
   const title = "What can I help you with?";
-  const subtitle = "Ask about sprint progress, risks, or next steps.";
-  const description = cells(subtitle) <= width ? subtitle : "Ask about sprint progress or risks.";
+  const description = "Ask about issues across Jira.";
   canvas.put(welcome, center(title), title, "title");
   canvas.put(welcome + 1, center(description), description, "muted", width);
 }

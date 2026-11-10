@@ -1,7 +1,7 @@
 /** Every Jira read the dashboard makes. The client never writes Jira data. */
 
 import type { z } from "zod";
-import { JiraError, type JiraHttp } from "./http";
+import { JiraError, type JiraHttp, type ReadOptions } from "./http";
 import {
   CommentPage,
   isComplete,
@@ -78,7 +78,8 @@ export class JiraClient {
 
   /** Up to `limit` issues for JQL, following Jira's page tokens. Each issue
    * also carries its sprints. */
-  async search(query: string, fields: string[], limit: number): Promise<RawIssue[]> {
+  async search(query: string, fields: string[], limit: number, options?: ReadOptions): Promise<RawIssue[]> {
+    options?.signal?.throwIfAborted();
     const sprintField = await this.sprintFieldId();
     const issues: RawIssue[] = [];
     const seen = new Set<string>();
@@ -94,6 +95,7 @@ export class JiraClient {
         },
         SearchPage,
         "issue list",
+        options,
       );
       issues.push(...page.issues.map((raw) => (sprintField ? withSprints(raw, raw.fields[sprintField]) : raw)));
       const next = page.nextPageToken ?? undefined;

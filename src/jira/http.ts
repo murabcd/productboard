@@ -43,6 +43,11 @@ type WaitingRead = PromiseWithResolvers<void>;
 /** Foreground reads are what the user is waiting for; they go first. */
 export type Priority = "foreground" | "background";
 
+export interface ReadOptions {
+  priority?: Priority;
+  signal?: AbortSignal;
+}
+
 export class JiraHttp {
   private readonly closing = new AbortController();
   private active = 0;
@@ -66,19 +71,16 @@ export class JiraHttp {
       if (value !== undefined) query.set(name, String(value));
     }
     const suffix = query.size ? `?${query}` : "";
-    return this.request("GET", `${path}${suffix}`, undefined, schema, what, priority);
+    return this.request("GET", `${path}${suffix}`, undefined, schema, what, { priority });
   }
 
   /** Jira's search is a POST, but it only reads. */
-  post<T>(path: string, body: unknown, schema: z.ZodType<T>, what: string): Promise<T> {
-    return this.request("POST", path, body, schema, what, "foreground");
+  post<T>(path: string, body: unknown, schema: z.ZodType<T>, what: string, options?: ReadOptions): Promise<T> {
+    return this.request("POST", path, body, schema, what, options);
   }
 
   close(): void {
-    this.closing.abort();
-    for (const queue of Object.values(this.waiting)) {
-      for (const read of queue.splice(0)) read.reject(new JiraError("Dashboard closed"));
-    }
+    this.closing.abort(new JiraError("Dashboard closed"));
   }
 
   /** Download a file. Jira redirects downloads to its media service; the
@@ -113,10 +115,11 @@ export class JiraHttp {
     body: unknown,
     schema: z.ZodType<T>,
     what: string,
-    priority: Priority,
+    { priority = "foreground", signal }: ReadOptions = {},
   ): Promise<T> {
     const response = await this.send(`https://${this.credentials.site}${path}`, priority, {
       method,
+      signal,
       headers: {
         ...this.auth(),
         Accept: "application/json",
@@ -129,23 +132,24 @@ export class JiraHttp {
 
   /** Fetch with retries; returns a successful or redirect response, else throws. */
   private async send(url: string, priority: Priority, init: RequestInit): Promise<Response> {
+    const stop = init.signal ? AbortSignal.any([this.closing.signal, init.signal]) : this.closing.signal;
     for (let attempt = 0; ; attempt++) {
-      if (this.closing.signal.aborted) throw new JiraError("Dashboard closed");
+      stop.throwIfAborted();
       let response: Response;
       try {
-        response = await this.slot(priority, () => {
-          const signal = AbortSignal.any([this.closing.signal, AbortSignal.timeout(TIMEOUT_MS)]);
+        response = await this.slot(priority, stop, () => {
+          const signal = AbortSignal.any([stop, AbortSignal.timeout(TIMEOUT_MS)]);
           return this.hedged(url, init, signal);
         });
       } catch (error) {
-        if (this.closing.signal.aborted) throw new JiraError("Dashboard closed");
+        stop.throwIfAborted();
         if (attempt >= RETRY_DELAYS.length) {
           const timedOut = error instanceof DOMException && error.name === "TimeoutError";
           throw new JiraError(
             timedOut ? "Jira timed out. Press r to retry." : "Could not reach Jira. Press r to retry.",
           );
         }
-        await this.sleep((RETRY_DELAYS[attempt] ?? 0) * 1000, this.closing.signal);
+        await this.sleep((RETRY_DELAYS[attempt] ?? 0) * 1000, stop);
         continue;
       }
       if (response.status < 400) return response;
@@ -155,7 +159,7 @@ export class JiraHttp {
       const retryAfter = Number(response.headers.get("Retry-After"));
       const wait = retryAfter > 0 ? retryAfter : (RETRY_DELAYS[attempt] ?? 0);
       if (wait > MAX_WAIT_SECONDS) throw new JiraError(message, response.status);
-      await this.sleep(wait * 1000, this.closing.signal);
+      await this.sleep(wait * 1000, stop);
     }
   }
 
@@ -178,17 +182,29 @@ export class JiraHttp {
   }
 
   /** Run at most MAX_PARALLEL requests at once; waiting foreground requests go first. */
-  private async slot<T>(priority: Priority, run: () => Promise<T>): Promise<T> {
+  private async slot<T>(priority: Priority, signal: AbortSignal, run: () => Promise<T>): Promise<T> {
     const limit = priority === "foreground" ? MAX_PARALLEL : MAX_BACKGROUND;
     if (this.active >= limit) {
       const waiting = Promise.withResolvers<void>();
-      this.waiting[priority].push(waiting);
-      await waiting.promise;
+      const queue = this.waiting[priority];
+      const cancel = () => {
+        const at = queue.indexOf(waiting);
+        if (at === -1) return;
+        queue.splice(at, 1);
+        waiting.reject(signal.reason);
+      };
+      queue.push(waiting);
+      signal.addEventListener("abort", cancel, { once: true });
+      try {
+        await waiting.promise;
+      } finally {
+        signal.removeEventListener("abort", cancel);
+      }
     } else {
       this.active++;
     }
     try {
-      this.closing.signal.throwIfAborted();
+      signal.throwIfAborted();
       return await run();
     } finally {
       this.active--;

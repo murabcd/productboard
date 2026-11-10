@@ -47,7 +47,6 @@ export type Action =
   | "filter"
   | "display"
   | "board"
-  | "sprint"
   | "brief"
   | "peek"
   | "details"
@@ -73,5 +72,5 @@ export type Target =
   | { kind: "choice"; value: string }
   /** The search box above the list. */
   | { kind: "box" }
-  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "sprint" | "board" }
+  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" }
   | { kind: "agent-cite"; key: string };

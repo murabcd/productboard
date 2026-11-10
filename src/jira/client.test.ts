@@ -124,6 +124,38 @@ describe("HTTP", () => {
     }
   });
 
+  test("canceling a queued background search leaves foreground reads available", async () => {
+    const held = deferred<void>();
+    const { client, requests } = fakeJira(async (_url, body) => {
+      if (body?.jql !== "project = FOREGROUND") await held.promise;
+      return json({ issues: [], isLast: true });
+    });
+    const active = ["EX", "WEB", "DESIGN", "OPS"].map((project) =>
+      client.search(`project = ${project}`, [], 1, { priority: "background" }),
+    );
+    const controller = new AbortController();
+    let queuedError: unknown;
+    const queued = client
+      .search("project = STOPPED", [], 1, { priority: "background", signal: controller.signal })
+      .catch((error: unknown) => {
+        queuedError = error;
+      });
+    try {
+      await settle();
+      expect(requests).toHaveLength(4);
+      const reason = new Error("Search stopped");
+      controller.abort(reason);
+      await settle();
+      expect(queuedError).toBe(reason);
+      await client.search("project = FOREGROUND", [], 1);
+      expect(requests).toHaveLength(5);
+    } finally {
+      held.resolve();
+      await Promise.allSettled([...active, queued]);
+    }
+    expect(requests.some(({ body }) => body?.jql === "project = STOPPED")).toBe(false);
+  });
+
   test("a rejected token explains how to fix it and is not retried", async () => {
     let calls = 0;
     const fetcher = fakeFetch(async () => {

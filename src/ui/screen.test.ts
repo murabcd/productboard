@@ -32,7 +32,7 @@ async function start(
     sprints: mock(() => deferred<never>().promise),
   };
   const work = new Workspace(source);
-  work.query = { ...initialQuery, view: View.All, sprint: options.agent ? 25 : null };
+  work.query = { ...initialQuery, view: View.All };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
   const client = {
     site: "example.atlassian.net",
@@ -184,9 +184,9 @@ describe("OpenTUI shell", () => {
     expect(shown?.visible).toBe(false);
   });
 
-  test("Agent answers about the sprint, and a cited issue opens and closes back to Agent", async () => {
-    const ask = mock<AgentBackend["ask"]>(async ({ onIssues, onText, scope }) => {
-      onIssues(snapshot({ ...initialQuery, sprint: scope.sprint }, ["EX-1"]).issues);
+  test("Agent answers without a selected sprint and opens an issue cited from Jira", async () => {
+    const ask = mock<AgentBackend["ask"]>(async ({ onIssues, onText }) => {
+      onIssues(snapshot({ ...initialQuery, view: View.All }, ["EX-1"]).issues);
       onText("Review EX-1 before release.");
     });
     const { setup, dashboard } = await start(100, { agent: fakeAgent(ask) });
@@ -195,7 +195,7 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.pressEnter();
     await settle();
     await setup.renderOnce();
-    expect(ask.mock.calls[0]?.[0].scope.sprint).toBe(25);
+    expect(ask).toHaveBeenCalledTimes(1);
     const lines = setup.captureCharFrame().split("\n");
     const citation = lines.findIndex((line) => line.includes("Review EX-1"));
     expect(citation).toBeGreaterThan(0);
