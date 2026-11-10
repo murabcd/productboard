@@ -1,36 +1,71 @@
-/** An in-terminal preview of an issue's image attachments. */
+/** Image selection and downloads for the attachment preview. */
 
+import type { JiraClient } from "../jira/client";
 import type { Attachment } from "../jira/types";
+import { message } from "../state/workspace";
+
+interface ImageRead {
+  state: { kind: "loading" } | { kind: "ready"; bytes: Uint8Array } | { kind: "error"; message: string };
+}
 
 export interface Preview {
   readonly images: Attachment[];
-  index: number;
-  /** The current image's content, once downloaded. */
-  bytes: Uint8Array | null;
-  loading: boolean;
-  error: string;
+  readonly index: number;
+  readonly image: Attachment;
+  readonly read: ImageRead;
 }
 
-export const currentImage = (preview: Preview): Attachment | undefined => preview.images[preview.index];
+export class ImagePreviews {
+  current: Preview | null = null;
+  private readonly reads = new Map<string, ImageRead>();
 
-export function previewOf(images: Attachment[], start: Attachment): Preview {
-  return { images, index: Math.max(0, images.indexOf(start)), bytes: null, loading: false, error: "" };
-}
+  constructor(
+    private readonly fetch: JiraClient["attachment"],
+    private readonly redraw: () => void,
+  ) {}
 
-/** Recently viewed images, so flipping back and forth does not download again. */
-export class ImageCache {
-  private readonly images = new Map<string, Uint8Array>();
-
-  constructor(private readonly limit = 12) {}
-
-  get(id: string): Uint8Array | undefined {
-    return this.images.get(id);
+  open(images: Attachment[], start: Attachment): void {
+    this.select(images, images.indexOf(start));
   }
 
-  set(id: string, bytes: Uint8Array): void {
-    this.images.delete(id);
-    this.images.set(id, bytes);
-    const oldest = this.images.keys().next().value;
-    if (this.images.size > this.limit && oldest !== undefined) this.images.delete(oldest);
+  step(delta: number): void {
+    if (!this.current) return;
+    const { images, index } = this.current;
+    this.select(images, (index + delta + images.length) % images.length);
+  }
+
+  close(): void {
+    this.current = null;
+  }
+
+  private select(images: Attachment[], index: number): void {
+    const image = images[index];
+    if (!image) return;
+    let read = this.reads.get(image.id);
+    if (!read) {
+      read = { state: { kind: "loading" } };
+      this.reads.set(image.id, read);
+      void this.load(image.id, read);
+    }
+    this.current = { images, index, image, read };
+  }
+
+  private async load(id: string, read: ImageRead): Promise<void> {
+    try {
+      read.state = { kind: "ready", bytes: await this.fetch(id) };
+      this.reads.delete(id);
+      this.reads.set(id, read);
+      if (this.reads.size > 12) {
+        for (const [key, cached] of this.reads) {
+          if (cached.state.kind === "loading") continue;
+          this.reads.delete(key);
+          break;
+        }
+      }
+    } catch (error) {
+      this.reads.delete(id);
+      read.state = { kind: "error", message: message(error) };
+    }
+    if (this.current?.read === read) this.redraw();
   }
 }

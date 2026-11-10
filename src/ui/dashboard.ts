@@ -15,7 +15,7 @@ import { helpPanel, type Panel, sprintPanel } from "./panel";
 import type { Peek } from "./peek";
 import { Picker, type PickerItem, type PickerKind } from "./picker";
 import { PICKERS } from "./pickers";
-import { currentImage, ImageCache, type Preview, previewOf } from "./preview";
+import { ImagePreviews, type Preview } from "./preview";
 
 export interface Opener {
   open(url: string): Promise<void>;
@@ -52,7 +52,6 @@ export class Dashboard {
   personLabel = "All people";
   picker: Picker | null = null;
   modal: Panel | null = null;
-  preview: Preview | null = null;
   /** A short confirmation or error after open/copy; it clears itself. */
   notice = "";
   height = 24;
@@ -63,7 +62,7 @@ export class Dashboard {
   readonly agent: AgentPanel;
   private autoSprintPicker = true;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
-  private readonly imageCache = new ImageCache();
+  private readonly images: ImagePreviews;
   private readonly details: IssueDetails;
   private readonly unsubscribe: () => void;
 
@@ -75,6 +74,7 @@ export class Dashboard {
     agentBackend?: AgentBackend,
   ) {
     this.list = new IssueList(workspace);
+    this.images = new ImagePreviews((id) => client.attachment(id), redraw);
     this.agent = new AgentPanel(workspace, agentBackend, redraw, () => this.update());
     this.details = new IssueDetails(
       (key) => client.detail(key),
@@ -102,6 +102,7 @@ export class Dashboard {
   dispose(): void {
     this.unsubscribe();
     this.details.dispose();
+    this.images.close();
     this.agent.dispose();
     clearTimeout(this.noticeTimer);
   }
@@ -167,8 +168,7 @@ export class Dashboard {
 
   /** Images preview over the details panel; other files open in Helium. */
   openAttachment(item: Attachment): void {
-    const images = this.attachments.filter(isImage);
-    if (isImage(item)) this.openPreview(previewOf(images, item));
+    if (isImage(item)) this.images.open(this.attachments.filter(isImage), item);
     else this.openUrl(this.attachmentUrl(item), "Opened attachment");
   }
 
@@ -264,46 +264,8 @@ export class Dashboard {
     return `https://${this.site}/secure/attachment/${encodeURIComponent(item.id)}/${encodeURIComponent(item.filename)}`;
   }
 
-  private openPreview(preview: Preview): void {
-    this.preview = preview;
-    this.loadImage(preview);
-  }
-
-  private stepImage(preview: Preview, delta: number): void {
-    const count = preview.images.length;
-    preview.index = (preview.index + delta + count) % count;
-    preview.bytes = null;
-    preview.error = "";
-    this.loadImage(preview);
-  }
-
-  /** Download the current image; a late download for another image is dropped. */
-  private loadImage(preview: Preview): void {
-    const item = currentImage(preview);
-    if (!item) return;
-    const cached = this.imageCache.get(item.id);
-    if (cached) {
-      preview.bytes = cached;
-      return;
-    }
-    const showing = () => this.preview === preview && currentImage(preview) === item;
-    preview.loading = true;
-    this.client
-      .attachment(item.id)
-      .then(
-        (bytes) => {
-          this.imageCache.set(item.id, bytes);
-          if (showing()) preview.bytes = bytes;
-        },
-        (error: unknown) => {
-          if (showing()) preview.error = message(error);
-        },
-      )
-      .finally(() => {
-        if (!showing()) return;
-        preview.loading = false;
-        this.redraw();
-      });
+  get preview(): Preview | null {
+    return this.images.current;
   }
 
   /** Open the shown issue in Helium, or copy its link. */
@@ -361,7 +323,7 @@ export class Dashboard {
 
   /** Back to the plain list, dropping any open picker, panel or prompt. */
   private closeLayers(): void {
-    this.preview = null;
+    this.images.close();
     this.picker = null;
     this.modal = null;
     this.finding = null;
@@ -490,7 +452,7 @@ export class Dashboard {
       case "agent-cite": {
         const issue = this.agent.chat.current.issues.get(target.key);
         if (!issue) return;
-        this.preview = null;
+        this.images.close();
         this.picker = null;
         this.openDetail(issue);
         return;
@@ -597,13 +559,12 @@ export class Dashboard {
 
   private readonly previewKeys = bindings<(preview: Preview) => void>({
     "q escape ctrl-c": () => {
-      this.preview = null;
+      this.images.close();
     },
-    "right l j down pagedown": (preview) => this.stepImage(preview, 1),
-    "left h k up pageup": (preview) => this.stepImage(preview, -1),
+    "right l j down pagedown": () => this.images.step(1),
+    "left h k up pageup": () => this.images.step(-1),
     o: (preview) => {
-      const item = currentImage(preview);
-      if (item) this.openUrl(this.attachmentUrl(item), "Opened in Helium");
+      this.openUrl(this.attachmentUrl(preview.image), "Opened in Helium");
     },
   });
 

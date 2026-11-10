@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testing";
 import type { AgentBackend } from "../agent/chat";
+import type { JiraClient } from "../jira/client";
 import { initialQuery, View } from "../jira/query";
 import { Workspace } from "../state/workspace";
 import { deferred, fakeAgent, settle, snapshot } from "../testing";
@@ -20,7 +21,11 @@ afterEach(async () => {
   setup = undefined;
 });
 
-async function start(width = 100, agent?: AgentBackend) {
+async function start(
+  width = 100,
+  agent?: AgentBackend,
+  reads: Partial<Pick<JiraClient, "detail" | "attachment">> = {},
+) {
   const source = {
     snapshot: mock(() => deferred<never>().promise),
     catalog: mock(() => deferred<never>().promise),
@@ -33,6 +38,7 @@ async function start(width = 100, agent?: AgentBackend) {
     site: "example.atlassian.net",
     detail: mock(() => deferred<never>().promise),
     attachment: mock(() => deferred<never>().promise),
+    ...reads,
   };
   const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {}, agent);
   setup = await createTestRenderer({ width, height: 30, exitOnCtrlC: false });
@@ -93,9 +99,16 @@ describe("OpenTUI shell", () => {
   });
 
   test("a previewed image is shown in its area and hidden afterwards", async () => {
-    const { setup, dashboard } = await start();
     const image = { id: "1", filename: "dot.png", mimeType: "image/png", size: 70, author: "D", created: "" };
-    dashboard.preview = { images: [image], index: 0, bytes: PNG, loading: false, error: "" };
+    const { setup } = await start(100, undefined, {
+      detail: async () => ({ attachments: [image], description: [], comments: [], facts: [] }),
+      attachment: async () => PNG,
+    });
+    await setup.mockInput.pressEnter();
+    await settle();
+    await setup.mockInput.typeText("i");
+    await setup.mockInput.pressEnter();
+    await settle();
     await setup.renderOnce();
     await setup.renderOnce();
     const view = setup.renderer.root.getRenderable("dashboard");
@@ -103,7 +116,8 @@ describe("OpenTUI shell", () => {
     expect(shown?.visible).toBe(true);
     expect([shown?.x, shown?.y]).toEqual([22, 8]);
     expect(setup.captureCharFrame()).toContain("dot.png");
-    dashboard.preview = null;
+    setup.mockInput.pressEscape();
+    await Bun.sleep(30);
     await setup.renderOnce();
     expect(shown?.visible).toBe(false);
   });

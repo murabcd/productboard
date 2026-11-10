@@ -213,16 +213,19 @@ describe("dashboard", () => {
     expect(dashboard.preview?.images.map((i) => i.filename)).toEqual(["a.png", "b.jpg"]);
     downloads[0]?.reply.resolve(new Uint8Array([1]));
     await settle();
-    expect(dashboard.preview?.bytes).toEqual(new Uint8Array([1]));
+    expect(dashboard.preview?.read.state).toEqual({ kind: "ready", bytes: new Uint8Array([1]) });
 
     dashboard.handle({ name: "right" });
     expect(downloads[1]?.id).toBe("3");
-    expect(dashboard.preview?.bytes).toBeNull();
+    expect(dashboard.preview?.read.state).toEqual({ kind: "loading" });
     dashboard.handle({ name: "left" });
-    expect(dashboard.preview?.bytes).toEqual(new Uint8Array([1])); // from the cache
+    expect(dashboard.preview?.read.state).toEqual({ kind: "ready", bytes: new Uint8Array([1]) }); // from the cache
+    dashboard.handle({ name: "right" });
+    expect(downloads).toHaveLength(2);
+    dashboard.handle({ name: "left" });
     downloads[1]?.reply.resolve(new Uint8Array([3])); // late; another image is showing
     await settle();
-    expect(dashboard.preview?.bytes).toEqual(new Uint8Array([1]));
+    expect(dashboard.preview?.read.state).toEqual({ kind: "ready", bytes: new Uint8Array([1]) });
 
     expect(draw(dashboard, 80, 24).text(6)).toContain("1 of 2");
     dashboard.handle(ESC);

@@ -28,7 +28,7 @@ import { currentPage, NAVIGATION, type NavItem } from "./navigation";
 import { detailBlocks, type Panel } from "./panel";
 import { drawPeek } from "./peek";
 import { filterChips, PICKERS } from "./pickers";
-import { currentImage, type Preview } from "./preview";
+import type { Preview } from "./preview";
 import { priorityMark, statusIcon } from "./status";
 
 export function frame(d: Dashboard): Canvas {
@@ -346,8 +346,10 @@ function drawModal(canvas: Canvas, d: Dashboard, panel: Panel): void {
 }
 
 function drawPreview(canvas: Canvas, d: Dashboard, preview: Preview): void {
-  const item = currentImage(preview);
-  if (!item) return;
+  const {
+    image: item,
+    read: { state },
+  } = preview;
   canvas.put(BODY_TOP - 3, 2, item.filename, "title");
   canvas.put(
     BODY_TOP - 2,
@@ -355,8 +357,8 @@ function drawPreview(canvas: Canvas, d: Dashboard, preview: Preview): void {
     `${preview.index + 1} of ${preview.images.length} · ${describeAttachment(item)}`,
     "accent",
   );
-  if (preview.error) canvas.put(BODY_TOP, 2, `Could not load the image: ${preview.error}`, "error");
-  else if (!preview.bytes) canvas.put(BODY_TOP, 2, "Loading image…", "warning");
+  if (state.kind === "error") canvas.put(BODY_TOP, 2, `Could not load the image: ${state.message}`, "error");
+  else if (state.kind === "loading") canvas.put(BODY_TOP, 2, "Loading image…", "warning");
   // OpenTUI draws the image itself, with the best protocol the terminal has.
   else {
     const height = canvas.height - BODY_TOP - FOOTER_ROWS - 1;

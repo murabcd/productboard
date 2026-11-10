@@ -208,9 +208,9 @@ class DashboardView extends Renderable {
   }
 
   private placeImage(area: Rect | undefined): void {
-    const bytes = this.dashboard.preview?.bytes;
-    if (!this.place(this.image, area) || !bytes) return;
-    if (this.image.source !== bytes) this.image.source = bytes;
+    const state = this.dashboard.preview?.read.state;
+    if (!this.place(this.image, area) || state?.kind !== "ready") return;
+    if (this.image.source !== state.bytes) this.image.source = state.bytes;
   }
 
   private placeComposer(area: Rect | undefined): void {
