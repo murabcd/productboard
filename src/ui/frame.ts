@@ -36,7 +36,7 @@ export function frame(d: Dashboard): Canvas {
   const layer = d.layer();
   const canvas = new Canvas(width, height);
   if (layer.kind === "too-small") {
-    canvas.put(1, 1, `productboard · make this pane at least ${MIN_WIDTH} × ${MIN_HEIGHT}`, "warning");
+    canvas.put(1, 1, `PRODUCTBOARD · make this pane at least ${MIN_WIDTH} × ${MIN_HEIGHT}`, "warning");
     canvas.put(3, 1, "q quit", "text");
     return canvas;
   }
@@ -57,15 +57,21 @@ const navTarget = (item: NavItem): Target =>
 function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number): void {
   const { width } = canvas;
   canvas.paint(0, 0, width, "chrome");
-  canvas.put(0, 2, "◆", "accent");
-  // The narrowest panes keep only the mark, so every page tab still fits.
+  // Give the tabs the full row in the narrowest panes.
   const compact = !sidebar && width < 80;
-  if (!compact) canvas.put(0, 4, "productboard", "title");
+  let x = 2;
+  if (!compact) {
+    const product = "PRODUCT";
+    const board = "BOARD";
+    canvas.put(0, x, product, "title");
+    x += cells(product);
+    canvas.put(0, x, board, "mutedBold");
+    x += cells(board) + 4;
+  }
   const right = buttonsRight(canvas, 0, width - 2, [{ label: "^K", target: action("commands"), style: "accent" }]);
   if (sidebar) return;
   // Narrow panes: pages sit in the top bar, the current one highlighted.
   const here = currentPage(d.workspace.query.view, d.agent.tab);
-  let x = compact ? 4 : 18;
   for (const item of NAVIGATION) {
     const label = ` ${item.short} `;
     if (x + cells(label) > right - 1) break;
