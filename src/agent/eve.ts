@@ -14,22 +14,36 @@ const REQUEST_TIMEOUT = 120_000;
 const CONTEXT_LIMIT = 200;
 type Ask = Parameters<AgentBackend["ask"]>[0];
 
+interface EveProcess {
+  child: ChildProcessWithoutNullStreams;
+  connection: ClientConnection;
+  ready: Promise<void>;
+  sessions: Map<string, string>;
+  responses: Map<string, Ask["onText"]>;
+}
+
+interface AgentSettings {
+  read: typeof agentChoice;
+  key: typeof loadAgentKey;
+  remember: typeof rememberAgentChoice;
+}
+
+const localSettings: AgentSettings = { read: agentChoice, key: loadAgentKey, remember: rememberAgentChoice };
+
 export class EveAgent implements AgentBackend {
-  private process?: ChildProcessWithoutNullStreams;
-  private ready?: Promise<ClientConnection>;
-  private connection?: ClientConnection;
-  private readonly sessions = new Map<string, string>();
+  private active?: EveProcess;
 
   private constructor(
     private readonly jira: Pick<JiraClient, "snapshot">,
     private choice: AgentChoice,
     private apiKey: string,
+    private readonly settings: AgentSettings,
   ) {}
 
-  static create(jira: Pick<JiraClient, "snapshot">): EveAgent | undefined {
-    const choice = agentChoice();
-    const key = loadAgentKey(choice.provider);
-    return key ? new EveAgent(jira, choice, key) : undefined;
+  static create(jira: Pick<JiraClient, "snapshot">, settings = localSettings): EveAgent | undefined {
+    const choice = settings.read();
+    const key = settings.key(choice.provider);
+    return key ? new EveAgent(jira, choice, key, settings) : undefined;
   }
 
   get current(): AgentChoice {
@@ -37,28 +51,34 @@ export class EveAgent implements AgentBackend {
   }
 
   models(): Promise<AgentModel[]> {
-    return listModels({ openai: loadAgentKey("openai"), anthropic: loadAgentKey("anthropic") });
+    return listModels({ openai: this.settings.key("openai"), anthropic: this.settings.key("anthropic") });
   }
 
   /** Answer with another model or reasoning from now on, and on the next start.
    * The Eve process reads both at launch, so the next question starts a new one;
    * each question carries the recent conversation, so nothing is lost. */
   async use(choice: AgentChoice): Promise<void> {
-    const key = loadAgentKey(choice.provider);
+    const key = this.settings.key(choice.provider);
     if (!key) throw new Error(`No ${PROVIDER_NAMES[choice.provider]} API key: run board --agent-login`);
-    await this.close();
+    this.settings.remember(choice);
+    const closing = this.close();
     this.choice = choice;
     this.apiKey = key;
-    rememberAgentChoice(choice);
+    await closing;
   }
 
   async ask({ scope, thread, prompt, signal, history, onIssues, onText }: Ask): Promise<void> {
+    const choice = this.choice;
     const { issues, more } = await this.jira.snapshot({ ...initialQuery, sprint: scope.sprint, limit: CONTEXT_LIMIT });
     signal.throwIfAborted();
+    if (choice !== this.choice) throw new Error("Agent settings changed. Send the question again.");
     onIssues(issues);
-    const connection = await this.connect();
+    const process = this.connect();
+    const { connection, sessions, responses } = process;
+    await process.ready;
     signal.throwIfAborted();
-    const existing = this.sessions.get(thread);
+    if (this.active !== process) throw new Error("Agent restarted. Send the question again.");
+    const existing = sessions.get(thread);
     const sessionId =
       existing ??
       (
@@ -68,17 +88,20 @@ export class EveAgent implements AgentBackend {
           { cancellationSignal: AbortSignal.timeout(REQUEST_TIMEOUT), stopWaitingOnCancel: true },
         )
       ).sessionId;
-    signal.throwIfAborted();
-    this.sessions.set(thread, sessionId);
+    if (signal.aborted || this.active !== process) {
+      if (!existing) void this.closeSession(connection, sessionId);
+      signal.throwIfAborted();
+      throw new Error("Agent restarted. Send the question again.");
+    }
+    sessions.set(thread, sessionId);
     const cancel = () => {
-      if (this.sessions.get(thread) === sessionId) this.sessions.delete(thread);
+      if (sessions.get(thread) === sessionId) sessions.delete(thread);
       void connection.agent.notify("session/cancel", { sessionId }).catch(() => {});
     };
     const deadline = AbortSignal.timeout(REQUEST_TIMEOUT);
     const cancellationSignal = AbortSignal.any([signal, deadline]);
-    signal.addEventListener("abort", cancel, { once: true });
-    deadline.addEventListener("abort", cancel, { once: true });
-    this.responses.set(sessionId, onText);
+    cancellationSignal.addEventListener("abort", cancel, { once: true });
+    responses.set(sessionId, onText);
     try {
       const snapshot = JSON.stringify({
         sprint: scope.label,
@@ -113,25 +136,13 @@ export class EveAgent implements AgentBackend {
         deadline.aborted ? "Agent timed out. Try again." : "Agent could not reply. Check the provider key and model.",
       );
     } finally {
-      this.responses.delete(sessionId);
-      signal.removeEventListener("abort", cancel);
-      deadline.removeEventListener("abort", cancel);
+      responses.delete(sessionId);
+      cancellationSignal.removeEventListener("abort", cancel);
     }
   }
 
-  private readonly responses = new Map<string, Ask["onText"]>();
-
-  private connect(): Promise<ClientConnection> {
-    if (this.ready) return this.ready;
-    const ready = this.launch().catch(async () => {
-      if (this.ready === ready) await this.close();
-      throw new Error("Could not start Eve. Install Node.js 24 and run bun install.");
-    });
-    this.ready = ready;
-    return ready;
-  }
-
-  private async launch(): Promise<ClientConnection> {
+  private connect(): EveProcess {
+    if (this.active) return this.active;
     const child = spawn("node", [EVE, "acp"], {
       cwd: ROOT,
       stdio: "pipe",
@@ -146,26 +157,34 @@ export class EveAgent implements AgentBackend {
         EVE_TRACES: "off",
       },
     });
-    this.process = child;
-    // ACP reserves stdout for protocol messages. Drain diagnostics without writing over the terminal UI.
+    const responses = new Map<string, Ask["onText"]>();
     child.stderr.resume();
     const connection = client()
       .onNotification("session/update", ({ params: { sessionId, update } }) => {
-        if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text")
-          this.responses.get(sessionId)?.(update.content.text);
+        if (this.active === run && update.sessionUpdate === "agent_message_chunk" && update.content.type === "text")
+          responses.get(sessionId)?.(update.content.text);
       })
       .connect(ndJsonStream(Writable.toWeb(child.stdin), Readable.toWeb(child.stdout)));
-    this.connection = connection;
     child.on("error", (error) => connection.close(error));
     void connection.closed.then(() => {
-      if (this.process === child) void this.close();
+      if (this.active === run) void this.close();
     });
-    await connection.agent.request(
-      "initialize",
-      { protocolVersion: PROTOCOL_VERSION, clientInfo: { name: "productboard", version: "1.0.0" } },
-      { cancellationSignal: AbortSignal.timeout(REQUEST_TIMEOUT), stopWaitingOnCancel: true },
-    );
-    return connection;
+    const ready = connection.agent
+      .request(
+        "initialize",
+        { protocolVersion: PROTOCOL_VERSION, clientInfo: { name: "productboard", version: "1.0.0" } },
+        { cancellationSignal: AbortSignal.timeout(REQUEST_TIMEOUT), stopWaitingOnCancel: true },
+      )
+      .then(
+        () => {},
+        () => {
+          if (this.active === run) void this.close();
+          throw new Error("Could not start Eve. Install Node.js 24 and run bun install.");
+        },
+      );
+    const run: EveProcess = { child, connection, ready, sessions: new Map(), responses };
+    this.active = run;
+    return run;
   }
 
   private async closeSession(connection: ClientConnection, sessionId: string): Promise<void> {
@@ -182,18 +201,17 @@ export class EveAgent implements AgentBackend {
   }
 
   async close(): Promise<void> {
-    const child = this.process;
-    const connection = this.connection;
-    const sessions = [...this.sessions.values()];
-    this.process = undefined;
-    this.connection = undefined;
-    this.ready = undefined;
-    this.sessions.clear();
-    this.responses.clear();
-    if (connection && !connection.signal.aborted) {
-      await Promise.all(sessions.map((id) => this.closeSession(connection, id)));
-      connection.close();
+    const run = this.active;
+    if (!run) return;
+    this.active = undefined;
+    const { child, connection, sessions } = run;
+    try {
+      if (!connection.signal.aborted) {
+        await Promise.all([...sessions.values()].map((id) => this.closeSession(connection, id)));
+        connection.close();
+      }
+    } finally {
+      child.kill();
     }
-    child?.kill();
   }
 }

@@ -92,4 +92,6 @@ a question. It reads a bounded sprint snapshot and passes the selected fields
 and the prompt to the configured provider using ACP. Jira transport and
 credentials stay in the dashboard. Provider credentials come from the shell
 or macOS Keychain. The dashboard keeps conversation history in memory and
-cancels pending work on exit.
+cancels pending work on exit. Sessions and streaming callbacks belong to the
+Eve process that created them. If the model changes during a Jira read, the
+old question cannot start a session with the new settings.
