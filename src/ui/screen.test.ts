@@ -153,9 +153,9 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("2");
     expect(dashboard.workspace.query.view).toBe(View.Mentions);
     await setup.renderOnce();
-    const allIssues = setup.captureCharFrame().split("\n")[0]?.indexOf(" All ") ?? -1;
+    const allIssues = setup.captureCharFrame().split("\n")[1]?.indexOf(" All ") ?? -1;
     expect(allIssues).toBeGreaterThan(0);
-    await setup.mockMouse.click(allIssues + 1, 0);
+    await setup.mockMouse.click(allIssues + 1, 1);
     expect(dashboard.workspace.query.view).toBe(View.All);
   });
 

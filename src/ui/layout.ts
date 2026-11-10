@@ -1,5 +1,5 @@
-/** Screen layout. Row 0 is the top bar, rows 1–4 the view header, row 5 the
- * column headings, and the last two rows the footer bar and the status line.
+/** Screen layout. Row 0 is the title bar, rows 1–4 hold navigation and view
+ * controls, row 5 holds the column headings, and the last row is the footer.
  * Key handling pages by these same sizes, so a page matches what is on screen. */
 
 export const MIN_WIDTH = 60;

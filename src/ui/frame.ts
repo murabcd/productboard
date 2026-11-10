@@ -7,11 +7,11 @@ import { describeAttachment, type Issue, shortSprintName } from "../jira/types";
 import { cells } from "../text";
 import { drawAgent } from "./agent";
 import { Canvas, type Style } from "./canvas";
-import { action, buttonsRight } from "./controls";
+import { action, buttons } from "./controls";
 import type { Dashboard, Layer } from "./dashboard";
 import { drawDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
-import { drawHeader } from "./header";
+import { drawHeader, drawPageTitle, type PageHeader, pageHeader } from "./header";
 import type { Target } from "./input";
 import {
   BODY_TOP,
@@ -42,10 +42,12 @@ export function frame(d: Dashboard): Canvas {
   }
   const sidebar = sidebarWidth(width);
   const content = new Canvas(width - sidebar, height);
+  const header = pageHeader(d);
+  drawHeader(content, header, sidebar ? 1 : 2);
   drawWorkspace(content, d, layer);
   canvas.paste(content, sidebar, 0);
   if (sidebar) drawSidebar(canvas, d, sidebar);
-  drawTopBar(canvas, d, sidebar);
+  drawTopBar(canvas, d, sidebar, header);
   if (layer.kind === "picker") drawDialog(canvas, layer.picker, PICKERS[layer.picker.kind].empty?.(d) ?? "No matches");
 
   return canvas;
@@ -54,33 +56,33 @@ export function frame(d: Dashboard): Canvas {
 const navTarget = (item: NavItem): Target =>
   item.to === "agent" ? { kind: "agent", action: "tab" } : { kind: "view", view: item.to };
 
-function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number): void {
+function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number, header: PageHeader): void {
   const { width } = canvas;
-  canvas.paint(0, 0, width, "chrome");
-  // Give the tabs the full row in the narrowest panes.
-  const compact = !sidebar && width < 80;
-  let x = 2;
-  if (!compact) {
-    const product = "PRODUCT";
-    const board = "BOARD";
-    canvas.put(0, x, product, "title");
-    x += cells(product);
-    canvas.put(0, x, board, "mutedBold");
-    x += cells(board) + 4;
-  }
-  const right = buttonsRight(canvas, 0, width - 2, [{ label: "^K", target: action("commands"), style: "accent" }]);
+  const product = "PRODUCT";
+  const board = "BOARD";
+  const boardStart = 2 + cells(product);
+  canvas.put(0, 2, product, "title");
+  canvas.put(0, boardStart, board, "mutedBold");
+  const shortcut = " ^K ";
+  const right = width - 2 - cells(shortcut);
+  canvas.put(0, right, shortcut, "muted");
+  canvas.mark(0, right, cells(shortcut), action("commands"));
+  const titleStart = sidebar ? sidebar + 2 : boardStart + cells(board) + 3;
+  drawPageTitle(canvas, header, titleStart, right - 2);
   if (sidebar) return;
-  // Narrow panes: pages sit in the top bar, the current one highlighted.
+
   const here = currentPage(d.workspace.query.view, d.agent.tab);
-  for (const item of NAVIGATION) {
-    const label = ` ${item.short} `;
-    if (x + cells(label) > right - 1) break;
-    const active = item === here;
-    canvas.put(0, x, label, active ? "accentBold" : "muted");
-    if (active) canvas.paint(0, x, cells(label), "selected");
-    canvas.mark(0, x, cells(label), navTarget(item));
-    x += cells(label) + (compact ? 0 : 1);
-  }
+  buttons(
+    canvas,
+    1,
+    2,
+    NAVIGATION.map((item) => ({
+      label: item.short,
+      target: navTarget(item),
+      tab: item === here ? "selected" : "unselected",
+    })),
+    width - 2,
+  );
 }
 
 function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
@@ -101,7 +103,6 @@ function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
 
 function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
   const { width, height } = canvas;
-  drawHeader(canvas, d);
   // A picker opens as a dialog over the page, so the page stays drawn under it.
   if (layer.kind === "agent" || (d.agent.tab && layer.kind === "picker")) {
     // Under the shared header, where the list would start, and above the footer.

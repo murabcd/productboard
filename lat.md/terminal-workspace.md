@@ -48,11 +48,12 @@ The footer shows counts, sync status, and shortcuts.
 [[src/ui/navigation.ts#NAV_GROUPS]] groups Search, the personal pages, and the
 team pages in sidebar order with a blank row between groups.
 [[src/ui/navigation.ts#NAVIGATION]] flattens that order for number keys, Tab,
-and the command palette. On narrow panes, the same order appears in the top bar.
+and the command palette. On narrow panes, the same order appears as tabs
+below the title bar.
 
-[[src/ui/header.ts#drawHeader]] draws the same header on every page: the title,
-a description, and one toolbar with tabs, board and sprint, the Filter menu,
-active filters, and page actions on the right.
+[[src/ui/header.ts#pageHeader]] supplies the title for the row shared with the
+app name and command palette shortcut. [[src/ui/header.ts#drawHeader]] draws
+the description and toolbar below, including tabs, filters, and page actions.
 
 [[src/ui/pickers.ts#PICKERS]] describes every picker in one table: boards,
 sprints, filters, models, the command palette and the rest. Each item carries

@@ -1,7 +1,4 @@
-/** The page header, the same on every page: the title, a one-line
- * description, a blank row, then one toolbar: tabs, then what the page shows
- * (board, sprint, filters), with page actions on the right. Each page fills
- * in this shape; one function draws it. */
+/** Shared page title, description and toolbar controls. */
 
 import { choiceLabel } from "../agent/models";
 import { MENTION_DAYS, View } from "../jira/query";
@@ -13,7 +10,7 @@ import type { Dashboard } from "./dashboard";
 import { AGENT, MY_ISSUES_TABS, pageOf } from "./navigation";
 import { filterChips } from "./pickers";
 
-interface PageHeader {
+export interface PageHeader {
   title: string;
   /** Shown after the title, e.g. "● Active · Nov 3–17". */
   status?: [text: string, style: Style];
@@ -111,15 +108,21 @@ function issuesHeader(d: Dashboard): PageHeader {
 
 const TOOLBAR = 4;
 
-export function drawHeader(canvas: Canvas, d: Dashboard): void {
-  const { width } = canvas;
-  const header = d.agent.tab ? agentHeader(d) : issuesHeader(d);
-  canvas.put(1, 2, header.title, "title", width - 4);
+export function pageHeader(d: Dashboard): PageHeader {
+  return d.agent.tab ? agentHeader(d) : issuesHeader(d);
+}
+
+export function drawPageTitle(canvas: Canvas, header: PageHeader, left: number, right: number): void {
+  canvas.put(0, left, header.title, "title", right - left);
   if (header.status) {
-    const x = 4 + cells(header.title);
-    canvas.put(1, x, header.status[0], header.status[1], width - x - 2);
+    const x = left + cells(header.title) + 2;
+    canvas.put(0, x, header.status[0], header.status[1], right - x);
   }
-  canvas.put(2, 2, header.description, "muted", width - 4);
+}
+
+export function drawHeader(canvas: Canvas, header: PageHeader, descriptionRow: number): void {
+  const { width } = canvas;
+  canvas.put(descriptionRow, 2, header.description, "muted", width - 4);
   const right = header.actions.length ? buttonsRight(canvas, TOOLBAR, width - 2, header.actions) - 2 : width - 2;
   const afterTabs = buttons(canvas, TOOLBAR, 2, header.tabs, right);
   buttons(canvas, TOOLBAR, header.tabs.length ? afterTabs + 2 : 2, header.filters, right);

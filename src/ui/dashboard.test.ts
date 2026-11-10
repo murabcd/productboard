@@ -504,17 +504,17 @@ describe("concept layout", () => {
     expect(view()).toBe(View.Today); // Agent is not a view; Tab skips it
   });
 
-  test("every page has the same header: title on row 1, a description on row 2", () => {
+  test("every page shares the title bar with the app name and command shortcut", () => {
     const { dashboard, work } = setup();
     const header = (): [string, string] => {
       const canvas = draw(dashboard, 120, 30);
-      return [canvas.text(1).slice(20).trim(), canvas.text(2).slice(20).trim()];
+      return [canvas.text(0), canvas.text(1).slice(20).trim()];
     };
     for (const page of NAVIGATION) {
       if (page.to === "agent") dashboard.handle({ text: navKey(page) });
       else work.query = { ...initialQuery, view: page.to };
       const [title, description] = header();
-      expect(title.startsWith(page.name)).toBe(true);
+      expect(title).toMatch(new RegExp(`^  PRODUCTBOARD +${page.name} +\\^K`));
       expect(description.length).toBeGreaterThan(0);
       dashboard.agent.tab = false;
     }
@@ -524,13 +524,8 @@ describe("concept layout", () => {
     const { dashboard } = setup();
     dashboard.handle({ text: "4" });
     const canvas = draw(dashboard, 120, 30);
-    const rows = Array.from({ length: 29 }, (_, y) =>
-      canvas
-        .text(y + 1)
-        .slice(20)
-        .trim(),
-    );
-    expect(rows.filter((row) => /^(✦ )?Agent$/.test(row))).toHaveLength(1);
+    const rows = Array.from({ length: 30 }, (_, y) => canvas.text(y).slice(20).trim());
+    expect(rows.filter((row) => /^(✦ )?Agent\s*(\^K)?$/.test(row))).toHaveLength(1);
     expect(rows.join("\n")).not.toContain("Filter");
   });
 
@@ -705,7 +700,7 @@ describe("frame", () => {
     const canvas = draw(dashboard, 80, 24);
     for (let y = 0; y < 24; y++) expect(canvas.text(y).length).toBeLessThanOrEqual(80);
     expect(canvas.text(7)).toMatch(/› EX-1/);
-    expect(canvas.text(1)).toContain("All issues");
+    expect(canvas.text(0)).toMatch(/PRODUCTBOARD +All issues +\^K/);
     expect(canvas.text(23)).toContain("2 issues");
   });
 
