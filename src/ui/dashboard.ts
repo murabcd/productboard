@@ -11,7 +11,16 @@ import { ContextPicker } from "./context-picker";
 import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
 import { IssueDetails, type IssueRead } from "./issue-details";
 import { IssueList } from "./issue-list";
-import { listRows, MIN_HEIGHT, MIN_WIDTH, modalRows, PEEK_MIN_WIDTH, pickerRows, sidebarWidth } from "./layout";
+import {
+  agentLayout,
+  listRows,
+  MIN_HEIGHT,
+  MIN_WIDTH,
+  modalRows,
+  PEEK_MIN_WIDTH,
+  pickerRows,
+  sidebarWidth,
+} from "./layout";
 import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
 import { helpPanel, type Panel, sprintPanel } from "./panel";
 import type { Peek } from "./peek";
@@ -106,6 +115,10 @@ export class Dashboard {
     this.width = width;
     this.height = height;
     if (peekFit !== this.peekFits()) this.syncPeek();
+  }
+
+  get agentLayout() {
+    return agentLayout(this.width - sidebarWidth(this.width), this.height, this.agent.composerRows);
   }
 
   get site(): string {
@@ -393,7 +406,7 @@ export class Dashboard {
     switch (layer.kind) {
       case "agent":
         if (id === "agent-cited") this.openPicker("cited");
-        else this.agent.key(key, Math.max(1, this.height - 12));
+        else this.agent.key(key, this.agentLayout);
         return true;
       case "preview":
         this.previewKeys.get(id)?.(layer.preview);
@@ -534,7 +547,7 @@ export class Dashboard {
     if (over?.kind === "peek" && this.peek && layer.kind === "list") {
       this.scrollPeek(delta);
     } else if (layer.kind === "agent") {
-      this.agent.wheel(delta);
+      this.agent.wheel(delta, this.agentLayout);
     } else if (layer.kind === "picker") {
       layer.picker.move(delta);
     } else if (layer.kind === "modal") {

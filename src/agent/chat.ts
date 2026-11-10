@@ -24,12 +24,12 @@ export interface AgentBackend {
 }
 
 export interface Turn {
-  prompt: string;
-  displayPrompt: string;
+  readonly prompt: string;
+  readonly displayPrompt: string;
   answer: string;
-  choice: AgentChoice;
+  readonly choice: AgentChoice;
   /** When it was sent and when the reply ended, in milliseconds. */
-  started: number;
+  readonly started: number;
   finished?: number;
   interrupted?: boolean;
 }

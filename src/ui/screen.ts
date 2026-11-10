@@ -8,12 +8,13 @@ import {
   TextAttributes,
 } from "@opentui/core";
 import { cells, splitGraphemes } from "../text";
-import { COMPOSER_MAX_ROWS, SCANNER_FRAME_MS } from "./agent";
+import { SCANNER_FRAME_MS } from "./agent";
 import type { Canvas, Rect } from "./canvas";
 import { AgentComposer } from "./composer";
 import type { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key, KeyName } from "./input";
+import { COMPOSER_MAX_ROWS } from "./layout";
 import { isScanner, resolveTheme } from "./theme";
 
 /** Keys the dashboard keeps while the Agent text box has focus; the rest are typing. */

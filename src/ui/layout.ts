@@ -29,3 +29,24 @@ export function rowOffset(offset: number, selected: number, count: number, capac
   const first = selected < offset ? selected - 1 : Math.max(offset, selected - capacity + 1);
   return Math.max(0, Math.min(first, count - capacity));
 }
+
+export const COMPOSER_MAX_ROWS = 6;
+
+export function agentLayout(width: number, height: number, composerRows: number) {
+  const room = Math.min(width - 5, 72);
+  const left = Math.floor((width - room) / 2);
+  const rows = Math.max(1, Math.min(COMPOSER_MAX_ROWS, composerRows));
+  const status = height - FOOTER_ROWS - 2;
+  const boxBottom = status - 1;
+  const boxTop = boxBottom - rows - 1;
+  return {
+    left,
+    rows,
+    status,
+    boxBottom,
+    boxTop,
+    transcript: { top: LIST_TOP, capacity: Math.max(1, boxTop - LIST_TOP - 1), room },
+  };
+}
+
+export type AgentLayout = ReturnType<typeof agentLayout>;

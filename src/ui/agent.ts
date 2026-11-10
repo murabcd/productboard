@@ -1,29 +1,16 @@
 /** The Agent page: the conversation and its text box, under the shared header. */
 
-import type { Turn } from "../agent/chat";
-import { choiceLabel } from "../agent/models";
+import type { Issue } from "../jira/types";
 import { cells } from "../text";
+import type { AgentPanel } from "./agent-panel";
 import type { Canvas, ScannerStyle, Style } from "./canvas";
-import type { Dashboard } from "./dashboard";
-import { type Line, layout, wrapSpans } from "./document";
-import { markdownBlocks } from "./markdown";
+import type { AgentLayout } from "./layout";
+import { transcriptWindow } from "./transcript";
 
-/** Rows the text box may grow to before it scrolls inside. */
-export const COMPOSER_MAX_ROWS = 6;
-
-/** The conversation and its text box, below the page header. */
-export function drawAgent(canvas: Canvas, dashboard: Dashboard, editing: boolean): void {
-  const { chat, composerRows } = dashboard.agent;
+export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLayout, editing: boolean): void {
   const thread = chat.current;
-  const { width, height } = canvas;
-  const room = Math.min(width - 5, 72);
-  const left = Math.floor((width - room) / 2);
-
-  // The text box grows with its text; OpenTUI draws it in the reserved area.
-  const rows = Math.max(1, Math.min(COMPOSER_MAX_ROWS, composerRows));
-  const status = height - 2;
-  const boxBottom = status - 1;
-  const boxTop = boxBottom - rows - 1;
+  const { left, rows, status, boxBottom, boxTop, transcript } = layout;
+  const { room } = transcript;
   for (let y = boxTop; y <= boxBottom; y++) {
     canvas.paint(y, left, room, "raised");
     canvas.put(y, left, "┃", thread.pending ? "muted" : "accent");
@@ -31,17 +18,23 @@ export function drawAgent(canvas: Canvas, dashboard: Dashboard, editing: boolean
   // A dialog over Agent takes the keys, so the text box steps aside while it is open.
   if (editing) canvas.reserve("composer", { left: left + 2, top: boxBottom - rows, width: room - 3, height: rows });
 
-  const bodyTop = 1;
-  const available = boxTop - bodyTop - 1;
   if (thread.turns.length) {
-    const lines = thread.turns.flatMap((turn) => turnRows(canvas, turn, thread.issues, left, room));
-    thread.scroll = Math.min(thread.scroll, Math.max(0, lines.length - available));
-    const end = lines.length - thread.scroll;
-    lines.slice(Math.max(0, end - available), end).forEach((draw, row) => {
-      draw(bodyTop + row);
+    const { rows } = transcriptWindow(thread.turns, transcript, thread.scroll);
+    rows.forEach(({ kind, line }, row) => {
+      const y = transcript.top + row;
+      if (kind === "prompt") {
+        canvas.paint(y, left, room, "raised");
+        canvas.put(y, left, "┃", "accent");
+      }
+      let x = left + 3;
+      for (const { text, style } of line) {
+        if (kind === "answer" && style === "text") drawCitedText(canvas, y, x, text, thread.issues);
+        else canvas.put(y, x, text, style);
+        x += cells(text);
+      }
     });
   } else {
-    drawWelcome(canvas, left, room, bodyTop, available);
+    drawWelcome(canvas, left, room, transcript.top, transcript.capacity);
   }
 
   if (thread.pending) {
@@ -95,62 +88,6 @@ export function drawScanner(canvas: Canvas, y: number, x: number, frame: number)
   }
 }
 
-/** One row of the conversation, drawn at a given screen row. */
-type Row = (y: number) => void;
-
-/** "4.2s", or "1m 12s" past a minute. */
-function duration(ms: number): string {
-  const seconds = ms / 1000;
-  return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
-}
-
-function turnRows(canvas: Canvas, turn: Turn, issues: ReadonlyMap<string, unknown>, left: number, room: number): Row[] {
-  const rows: Row[] = [];
-  const blank: Row = () => {};
-  const indent = left + 3;
-  const prompt =
-    (draw: Row): Row =>
-    (y) => {
-      canvas.paint(y, left, room, "raised");
-      canvas.put(y, left, "┃", "accent");
-      draw(y);
-    };
-  rows.push(prompt(blank));
-  for (const line of wrapSpans([{ text: turn.displayPrompt, style: "plain" }], room - 5)) {
-    rows.push(prompt((y) => drawLine(canvas, y, indent, line)));
-  }
-  rows.push(prompt(blank), blank);
-
-  for (const line of layout(markdownBlocks(turn.answer), room - 3)) {
-    rows.push((y) => {
-      let x = indent;
-      for (const { text, style } of line) {
-        // Issue keys in plain text link to the issue.
-        if (style === "text") drawCitedText(canvas, y, x, text, issues);
-        else canvas.put(y, x, text, style);
-        x += cells(text);
-      }
-    });
-  }
-  if (turn.finished !== undefined) {
-    const details = [
-      choiceLabel(turn.choice),
-      duration(turn.finished - turn.started),
-      turn.interrupted ? "interrupted" : "",
-    ].filter(Boolean);
-    rows.push(blank, (y) => canvas.put(y, indent, details.join(" · "), "muted"));
-  }
-  rows.push(blank);
-  return rows;
-}
-
-function drawLine(canvas: Canvas, y: number, x: number, line: Line): void {
-  for (const { text, style } of line) {
-    canvas.put(y, x, text, style);
-    x += cells(text);
-  }
-}
-
 function drawWelcome(canvas: Canvas, left: number, width: number, top: number, height: number): void {
   const center = (text: string) => left + Math.max(0, Math.floor((width - cells(text)) / 2));
   const welcome = Math.max(top, top + Math.floor((height - 2) / 2));
@@ -163,13 +100,7 @@ function drawWelcome(canvas: Canvas, left: number, width: number, top: number, h
 /** An issue key such as FL-123, kept as its own piece when a reply is split. */
 const ISSUE_KEY = /\b([A-Z][A-Z0-9_]*-\d+)\b/;
 
-function drawCitedText(
-  canvas: Canvas,
-  row: number,
-  x: number,
-  text: string,
-  issues: ReadonlyMap<string, unknown>,
-): void {
+function drawCitedText(canvas: Canvas, row: number, x: number, text: string, issues: ReadonlyMap<string, Issue>): void {
   for (const segment of text.split(ISSUE_KEY)) {
     const style: Style = issues.has(segment) ? "link" : "text";
     canvas.put(row, x, segment, style);

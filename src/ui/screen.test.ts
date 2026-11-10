@@ -196,9 +196,12 @@ describe("OpenTUI shell", () => {
   });
 
   test("Agent answers without a selected sprint and opens an issue cited from Jira", async () => {
+    const finish = deferred<void>();
     const ask = mock<AgentBackend["ask"]>(async ({ onIssues, onText }) => {
+      onText("Review ");
+      await finish.promise;
       onIssues(snapshot({ ...initialQuery, view: View.All }, ["EX-1"]).issues);
-      onText("Review EX-1 before release.");
+      onText("EX-1 before release.");
     });
     const { setup, dashboard } = await start(100, { agent: fakeAgent(ask) });
     await setup.mockMouse.click(6, 6); // Agent in the sidebar
@@ -207,6 +210,10 @@ describe("OpenTUI shell", () => {
     await settle();
     await setup.renderOnce();
     expect(ask).toHaveBeenCalledTimes(1);
+    expect(setup.captureCharFrame()).toContain("Review");
+    finish.resolve();
+    await settle();
+    await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
     const citation = lines.findIndex((line) => line.includes("Review EX-1"));
     expect(citation).toBeGreaterThan(0);
@@ -216,6 +223,35 @@ describe("OpenTUI shell", () => {
     setup.mockInput.pressCtrlC();
     expect(dashboard.modal).toBeNull();
     expect(dashboard.agent.tab).toBe(true);
+  });
+
+  test("Agent pages by the visible transcript rows as the composer grows and the pane resizes", async () => {
+    const answer = Array.from({ length: 60 }, (_, index) => `Transcript row ${index + 1}`).join("\n");
+    const ask: AgentBackend["ask"] = async ({ onText }) => onText(`\`\`\`\n${answer}\n\`\`\``);
+    const { setup } = await start(100, { agent: fakeAgent(ask) });
+    await setup.mockMouse.click(6, 6);
+    await setup.renderOnce();
+    await setup.mockInput.typeText("Show a long reply");
+    await setup.mockInput.pressEnter();
+    await settle();
+
+    for (let line = 0; line < 5; line++) setup.mockInput.pressKey("j", { ctrl: true });
+    await setup.mockInput.typeText("Draft");
+    const visible = () =>
+      Array.from(setup.captureCharFrame().matchAll(/Transcript row (\d+)/g), (match) => Number(match[1]));
+    for (const height of [30, 25]) {
+      setup.resize(100, height);
+      await setup.renderOnce();
+      await setup.renderOnce();
+      const latest = visible();
+      expect(latest.at(-1)).toBe(60);
+      setup.mockInput.pressKey("\x1b[5~");
+      await setup.renderOnce();
+      expect(visible().at(-1)).toBe((latest[0] ?? 0) - 1);
+      setup.mockInput.pressKey("\x1b[6~");
+      await setup.renderOnce();
+      expect(visible()).toEqual(latest);
+    }
   });
 
   test("Agent sends the contents of inline tokens and the selected sprint", async () => {

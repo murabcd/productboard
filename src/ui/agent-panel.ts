@@ -6,6 +6,8 @@ import type { AgentModel } from "../agent/models";
 import type { AgentChoice, ModelRef, Reasoning } from "../auth";
 import { message } from "../state/workspace";
 import { type Key, keyId } from "./input";
+import type { AgentLayout } from "./layout";
+import { transcriptWindow } from "./transcript";
 
 const WHEEL_LINES = 3;
 
@@ -81,7 +83,7 @@ export class AgentPanel {
   }
 
   /** Keys while Agent is active. Typing goes to the text box; these are the rest. */
-  key(key: Key, page: number): void {
+  key(key: Key, { transcript }: AgentLayout): void {
     const thread = this.chat.current;
     switch (keyId(key)) {
       case "escape":
@@ -102,14 +104,18 @@ export class AgentPanel {
         return;
       case "pageup":
       case "pagedown":
-        thread.scroll = Math.max(0, thread.scroll + (keyId(key) === "pageup" ? page : -page));
+        this.scroll(transcript, keyId(key) === "pageup" ? transcript.capacity : -transcript.capacity);
         return;
     }
   }
 
-  wheel(delta: number): void {
+  wheel(delta: number, { transcript }: AgentLayout): void {
+    this.scroll(transcript, -delta * WHEEL_LINES);
+  }
+
+  private scroll(transcript: AgentLayout["transcript"], delta: number): void {
     const thread = this.chat.current;
-    thread.scroll = Math.max(0, thread.scroll - delta * WHEEL_LINES);
+    thread.scroll = transcriptWindow(thread.turns, transcript, thread.scroll, delta).scroll;
   }
 
   dispose(): void {

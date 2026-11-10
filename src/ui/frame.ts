@@ -114,11 +114,7 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
     return;
   }
   if (layer.kind === "agent" || (d.agent.tab && layer.kind === "picker")) {
-    const { width, height } = canvas;
-    // Under the shared header, where the list would start, and above the footer.
-    const body = new Canvas(width, height - (LIST_TOP - 1) - FOOTER_ROWS);
-    drawAgent(body, d, layer.kind === "agent");
-    canvas.paste(body, 0, LIST_TOP - 1);
+    drawAgent(canvas, d.agent, d.agentLayout, layer.kind === "agent");
     drawAgentFooter(canvas, d);
     return;
   }

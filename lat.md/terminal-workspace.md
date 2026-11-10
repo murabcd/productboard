@@ -102,7 +102,10 @@ whether Agent is shown and its keys.
 
 The frame reserves areas that OpenTUI draws itself: the Agent text box and image
 previews. Issue citations open the normal detail panel and can
-return to the conversation.
+return to the conversation. [[src/ui/transcript.ts#transcriptWindow]] shares
+one viewport between drawing and scrolling. Page keys move by the visible
+rows after the composer has taken its space. Transcript layout is reused
+while the turn content and pane width stay the same.
 
 [[src/agent/models.ts#listModels]] lists GPT-6 and Claude 5 models from each
 provider with a key. Choosing one, then a reasoning level, restarts the Eve process with both
