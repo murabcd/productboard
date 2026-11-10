@@ -1,6 +1,6 @@
 import { type CliRenderer, TextareaRenderable } from "@opentui/core";
 import type { AgentChat } from "../agent/chat";
-import { type Draft, type DraftAttachment, type DraftReference, draftText } from "../agent/draft";
+import { type DraftAttachment, type DraftParts, type DraftReference, draftText } from "../agent/draft";
 import { pastedImagePath } from "../agent/images";
 import { shortSprintName } from "../jira/types";
 import { clean } from "../text";
@@ -9,7 +9,7 @@ import type { resolveTheme } from "./theme";
 export class AgentComposer extends TextareaRenderable {
   private readonly attachments = new WeakMap<object, DraftAttachment>();
   private thread?: AgentChat["current"];
-  private draft?: Draft;
+  private parts?: DraftParts;
   private updating = false;
   private attachmentNumber = 0;
 
@@ -17,7 +17,7 @@ export class AgentComposer extends TextareaRenderable {
     renderer: CliRenderer,
     private readonly chat: AgentChat,
     style: ReturnType<typeof resolveTheme>["composer"],
-    changed: () => void,
+    private readonly changed: () => void,
   ) {
     super(renderer, {
       id: "composer",
@@ -47,20 +47,24 @@ export class AgentComposer extends TextareaRenderable {
 
   sync(): void {
     const thread = this.chat.current;
-    if (this.thread === thread && this.draft === thread.draft) return;
+    const parts = thread.draft.parts;
+    if (this.thread === thread && this.parts === parts) return;
     const cursor = this.thread === thread ? this.cursorOffset : 0;
-    const removed = this.extmarks.getAll().reduce((cells, { start, end, data }) => {
-      const attachment = this.markedAttachment(data);
-      return attachment?.kind === "image" && attachment.state.kind === "failed" && !thread.draft.includes(attachment)
-        ? cells + Math.max(0, Math.min(end, cursor) - start)
-        : cells;
-    }, 0);
+    const removed =
+      cursor === 0
+        ? 0
+        : this.extmarks.getAll().reduce((cells, { start, end, data }) => {
+            const attachment = this.markedAttachment(data);
+            return attachment?.kind === "image" && !parts.includes(attachment)
+              ? cells + Math.max(0, Math.min(end, cursor) - start)
+              : cells;
+          }, 0);
     this.thread = thread;
-    this.draft = thread.draft;
+    this.parts = parts;
     this.updating = true;
-    this.setText(draftText(thread.draft));
+    this.setText(draftText(parts));
     let offset = 0;
-    for (const part of thread.draft) {
+    for (const part of parts) {
       const end = offset + this.editBuffer.measureText(typeof part === "string" ? part : part.label);
       if (typeof part !== "string") this.mark(part, offset, end);
       offset = end;
@@ -76,8 +80,9 @@ export class AgentComposer extends TextareaRenderable {
 
   attachReference(reference: DraftReference): void {
     this.sync();
-    if (reference.kind === "sprint") {
-      const previous = this.extmarks.getAll().find(({ data }) => this.markedAttachment(data)?.kind === "sprint");
+    const sprint = this.chat.current.draft.sprint;
+    if (reference.kind === "sprint" && sprint) {
+      const previous = this.extmarks.getAll().find(({ data }) => this.markedAttachment(data) === sprint);
       if (previous) {
         const cursor = this.cursorOffset;
         this.updating = true;
@@ -101,7 +106,9 @@ export class AgentComposer extends TextareaRenderable {
     const number = ++this.attachmentNumber;
     const spacer = this.canMention() ? "" : " ";
     if (path) {
-      void this.chat.attachImage(path, `${spacer}[Image #${number}]`, (attachment) => this.insert(attachment));
+      void this.chat.current.draft
+        .attachImage(path, `${spacer}[Image #${number}]`, (attachment) => this.insert(attachment))
+        .then(this.changed);
     } else {
       const label = `${spacer}[Pasted text #${number}${breaks ? ` +${breaks} ${breaks === 1 ? "line" : "lines"}` : ""}]`;
       this.insert({ kind: "paste", label, text: pasted });
@@ -141,6 +148,7 @@ export class AgentComposer extends TextareaRenderable {
     }
     const end = this.editBuffer.measureText(this.plainText);
     if (offset < end) parts.push(this.getTextRange(offset, end));
-    this.thread.draft = this.draft = parts;
+    this.thread.draft.replace(parts);
+    this.parts = parts;
   }
 }

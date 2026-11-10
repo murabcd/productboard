@@ -110,7 +110,7 @@ export class AgentPanel {
     this.backend.use(choice).then(
       () => this.changed(),
       (error: unknown) => {
-        thread.error = message(error);
+        thread.draft.error = message(error);
         this.changed();
       },
     );

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { RGBA, TextareaRenderable } from "@opentui/core";
 import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testing";
 import type { AgentBackend } from "../agent/chat";
-import { draftImages, draftText } from "../agent/draft";
+import { draftText } from "../agent/draft";
 import type { JiraClient } from "../jira/client";
 import { initialQuery, View } from "../jira/query";
 import type { Issue } from "../jira/types";
@@ -81,7 +81,7 @@ describe("OpenTUI shell", () => {
     await setup.renderOnce();
 
     expect(rememberTheme).toHaveBeenCalledWith("vercel-light");
-    expect(draftText(dashboard.agent.chat.current.draft)).toBe("Draft");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Draft");
     const composer = setup.renderer.root.getRenderable("dashboard")?.getRenderable("composer");
     if (!(composer instanceof TextareaRenderable)) throw new Error("Expected the Agent composer");
     expect(composer.visible).toBe(true);
@@ -238,10 +238,10 @@ describe("OpenTUI shell", () => {
       await setup.mockInput.typeText("sprint 32");
       setup.mockInput.pressEnter();
       await setup.renderOnce();
-      expect(draftText(dashboard.agent.chat.current.draft)).toBe("Compare 🧪 結果: @Sprint 32 結果");
+      expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Compare 🧪 結果: @Sprint 32 結果");
       setup.mockInput.pressBackspace();
       await settle();
-      expect(draftText(dashboard.agent.chat.current.draft)).toBe("Compare 🧪 結果: ");
+      expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Compare 🧪 結果: ");
 
       await setup.mockInput.typeText("@sprint 32");
       setup.mockInput.pressEnter();
@@ -252,13 +252,9 @@ describe("OpenTUI shell", () => {
       await setup.mockInput.typeText("sprint 31");
       setup.mockInput.pressEnter();
       await setup.renderOnce();
-      expect(draftText(dashboard.agent.chat.current.draft)).toBe("Compare 🧪 結果: @Sprint 31");
+      expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Compare 🧪 結果: @Sprint 31");
       await setup.mockInput.pasteBracketedText(path.replaceAll(" ", "\\ "));
-      for (
-        let attempt = 0;
-        attempt < 50 && draftImages(dashboard.agent.chat.current.draft).some(({ state }) => state.kind === "loading");
-        attempt++
-      ) {
+      for (let attempt = 0; attempt < 50 && dashboard.agent.chat.current.draft.loading; attempt++) {
         await Bun.sleep(5);
       }
       const pasted = "first $&\nsecond\nthird\nfourth\nfifth\nsixth  ";
@@ -269,13 +265,13 @@ describe("OpenTUI shell", () => {
       await setup.mockInput.pasteBracketedText("remove me\nplease");
       setup.mockInput.pressBackspace();
       await settle();
-      expect(draftText(dashboard.agent.chat.current.draft)).toEndWith("[Pasted text #2 +5 lines]");
+      expect(draftText(dashboard.agent.chat.current.draft.parts)).toEndWith("[Pasted text #2 +5 lines]");
 
       await setup.mockInput.pasteBracketedText(join(directory, "missing.png"));
-      for (let attempt = 0; attempt < 50 && !dashboard.agent.chat.current.error; attempt++) {
+      for (let attempt = 0; attempt < 50 && !dashboard.agent.chat.current.draft.error; attempt++) {
         await Bun.sleep(5);
       }
-      expect(dashboard.agent.chat.current.error).toBe("Could not read the image.");
+      expect(dashboard.agent.chat.current.draft.error).toBe("Could not read the image.");
       await setup.mockInput.typeText(" — explain");
       setup.mockInput.pressEnter();
       await settle();
@@ -334,7 +330,7 @@ describe("OpenTUI shell", () => {
     expect(frame).not.toContain("OLD-2");
     setup.mockInput.pressEnter();
     await setup.renderOnce();
-    expect(draftText(dashboard.agent.chat.current.draft)).toBe("Review @OPS-91");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Review @OPS-91");
 
     setup.mockInput.pressEnter();
     await settle();
@@ -358,13 +354,13 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("second line");
     await setup.renderOnce();
     expect(quit).not.toHaveBeenCalled();
-    expect(draftText(dashboard.agent.chat.current.draft)).toBe("quick 1 line\nsecond line");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("quick 1 line\nsecond line");
     expect(dashboard.agent.composerRows).toBe(2);
     setup.mockInput.pressEnter();
     await settle();
     await setup.renderOnce();
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(draftText(dashboard.agent.chat.current.draft)).toBe("");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("");
     expect(setup.captureCharFrame()).toContain("esc interrupt");
     setup.mockInput.pressEscape();
     await Bun.sleep(30); // a lone Esc is recognized after a short wait
@@ -389,8 +385,8 @@ describe("OpenTUI shell", () => {
       await setup.renderOnce();
       expect(dashboard.picker).toBeNull();
       await setup.mockInput.typeText("resumed");
-      expect(draftText(dashboard.agent.chat.current.draft)).toEndWith("resumed");
-      dashboard.agent.chat.current.draft = [];
+      expect(draftText(dashboard.agent.chat.current.draft.parts)).toEndWith("resumed");
+      dashboard.agent.chat.current.draft.replace([]);
       await setup.renderOnce();
     }
   });

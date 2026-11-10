@@ -1,7 +1,6 @@
 /** The Agent page: the conversation and its text box, under the shared header. */
 
 import type { Turn } from "../agent/chat";
-import { draftImages } from "../agent/draft";
 import { choiceLabel } from "../agent/models";
 import { cells } from "../text";
 import type { Canvas, ScannerStyle, Style } from "./canvas";
@@ -50,9 +49,9 @@ export function drawAgent(canvas: Canvas, dashboard: Dashboard, editing: boolean
     drawScanner(canvas, status, left + 1, Math.floor((Date.now() - started) / SCANNER_FRAME_MS));
     canvas.put(status, left + 1 + SCANNER_WIDTH + 2, "esc", "text");
     canvas.put(status, left + 1 + SCANNER_WIDTH + 6, "interrupt", "muted");
-  } else if (thread.error) {
-    canvas.put(status, left + 1, thread.error, "error", room - 1);
-  } else if (draftImages(thread.draft).some(({ state }) => state.kind === "loading")) {
+  } else if (thread.draft.error) {
+    canvas.put(status, left + 1, thread.draft.error, "error", room - 1);
+  } else if (thread.draft.loading) {
     canvas.put(status, left + 1, "Attaching image…", "muted", room - 1);
   } else if (!chat.configured) {
     canvas.put(status, left + 1, "Set up Agent with board --agent-login", "muted", room - 1);

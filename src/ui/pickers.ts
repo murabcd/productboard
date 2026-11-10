@@ -1,4 +1,3 @@
-import { draftSprint } from "../agent/draft";
 import { type AgentModel, modelName, PROVIDER_NAMES, REASONING_NAMES } from "../agent/models";
 import { REASONING_LEVELS, type Reasoning } from "../auth";
 import { isPersonal, STATUSES, type StatusFilter, View } from "../jira/query";
@@ -176,7 +175,7 @@ const agentContext: PickerSource = {
   close: ({ agent }) => agent.clearContextSearch(),
   items: ({ workspace, agent }, query) => {
     const needle = query.trim().toLocaleLowerCase();
-    const current = draftSprint(agent.chat.current.draft)?.id;
+    const current = agent.chat.current.draft.sprint?.sprint.id;
     const matches = (text: string) => text.toLocaleLowerCase().includes(needle);
     const sprints = workspace.sprints.filter(({ name }) => matches(name)).slice(0, needle ? 12 : 4);
     const issues = new Map(

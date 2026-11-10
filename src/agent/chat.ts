@@ -1,16 +1,8 @@
 import type { AgentChoice } from "../auth";
 import type { Issue } from "../jira/types";
 import { clean } from "../text";
-import {
-  type Draft,
-  type DraftImage,
-  draftImages,
-  draftSprint,
-  draftText,
-  expandDraft,
-  type SprintContext,
-} from "./draft";
-import { type AgentImage, MAX_IMAGES, MAX_MESSAGE_IMAGE_BYTES, readAgentImage } from "./images";
+import { AgentDraft, type SprintContext } from "./draft";
+import type { AgentImage } from "./images";
 import type { AgentModel } from "./models";
 
 export interface AgentBackend {
@@ -47,8 +39,7 @@ interface Conversation {
   turns: Turn[];
   issues: Map<string, Issue>;
   pending?: AbortController;
-  draft: Draft;
-  error: string;
+  draft: AgentDraft;
   scroll: number;
 }
 
@@ -56,8 +47,7 @@ const conversation = (): Conversation => ({
   id: crypto.randomUUID(),
   turns: [],
   issues: new Map(),
-  draft: [],
-  error: "",
+  draft: new AgentDraft(),
   scroll: 0,
 });
 
@@ -105,67 +95,30 @@ export class AgentChat {
     for (const thread of this.threads) thread.pending?.abort();
   }
 
-  async attachImage(path: string, label: string, insert: (attachment: DraftImage) => void): Promise<void> {
-    const thread = this.current;
-    if (draftImages(thread.draft).length >= MAX_IMAGES) {
-      thread.error = `Attach up to ${MAX_IMAGES} images per message.`;
-      this.redraw();
-      return;
-    }
-    const attachment: DraftImage = { kind: "image", label, state: { kind: "loading" } };
-    thread.error = "";
-    insert(attachment);
-    try {
-      const image = await readAgentImage(path);
-      if (imageSize(draftImages(thread.draft)) + image.bytes.byteLength > MAX_MESSAGE_IMAGE_BYTES) {
-        throw new Error("Images can be up to 6 MB per message.");
-      }
-      attachment.state = { kind: "ready", image };
-    } catch (error) {
-      attachment.state = { kind: "failed" };
-      if (thread.draft.includes(attachment)) thread.draft = thread.draft.filter((part) => part !== attachment);
-      thread.error = error instanceof Error && !("code" in error) ? clean(error.message) : "Could not read the image.";
-    } finally {
-      this.redraw();
-    }
-  }
-
   async send(): Promise<void> {
     const thread = this.current;
     if (thread.pending) return;
     const { draft } = thread;
-    const attachments = draftImages(draft);
-    if (attachments.some(({ state }) => state.kind === "loading")) return;
-    if (attachments.some(({ state }) => state.kind === "failed")) {
-      thread.error = "Remove the image that could not be attached before sending.";
-      this.redraw();
-      return;
-    }
-    if (attachments.length > MAX_IMAGES || imageSize(attachments) > MAX_MESSAGE_IMAGE_BYTES) {
-      thread.error = `Attach up to ${MAX_IMAGES} images and 6 MB per message.`;
-      this.redraw();
-      return;
-    }
-    const images = attachments.flatMap(({ state }) => (state.kind === "ready" ? [state.image] : []));
-    const prompt = expandDraft(draft);
-    if (!prompt.trim() && !images.length) return;
-    // Say why nothing was sent rather than ignoring Enter.
+    const message = draft.prepare();
+    if (!message) return;
+    const parts = draft.parts;
+    const { displayPrompt, ...request } = message;
     if (!this.backend) {
-      thread.error = "Agent is not set up: run board --agent-login";
+      draft.error = "Agent is not set up: run board --agent-login";
       this.redraw();
       return;
     }
     const pending = new AbortController();
     const turn: Turn = {
-      prompt,
-      displayPrompt: draftText(draft).trim(),
+      prompt: request.prompt,
+      displayPrompt,
       answer: "",
       choice: this.backend.current,
       started: Date.now(),
     };
     thread.pending = pending;
-    thread.draft = [];
-    thread.error = "";
+    draft.replace([]);
+    draft.error = "";
     thread.scroll = 0;
     const history = thread.turns.slice(-6);
     thread.turns.push(turn);
@@ -173,9 +126,7 @@ export class AgentChat {
     try {
       const reply = this.backend.ask({
         thread: thread.id,
-        prompt,
-        sprint: draftSprint(draft),
-        images,
+        ...request,
         signal: pending.signal,
         history,
         onIssues: (issues) => {
@@ -197,17 +148,13 @@ export class AgentChat {
       if (pending.signal.aborted && answered) turn.interrupted = true;
       else if (pending.signal.aborted || failure) {
         if (!answered) thread.turns.pop();
-        if (thread.draft.length === 0) thread.draft = draft;
-        thread.error = pending.signal.aborted ? "Stopped." : failure;
+        if (draft.parts.length === 0) draft.replace(parts);
+        draft.error = pending.signal.aborted ? "Stopped." : failure;
       }
       thread.pending = undefined;
       this.redraw();
     }
   }
-}
-
-function imageSize(images: readonly DraftImage[]): number {
-  return images.reduce((bytes, { state }) => bytes + (state.kind === "ready" ? state.image.bytes.byteLength : 0), 0);
 }
 
 async function untilStopped(reply: Promise<void>, signal: AbortSignal): Promise<void> {

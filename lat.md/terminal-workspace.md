@@ -110,8 +110,9 @@ and saves them; each reply records the model and level that wrote it.
 through its authenticated loopback HTTP API. Eve's ACP adapter accepts only
 text, while the HTTP client supports image parts and per-turn context. Eve
 stages sent images in its local just-bash sandbox.
-[[src/ui/composer.ts#AgentComposer]] maps the ordered text and attachment parts
-of a draft to OpenTUI extmarks. Pasted local image paths and long or multiline
+[[src/agent/draft.ts#AgentDraft]] owns the ordered text and attachments in each
+conversation. Image reads settle only while their tokens are in that draft.
+[[src/ui/composer.ts#AgentComposer]] maps those parts to OpenTUI extmarks. Pasted local image paths and long or multiline
 text appear as numbered inline tokens that can be edited as a unit. Sending
 expands pasted text and passes staged images as separate parts. Typing `@` at the
 start of a word opens a centered context picker with grouped task and sprint
