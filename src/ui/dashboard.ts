@@ -573,7 +573,11 @@ export class Dashboard {
     o: () => this.openIssue(false),
     y: () => this.openIssue(true),
     i: () => {
-      if (this.attachments.length) this.openPicker("attachment");
+      const attachments = this.attachments;
+      const [first] = attachments;
+      if (!first) return;
+      if (attachments.length === 1 && isImage(first)) this.openAttachment(first);
+      else this.openPicker("attachment");
     },
     r: (panel) => {
       if (panel.kind === "issue") void this.details.reload(panel.read);

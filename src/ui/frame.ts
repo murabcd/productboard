@@ -102,9 +102,16 @@ function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
 }
 
 function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
-  const { width, height } = canvas;
-  // A picker opens as a dialog over the page, so the page stays drawn under it.
+  if (layer.kind === "preview") {
+    drawPreview(canvas, d, layer.preview);
+    return;
+  }
+  if (d.modal) {
+    drawModal(canvas, d, d.modal);
+    return;
+  }
   if (layer.kind === "agent" || (d.agent.tab && layer.kind === "picker")) {
+    const { width, height } = canvas;
     // Under the shared header, where the list would start, and above the footer.
     const body = new Canvas(width, height - (LIST_TOP - 1) - FOOTER_ROWS);
     drawAgent(body, d, layer.kind === "agent");
@@ -112,9 +119,7 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
     drawAgentFooter(canvas, d);
     return;
   }
-  if (layer.kind === "preview") drawPreview(canvas, d, layer.preview);
-  else if (layer.kind === "modal") drawModal(canvas, d, layer.panel);
-  else drawList(canvas, d);
+  drawList(canvas, d);
 }
 
 type Hint = [key: string, label: string, target?: Target];

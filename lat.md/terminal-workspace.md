@@ -83,6 +83,8 @@ dashboard does not keep a session-wide cache of issue details.
 
 [[src/jira/adf.ts]] converts Jira documents to typed blocks, and
 [[src/ui/document.ts]] lays those blocks out for the available terminal width.
+In issue details, `i` previews a sole image attachment directly. For other
+attachment lists, it opens the picker over the issue details.
 [[src/ui/preview.ts#ImagePreviews]] owns image selection and downloads. Returning
 to an image reuses its in-flight read or a recent successful result.
 

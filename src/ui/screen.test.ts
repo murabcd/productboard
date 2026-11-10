@@ -159,7 +159,7 @@ describe("OpenTUI shell", () => {
     expect(dashboard.workspace.query.view).toBe(View.All);
   });
 
-  test("a previewed image is shown in its area and hidden afterwards", async () => {
+  test("i previews a single image directly and Escape hides it", async () => {
     const image = { id: "1", filename: "dot.png", mimeType: "image/png", size: 70, author: "D", created: "" };
     const { setup } = await start(100, {
       reads: {
@@ -170,7 +170,6 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.pressEnter();
     await settle();
     await setup.mockInput.typeText("i");
-    await setup.mockInput.pressEnter();
     await settle();
     await setup.renderOnce();
     await setup.renderOnce();

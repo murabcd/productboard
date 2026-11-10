@@ -197,6 +197,7 @@ describe("dashboard", () => {
 
   test("images preview in the terminal; arrows flip, Esc returns to details", async () => {
     const { dashboard, pending, downloads } = setup();
+    dashboard.handle({ text: " " });
     dashboard.handle(ENTER);
     pending[0]?.resolve(
       detail("", {
@@ -208,6 +209,14 @@ describe("dashboard", () => {
       }),
     );
     await settle();
+    dashboard.handle({ text: "i" });
+    expect(dashboard.picker?.kind).toBe("attachment");
+    const heading = draw(dashboard, 120, 40).text(5);
+    expect(heading).toContain("Issue details");
+    expect(heading).not.toContain("Issue peek");
+    dashboard.handle(ESC);
+    expect(dashboard.picker).toBeNull();
+    expect(frame(dashboard).text(5)).toContain("Issue details");
     dashboard.handle({ text: "i" });
     dashboard.handle(ENTER);
     expect(dashboard.preview?.images.map((i) => i.filename)).toEqual(["a.png", "b.jpg"]);
@@ -231,6 +240,7 @@ describe("dashboard", () => {
     dashboard.handle(ESC);
     expect(dashboard.preview).toBeNull();
     expect(dashboard.attachments.length).toBe(3);
+    expect(frame(dashboard).text(5)).toContain("Issue details");
   });
 
   test("Page Down counts group headings and skips folded issues", () => {
