@@ -1,0 +1,6 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+`Record<string, unknown>` as $recordType where {
+	register_diagnostic(span=$recordType, message="`Record<string, unknown>` is forbidden. Use a source-derived type, a named boundary contract, or `object` when the value is intentionally opaque.", severity="error")
+}

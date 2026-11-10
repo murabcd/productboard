@@ -1,0 +1,17 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+	TsAsExpression(expression=TsAsExpression()) as $assertion where {
+		register_diagnostic(span=$assertion, message="Chained type assertions fabricate evidence. Keep the precise source type or parse the value at its boundary.", severity="error")
+	},
+	TsAsExpression(expression=TsTypeAssertionExpression()) as $assertion where {
+		register_diagnostic(span=$assertion, message="Chained type assertions fabricate evidence. Keep the precise source type or parse the value at its boundary.", severity="error")
+	},
+	TsTypeAssertionExpression(expression=TsAsExpression()) as $assertion where {
+		register_diagnostic(span=$assertion, message="Chained type assertions fabricate evidence. Keep the precise source type or parse the value at its boundary.", severity="error")
+	},
+	TsTypeAssertionExpression(expression=TsTypeAssertionExpression()) as $assertion where {
+		register_diagnostic(span=$assertion, message="Chained type assertions fabricate evidence. Keep the precise source type or parse the value at its boundary.", severity="error")
+	}
+}

@@ -75,3 +75,12 @@ export function fakeAgent(ask: AgentBackend["ask"]): AgentBackend & { choice: Ag
     ask,
   };
 }
+
+/** A fetch for tests: `answer` replies to every request, so nothing reaches the network. */
+export function fakeFetch(
+  answer: (input: string | URL | Request, init?: RequestInit) => Response | Promise<Response>,
+): typeof fetch {
+  return Object.assign(async (input: string | URL | Request, init?: RequestInit) => answer(input, init), {
+    preconnect: fetch.preconnect,
+  });
+}

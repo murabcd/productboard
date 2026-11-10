@@ -5,6 +5,14 @@ import type { DocBlock } from "./adf";
 
 export type Category = "new" | "indeterminate" | "done";
 
+/** Status names teams use for stages Jira's three categories don't have. */
+export const BLOCKED_STATUS = /blocked/i;
+export const BACKLOG_STATUS = /backlog/i;
+/** Icebox counts as done in Jira, but the work was parked, not finished. */
+export const ICEBOX_STATUS = /icebox/i;
+export const REVIEW_STATUS = /review|\bqa\b/i;
+export const READY_FOR_RELEASE_STATUS = /ready for release/i;
+
 /** Today's sections in display order; an issue appears only in the first that fits. */
 export const TODAY_SECTIONS = [
   "Blocked",
@@ -92,7 +100,8 @@ export interface Sprint {
 }
 
 /** A sprint's name without its board's prefix: "Platform Team - Sprint 2" reads "Sprint 2". */
-export const shortSprintName = (name: string): string => name.split(/\s[-–—|]\s/).at(-1) ?? name;
+const SPRINT_PREFIX_END = /\s[-–—|]\s/;
+export const shortSprintName = (name: string): string => name.split(SPRINT_PREFIX_END).at(-1) ?? name;
 
 export const SPRINT_STATE_NAMES: Record<SprintState, string> = {
   active: "Active",
@@ -123,7 +132,8 @@ export function sprintChoice(sprint: Sprint): Choice {
 }
 
 /** Image types the terminal preview can draw. */
-export const isImage = (item: Attachment): boolean => /^image\/(png|jpeg|gif|webp)$/.test(item.mimeType);
+const PREVIEWABLE_IMAGE = /^image\/(png|jpeg|gif|webp)$/;
+export const isImage = (item: Attachment): boolean => PREVIEWABLE_IMAGE.test(item.mimeType);
 
 export function humanSize(size: number): string {
   if (size < 1024) return `${size} B`;

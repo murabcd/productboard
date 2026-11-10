@@ -40,11 +40,37 @@ export type DocBlock =
 export const textBlock = (text: string, style: SpanStyle = "plain", extra: Partial<DocBlock> = {}): DocBlock =>
   ({ kind: "text", spans: [{ text, style }], ...extra }) as DocBlock;
 
-type Node = Record<string, unknown>;
+/** The parts of a Jira document (ADF) node this reader uses. Every field is
+ * optional and checked where it is read, since ADF keeps adding node types. */
+interface Node {
+  type?: unknown;
+  text?: unknown;
+  attrs?: unknown;
+  content?: unknown;
+  marks?: unknown;
+}
 
+/** The node attributes this reader uses, from links, mentions, panels, lists and media. */
+interface Attrs {
+  text?: unknown;
+  shortName?: unknown;
+  url?: unknown;
+  href?: unknown;
+  alt?: unknown;
+  title?: unknown;
+  panelType?: unknown;
+  state?: unknown;
+  id?: unknown;
+  level?: unknown;
+  order?: unknown;
+  timestamp?: unknown;
+}
+
+/** Any JSON object is a node: all its fields are optional and read defensively. */
 const isNode = (value: unknown): value is Node => typeof value === "object" && value !== null && !Array.isArray(value);
+const isAttrs = (value: unknown): value is Attrs => isNode(value);
 const contentOf = (node: Node): unknown[] => (Array.isArray(node.content) ? node.content : []);
-const attrsOf = (node: Node): Node => (isNode(node.attrs) ? node.attrs : {});
+const attrsOf = (node: Node): Attrs => (isAttrs(node.attrs) ? node.attrs : {});
 const str = (value: unknown): string => (typeof value === "string" ? clean(value) : "");
 
 /** Marks in priority order: a bold link reads as a link. */
@@ -239,6 +265,6 @@ export function mentions(node: unknown, account: string): boolean {
   if (!account) return false;
   if (Array.isArray(node)) return node.some((child) => mentions(child, account));
   if (!isNode(node)) return false;
-  if (node.type === "mention" && isNode(node.attrs)) return node.attrs.id === account;
+  if (node.type === "mention") return attrsOf(node).id === account;
   return mentions(node.content, account);
 }

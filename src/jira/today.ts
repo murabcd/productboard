@@ -4,7 +4,15 @@ import { localDay, usDate } from "../dates";
 import type { JiraClient } from "./client";
 import { jiraTime, LIST_FIELDS, openBlocker, type RawIssue, toIssue } from "./parse";
 import type { IssueQuery } from "./query";
-import { type Issue, mentionNote, TODAY_SECTIONS, type TodaySection } from "./types";
+import {
+  BACKLOG_STATUS,
+  BLOCKED_STATUS,
+  type Issue,
+  mentionNote,
+  READY_FOR_RELEASE_STATUS,
+  TODAY_SECTIONS,
+  type TodaySection,
+} from "./types";
 
 /** Its heading already names the person, so rows there leave the assignee out. */
 export const YOURS: TodaySection = "Assigned to you";
@@ -15,8 +23,7 @@ export const STUCK_DAYS = 5;
 export const FORGOTTEN_DAYS = 30;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
-/** Done on the team's side; it only waits for a release, not for you. */
-const READY_FOR_RELEASE = /ready for release/i;
+
 const TIMED_FIELDS = [...LIST_FIELDS, "updated"];
 const SPRINT_FIELDS = [...TIMED_FIELDS, "duedate", "issuelinks"];
 
@@ -41,8 +48,8 @@ function attention(raw: RawIssue, flagged: Set<string>, now: number): [TodaySect
   if (flagged.has(issue.key)) return ["Blocked", "Flagged"];
   const blocker = openBlocker(raw);
   if (blocker) return ["Blocked", `blocked by ${blocker}`];
-  if (/blocked/i.test(issue.status)) return ["Blocked", ""];
-  if (READY_FOR_RELEASE.test(issue.status)) {
+  if (BLOCKED_STATUS.test(issue.status)) return ["Blocked", ""];
+  if (READY_FOR_RELEASE_STATUS.test(issue.status)) {
     return idle >= STUCK_DAYS ? ["Waiting for release", `${idle}d waiting`] : undefined;
   }
   if (issue.category === "indeterminate" && idle >= STUCK_DAYS) return ["Stuck", `${idle}d no update`];
@@ -79,7 +86,7 @@ export async function today(
   const place = (section: TodaySection, issue: Issue, reason: string) => {
     if (placed.has(issue.key)) return;
     placed.add(issue.key);
-    sections.get(section)?.push({ ...issue, section, ...(reason ? { reason } : {}) });
+    sections.get(section)?.push({ ...issue, section, ...(reason && { reason }) });
   };
 
   const flaggedKeys = new Set(flagged.map((raw) => raw.key));
@@ -104,7 +111,7 @@ export async function today(
   for (const raw of created) place("Your issues, changed since yesterday", toIssue(raw), updatedAgo(raw));
   // Work under way first, then planned work, then the backlog.
   const rank = ({ fields }: RawIssue) =>
-    fields.status.statusCategory.key === "indeterminate" ? 0 : /backlog/i.test(fields.status.name) ? 2 : 1;
+    fields.status.statusCategory.key === "indeterminate" ? 0 : BACKLOG_STATUS.test(fields.status.name) ? 2 : 1;
   for (const raw of assigned.toSorted((a, b) => rank(a) - rank(b))) place(YOURS, toIssue(raw), updatedAgo(raw));
 
   return {

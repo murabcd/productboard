@@ -1,20 +1,28 @@
 import { describe, expect, test } from "bun:test";
-import { rawComment, rawIssue } from "../testing";
+import { fakeFetch, rawComment, rawIssue } from "../testing";
 import { JiraClient } from "./client";
 import { JiraError, JiraHttp } from "./http";
 import { initialQuery, View, withView } from "./query";
 
 const credentials = { site: "example.atlassian.net", email: "me@example.com", token: "token" };
 
-type Route = (url: URL, body: Record<string, unknown> | undefined) => Response | Promise<Response>;
+/** What the tests read from a search request's JSON body. */
+interface SearchBody {
+  jql?: string;
+  fields?: string[];
+  maxResults?: number;
+  nextPageToken?: string;
+}
+
+type Route = (url: URL, body: SearchBody | undefined) => Response | Promise<Response>;
 
 const SPRINT_FIELD = "customfield_10020";
 
 /** A fake Jira: records requests and answers them through `route`. The field
  * catalog, read once for the sprint field, is answered here and not recorded. */
 function fakeJira(route: Route) {
-  const requests: { path: string; body?: Record<string, unknown> }[] = [];
-  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+  const requests: { path: string; body?: SearchBody }[] = [];
+  const fetcher = fakeFetch(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.pathname === "/rest/api/3/field") {
       return json([
@@ -22,10 +30,10 @@ function fakeJira(route: Route) {
         { id: SPRINT_FIELD, schema: { custom: "com.pyxis.greenhopper.jira:gh-sprint" } },
       ]);
     }
-    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
+    const body: SearchBody | undefined = init?.body ? JSON.parse(String(init.body)) : undefined;
     requests.push({ path: url.pathname, body });
     return route(url, body);
-  }) as typeof fetch;
+  });
   const http = new JiraHttp(credentials, fetcher, async () => {});
   return { client: new JiraClient(http), http, requests };
 }
@@ -37,12 +45,12 @@ describe("HTTP", () => {
   test("throttled and failing requests are retried, honoring Retry-After", async () => {
     const waits: number[] = [];
     let calls = 0;
-    const fetcher = (async () => {
+    const fetcher = fakeFetch(async () => {
       calls++;
       if (calls === 1) return json({}, { status: 429, headers: { "Retry-After": "2" } });
       if (calls === 2) return json({}, { status: 503 });
       return json({ accountId: "me-id", displayName: "Avery" });
-    }) as unknown as typeof fetch;
+    });
     const http = new JiraHttp(credentials, fetcher, async (ms) => {
       waits.push(ms);
     });
@@ -54,11 +62,11 @@ describe("HTTP", () => {
   test("board and sprint lists leave room for the issue list", async () => {
     const started: string[] = [];
     const held: (() => void)[] = [];
-    const fetcher = (async (input: string | URL | Request) => {
+    const fetcher = fakeFetch(async (input: string | URL | Request) => {
       started.push(new URL(String(input)).pathname);
       await new Promise<void>((resolve) => held.push(resolve));
       return json({ values: [], isLast: true, issues: [] });
-    }) as typeof fetch;
+    });
     const client = new JiraClient(new JiraHttp(credentials, fetcher, async () => {}));
     for (let n = 0; n < 10; n++) void client.sprints(String(n));
     await Bun.sleep(0);
@@ -73,7 +81,7 @@ describe("HTTP", () => {
 
   test("a stalled connection is raced by a second attempt", async () => {
     let calls = 0;
-    const fetcher = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const fetcher = fakeFetch(async (_input: string | URL | Request, init?: RequestInit) => {
       calls++;
       if (calls === 1) {
         // The first connection hangs until it is abandoned.
@@ -82,7 +90,7 @@ describe("HTTP", () => {
         );
       }
       return json({ accountId: "me-id", displayName: "Avery" });
-    }) as typeof fetch;
+    });
     const started = performance.now();
     const me = await new JiraClient(new JiraHttp(credentials, fetcher, async () => {})).myself();
     expect(me.accountId).toBe("me-id");
@@ -92,10 +100,10 @@ describe("HTTP", () => {
 
   test("a rejected token explains how to fix it and is not retried", async () => {
     let calls = 0;
-    const fetcher = (async () => {
+    const fetcher = fakeFetch(async () => {
       calls++;
       return json({}, { status: 401 });
-    }) as unknown as typeof fetch;
+    });
     const http = new JiraHttp(credentials, fetcher, async () => {});
     await expect(new JiraClient(http).myself()).rejects.toThrow("board --login");
     expect(calls).toBe(1);
@@ -110,7 +118,7 @@ describe("HTTP", () => {
 describe("attachments", () => {
   test("downloads follow Jira's redirect without sending the token elsewhere", async () => {
     const seen: { url: string; auth: string | null }[] = [];
-    const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    const fetcher = fakeFetch(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       seen.push({ url, auth: new Headers(init?.headers).get("Authorization") });
       if (url.includes("example.atlassian.net")) {
@@ -121,7 +129,7 @@ describe("attachments", () => {
         });
       }
       return new Response(new Uint8Array([137, 80, 78, 71]));
-    }) as typeof fetch;
+    });
     const http = new JiraHttp(credentials, fetcher, async () => {});
     const bytes = await new JiraClient(http).attachment("42");
     expect([...bytes]).toEqual([137, 80, 78, 71]);
@@ -252,10 +260,10 @@ describe("sprints", () => {
   });
 
   test("a failed field lookup still loads the list, without sprints", async () => {
-    const fetcher = (async (input: string | URL | Request) => {
+    const fetcher = fakeFetch(async (input: string | URL | Request) => {
       if (new URL(String(input)).pathname === "/rest/api/3/field") return json({}, { status: 403 });
       return json({ issues: [rawIssue("EX-1")], isLast: true });
-    }) as typeof fetch;
+    });
     const client = new JiraClient(new JiraHttp(credentials, fetcher, async () => {}));
     const issues = await client.search("project = EX", [], 10);
     expect(issues.map((issue) => issue.key)).toEqual(["EX-1"]);

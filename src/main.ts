@@ -104,11 +104,15 @@ async function agentLogin(): Promise<number> {
   }
 }
 
+/** A pasted site URL keeps only its host: https://x.atlassian.net/jira reads as x.atlassian.net. */
+const URL_SCHEME = /^https?:\/\//;
+const URL_PATH = /\/.*$/;
+
 async function login(): Promise<number> {
   if (!process.stdin.isTTY) return fail("Run board --login in a terminal.");
   const previous = readConfig();
   say("Sign in to Jira with an API token. The token is saved to your macOS Keychain.");
-  const site = (await ask("Jira site", previous?.site)).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const site = (await ask("Jira site", previous?.site)).replace(URL_SCHEME, "").replace(URL_PATH, "");
   const email = await ask("Email", previous?.email);
   say(`Create a token at ${TOKEN_PAGE}`);
   const token = await askHidden("API token");

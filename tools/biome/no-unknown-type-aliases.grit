@@ -1,0 +1,6 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+TsTypeAliasDeclaration(ty=TsUnknownType()) as $alias where {
+	register_diagnostic(span=$alias, message="Do not hide unknown behind a type alias. Keep unknown visible at the parsing boundary.", severity="error")
+}

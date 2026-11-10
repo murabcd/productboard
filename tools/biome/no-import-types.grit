@@ -1,0 +1,5 @@
+language js(typescript, jsx)
+
+TsImportType() as $importType where {
+	register_diagnostic(span=$importType, message="Avoid import types. Use a standard top-level type import instead.", severity="error")
+}

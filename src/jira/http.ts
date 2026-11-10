@@ -115,9 +115,9 @@ export class JiraHttp {
       headers: {
         ...this.auth(),
         Accept: "application/json",
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(body !== undefined && { "Content-Type": "application/json" }),
       },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     });
     return decode(schema, await response.json(), what);
   }

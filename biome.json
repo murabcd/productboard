@@ -1,9 +1,34 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "includes": ["src/**", "*.json"] },
+  "files": { "includes": ["src/**", "agent/**", "*.json"] },
+  "plugins": [
+    "./tools/biome/no-chained-type-assertions.grit",
+    "./tools/biome/no-conditional-empty-object-spread.grit",
+    "./tools/biome/no-generic-record-functions.grit",
+    "./tools/biome/no-generic-unknown-record.grit",
+    "./tools/biome/no-import-types.grit",
+    "./tools/biome/no-inline-imports.grit",
+    "./tools/biome/no-object-parameters.grit",
+    "./tools/biome/no-reflect-apply.grit",
+    "./tools/biome/no-reflect-get.grit",
+    "./tools/biome/no-shape-symbol-names.grit",
+    "./tools/biome/no-unknown-type-aliases.grit"
+  ],
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "javascript": { "formatter": { "quoteStyle": "double", "trailingCommas": "all", "semicolons": "always" } },
-  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "performance": { "useTopLevelRegex": "error" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts"],
+      "linter": { "rules": { "performance": { "useTopLevelRegex": "off" } } }
+    }
+  ],
   "assist": { "actions": { "source": { "organizeImports": "on" } } }
 }

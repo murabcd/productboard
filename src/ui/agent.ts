@@ -159,6 +159,9 @@ function drawWelcome(canvas: Canvas, left: number, width: number, top: number, h
   canvas.put(welcome + 1, center(description), description, "muted", width);
 }
 
+/** An issue key such as FL-123, kept as its own piece when a reply is split. */
+const ISSUE_KEY = /\b([A-Z][A-Z0-9_]*-\d+)\b/;
+
 function drawCitedText(
   canvas: Canvas,
   row: number,
@@ -166,7 +169,7 @@ function drawCitedText(
   text: string,
   issues: ReadonlyMap<string, unknown>,
 ): void {
-  for (const segment of text.split(/\b([A-Z][A-Z0-9_]*-\d+)\b/)) {
+  for (const segment of text.split(ISSUE_KEY)) {
     const style: Style = issues.has(segment) ? "link" : "text";
     canvas.put(row, x, segment, style);
     if (style === "link") canvas.mark(row, x, cells(segment), { kind: "agent-cite", key: segment });

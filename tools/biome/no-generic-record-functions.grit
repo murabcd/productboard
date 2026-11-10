@@ -1,0 +1,13 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+	JsIdentifierBinding() as $name,
+	JsLiteralMemberName() as $name
+} where {
+	$name <: or {
+		`isRecord`,
+		`asRecord`
+	},
+	register_diagnostic(span=$name, message="Generic `isRecord` and `asRecord` helpers are forbidden. Fix trusted type flow upstream. At a real external boundary, parse one named schema and pass the concrete domain type downstream.", severity="error")
+}

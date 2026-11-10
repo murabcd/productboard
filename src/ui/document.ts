@@ -41,6 +41,8 @@ function push(line: Line, text: string, style: Style): void {
 }
 
 /** Word-wrap spans to `width` columns. Continuation lines start with `hang`. */
+const SPACES = /^\s+$/;
+
 export function wrapSpans(spans: Span[], width: number, first: Line = [], hang: Line = []): Line[] {
   const lines: Line[] = [];
   let line: Line = first.map((run) => ({ ...run }));
@@ -63,7 +65,7 @@ export function wrapSpans(spans: Span[], width: number, first: Line = [], hang: 
         continue;
       }
       const size = cells(token);
-      if (/^\s+$/.test(token)) {
+      if (SPACES.test(token)) {
         if (!empty && used + size <= width) {
           push(line, token, style);
           used += size;

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fakeFetch } from "../testing";
 import { listModels, modelName } from "./models";
 
 const json = (value: unknown, status = 200) =>
@@ -7,7 +8,7 @@ const json = (value: unknown, status = 200) =>
 describe("Agent models", () => {
   test("lists GPT-6 and Claude 5 models from each provider with a key, newest first, each key only to its provider", async () => {
     const calls: [string, string][] = [];
-    const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    const fetcher = fakeFetch(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const headers = new Headers(init?.headers);
       calls.push([new URL(url).host, headers.get("authorization") ?? headers.get("x-api-key") ?? ""]);
@@ -27,7 +28,7 @@ describe("Agent models", () => {
           { id: "claude-sonnet-4-6", created_at: "1970-01-01T00:06:00Z" },
         ],
       });
-    }) as typeof fetch;
+    });
     const models = await listModels({ openai: "sk-o", anthropic: "sk-a" }, fetcher);
     // Only GPT-6 and Claude 5 chat models.
     expect(models.map(({ provider, model }) => `${provider}/${model}`)).toEqual([
@@ -42,8 +43,9 @@ describe("Agent models", () => {
   });
 
   test("one failing provider still lists the other; all failing explains why", async () => {
-    const fetcher = (async (input: string | URL | Request) =>
-      String(input).includes("openai.com") ? json({}, 401) : json({ data: [] })) as typeof fetch;
+    const fetcher = fakeFetch(async (input: string | URL | Request) =>
+      String(input).includes("openai.com") ? json({}, 401) : json({ data: [] }),
+    );
     expect(await listModels({ openai: "bad", anthropic: "sk-a" }, fetcher)).toEqual([]);
     expect(listModels({ openai: "bad" }, fetcher)).rejects.toThrow(
       "Models unavailable: could not list models (HTTP 401)",

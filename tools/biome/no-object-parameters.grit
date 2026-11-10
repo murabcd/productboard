@@ -1,0 +1,7 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+JsFormalParameter() as $parameter where {
+	$parameter <: r".*:\s*object\s*.*",
+	register_diagnostic(span=$parameter, message="Broad object parameters erase the callee's contract. Accept a named owner type.", severity="error")
+}

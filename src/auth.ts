@@ -86,7 +86,7 @@ export function saveCredentials(credentials: Credentials): void {
   // The Agent model belongs to the user, so it is always kept.
   const previous = readConfig();
   const board = previous?.site === site ? previous.board : undefined;
-  writeConfig({ site, email, ...(board ? { board } : {}), ...(previous?.agent ? { agent: previous.agent } : {}) });
+  writeConfig({ site, email, ...(board && { board }), ...(previous?.agent && { agent: previous.agent }) });
 }
 
 const AGENT_SERVICE = "productboard-agent";

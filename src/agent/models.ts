@@ -19,15 +19,19 @@ export const REASONING_NAMES: Record<Reasoning, string> = {
 export const choiceLabel = ({ model, reasoning }: AgentChoice): string =>
   `${modelName(model)} · ${REASONING_NAMES[reasoning]}`;
 
+/** Parts of a model ID: a release date such as 20260301, and version numbers. */
+const DATE_PART = /^\d{8}$/;
+const NUMBER_PART = /^\d+$/;
+
 const capitalize = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** How a model reads everywhere: "gpt-6.1-sol" is "GPT-6.1 Sol" and
  * "claude-sonnet-5-5" is "Claude Sonnet 5.5". A trailing date is left out. */
 export function modelName(id: string): string {
-  const words = id.split("-").filter((word) => !/^\d{8}$/.test(word));
+  const words = id.split("-").filter((word) => !DATE_PART.test(word));
   if (words[0] === "gpt") return [`GPT-${words[1] ?? ""}`, ...words.slice(2).map(capitalize)].join(" ");
-  const version = words.filter((word) => /^\d+$/.test(word)).join(".");
-  const name = words.filter((word) => !/^\d+$/.test(word)).map(capitalize);
+  const version = words.filter((word) => NUMBER_PART.test(word)).join(".");
+  const name = words.filter((word) => !NUMBER_PART.test(word)).map(capitalize);
   return [...name, version].filter(Boolean).join(" ");
 }
 

@@ -1,0 +1,6 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+`Reflect.get($...)` as $call where {
+	register_diagnostic(span=$call, message="Reflect.get discards the owner contract. Use typed property access or parse an external value at its boundary.", severity="error")
+}

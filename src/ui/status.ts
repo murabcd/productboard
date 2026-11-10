@@ -1,6 +1,13 @@
 /** Workflow stages, and how a status and priority look in a list. */
 
-import type { Issue } from "../jira/types";
+import {
+  BACKLOG_STATUS,
+  BLOCKED_STATUS,
+  ICEBOX_STATUS,
+  type Issue,
+  READY_FOR_RELEASE_STATUS,
+  REVIEW_STATUS,
+} from "../jira/types";
 import type { Style } from "./canvas";
 
 /** Jira statuses such as "QA Blocked" and "Dev Blocked" share one workflow stage. */
@@ -10,14 +17,13 @@ export type Stage = (typeof STAGES)[number];
 /** Blocked, in review or QA, and ready to ship stand out from Jira's three
  * categories: to do, in progress and done. */
 export function stage({ status, category }: Pick<Issue, "status" | "category">): Stage {
-  if (/blocked/i.test(status)) return "Blocked";
-  // Icebox counts as done in Jira, but the work was parked, not finished.
-  if (/icebox/i.test(status)) return "Backlog";
+  if (BLOCKED_STATUS.test(status)) return "Blocked";
+  if (ICEBOX_STATUS.test(status)) return "Backlog";
   if (category === "done") return "Done";
-  if (/review|\bqa\b/i.test(status)) return "In review";
-  if (/ready for release/i.test(status)) return "Ready for release";
+  if (REVIEW_STATUS.test(status)) return "In review";
+  if (READY_FOR_RELEASE_STATUS.test(status)) return "Ready for release";
   if (category === "indeterminate") return "In progress";
-  return /backlog/i.test(status) ? "Backlog" : "To do";
+  return BACKLOG_STATUS.test(status) ? "Backlog" : "To do";
 }
 
 const STAGE_ICONS: Record<Stage, [icon: string, style: Style]> = {
@@ -50,12 +56,18 @@ export function statusLabel(status: string): string {
     .join(" ");
 }
 
+/** Jira priority names by level, across the default and older schemes. */
+const URGENT_PRIORITY = /highest|critical|blocker|urgent/;
+const HIGH_PRIORITY = /high|major/;
+const LOW_PRIORITY = /low|minor|trivial/;
+const MEDIUM_PRIORITY = /medium|normal/;
+
 /** A one-cell priority mark for the Pri column. */
 export function priorityMark(priority: string): [mark: string, style: Style] {
   const name = priority.toLowerCase();
-  if (/highest|critical|blocker|urgent/.test(name)) return ["!", "error"];
-  if (/high|major/.test(name)) return ["↑", "warning"];
-  if (/low|minor|trivial/.test(name)) return ["↓", "muted"];
-  if (/medium|normal/.test(name)) return ["–", "muted"];
+  if (URGENT_PRIORITY.test(name)) return ["!", "error"];
+  if (HIGH_PRIORITY.test(name)) return ["↑", "warning"];
+  if (LOW_PRIORITY.test(name)) return ["↓", "muted"];
+  if (MEDIUM_PRIORITY.test(name)) return ["–", "muted"];
   return [" ", "muted"];
 }

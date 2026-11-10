@@ -1,0 +1,5 @@
+language js(typescript, jsx)
+
+`import($module)` as $inlineImport where {
+	register_diagnostic(span=$inlineImport, message="Avoid inline imports. Use standard top-level imports for runtime values and type-only imports for types.", severity="error")
+}

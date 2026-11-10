@@ -107,9 +107,12 @@ function peekRows(canvas: Canvas, peek: Peek, left: number, room: number): Row[]
   return rows;
 }
 
+/** A comment reads as one paragraph in the peek. */
+const WHITESPACE = /\s+/;
+
 function commentBlock(comment: Comment, width: number): Line[] {
   const byline = `${comment.author} · ${usDateTime(comment.created)}`;
-  const text = comment.text.split(/\s+/).join(" ") || "(empty comment)";
+  const text = comment.text.split(WHITESPACE).join(" ") || "(empty comment)";
   return layout([textBlock(byline, "muted"), textBlock(text, "muted")], width).filter((line) => line.length);
 }
 

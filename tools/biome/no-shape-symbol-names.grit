@@ -1,0 +1,7 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+JsIdentifierBinding() as $name where {
+	$name <: r".*[Ss]hape.*",
+	register_diagnostic(span=$name, message="Rename this symbol for its domain role; shape describes structure rather than ownership.", severity="error")
+}

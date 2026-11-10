@@ -1,0 +1,6 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+`Reflect.apply($...)` as $call where {
+	register_diagnostic(span=$call, message="Reflect.apply discards the callable contract. Call the typed function directly.", severity="error")
+}

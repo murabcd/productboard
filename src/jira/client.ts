@@ -90,7 +90,7 @@ export class JiraClient {
           jql: query,
           fields: sprintField ? [...fields, sprintField] : fields,
           maxResults: Math.min(SEARCH_PAGE, limit - issues.length),
-          ...(token ? { nextPageToken: token } : {}),
+          ...(token && { nextPageToken: token }),
         },
         SearchPage,
         "issue list",

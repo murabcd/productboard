@@ -1,0 +1,13 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+	`...($condition ? $included : {})` as $spread where {
+		register_diagnostic(span=$spread, message="Conditional empty-object spreads hide omission behind a fallback object. Use a direct conditional spread.", severity="error", fix_kind="safe"),
+		$spread => `...(($condition) && $included)`
+	},
+	`...($condition ? {} : $included)` as $spread where {
+		register_diagnostic(span=$spread, message="Conditional empty-object spreads hide omission behind a fallback object. Use a direct conditional spread.", severity="error", fix_kind="safe"),
+		$spread => `...(!($condition) && $included)`
+	}
+}

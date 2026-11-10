@@ -99,9 +99,12 @@ export function openBlocker(raw: RawIssue): string | undefined {
   return link?.inwardIssue ? clean(link.inwardIssue.key) : undefined;
 }
 
+/** Jira writes offsets as +0300; Date.parse needs +03:00. */
+const COMPACT_OFFSET = /([+-]\d{2})(\d{2})$/;
+
 /** A Jira timestamp ("2026-11-05T13:08:14.000+0300") in milliseconds. */
 export function jiraTime(value: string): number {
-  return Date.parse(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+  return Date.parse(value.replace(COMPACT_OFFSET, "$1:$2"));
 }
 
 /** Search results keep fields the schema doesn't name, such as the site's
