@@ -5,7 +5,6 @@ export const DEFAULT_THEME: ThemeId = "productboard";
 interface ThemePalette {
   label: string;
   background: string;
-  chrome: string;
   raised: string;
   panel: string;
   selection: string;
@@ -27,7 +26,6 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
   productboard: {
     label: "Default",
     background: "#151619",
-    chrome: "#111215",
     raised: "#22253a",
     panel: "#1a1b21",
     selection: "#292d40",
@@ -49,7 +47,6 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
   "vercel-dark": {
     label: "Vercel Dark",
     background: "#000000",
-    chrome: "#0a0a0a",
     raised: "#1a1a1a",
     panel: "#111111",
     selection: "#2e2e2e",
@@ -69,7 +66,6 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
   "vercel-light": {
     label: "Vercel Light",
     background: "#fbfbfa",
-    chrome: "#f5f5f4",
     raised: "#ebedf0",
     panel: "#ffffff",
     selection: "#dce3ec",

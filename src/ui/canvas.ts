@@ -40,9 +40,8 @@ export type TextStyle =
   | "selection"
   | "selectedBold";
 
-/** Background layers: the workspace, the top and bottom bars, buttons and
- * group headings, the selection, and the peek panel. */
-export type Surface = "workspace" | "chrome" | "raised" | "selected" | "panel";
+/** Background layers for the workspace, controls, selections, and panels. */
+export type Surface = "workspace" | "raised" | "selected" | "panel";
 
 export interface Run {
   text: string;

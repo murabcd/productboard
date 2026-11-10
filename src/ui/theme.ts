@@ -22,7 +22,6 @@ export function resolveTheme(id: ThemeId) {
   const hex = (value: string) => RGBA.fromHex(value);
   const surfaces: Record<Surface, RGBA> = {
     workspace: hex(palette.background),
-    chrome: hex(palette.chrome),
     raised: hex(palette.raised),
     panel: hex(palette.panel),
     selected: hex(palette.selection),

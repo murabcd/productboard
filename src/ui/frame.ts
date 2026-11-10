@@ -142,7 +142,6 @@ function drawFooter(
 ): void {
   const { width, height } = canvas;
   const y = height - 1;
-  canvas.paint(y, 0, width, "chrome");
   const size = (list: Hint[]) =>
     list.reduce((sum, [key, label]) => sum + cells(key) + (label ? cells(label) + 1 : 0) + 3, -3);
   // Drop hints from the left of the list when the pane is too narrow.
@@ -235,7 +234,7 @@ function drawList(canvas: Canvas, d: Dashboard): void {
     canvas.put(y, x, mark, active ? "selection" : markStyle);
   });
 
-  if (peek) drawPeek(canvas, peek, width, top - 1, canvas.width - width, height - 1);
+  if (peek) drawPeek(canvas, peek, width, top, canvas.width - width, height - 1);
 
   const total = work.issues.length;
   let count = `${shown} ${shown === 1 ? "issue" : "issues"}`;

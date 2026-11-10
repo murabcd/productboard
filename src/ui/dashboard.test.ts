@@ -401,7 +401,7 @@ describe("concept layout", () => {
     expect(client.detail).toHaveBeenCalledTimes(1);
     pending[0]?.resolve(detail("EX-1 description"));
     await settle();
-    expect(draw(dashboard, 120, 30).text(5)).toContain("Issue peek");
+    expect(draw(dashboard, 120, 30).text(6)).toContain("Issue peek");
     dashboard.handle({ name: "down" });
     expect(dashboard.peek?.issue.key).toBe("EX-2");
     dashboard.handle({ name: "up" });
@@ -450,12 +450,12 @@ describe("concept layout", () => {
     pending[0]?.resolve(detail(words));
     await settle();
     let canvas = draw(dashboard, 120, 30);
-    expect(canvas.text(5)).toContain("↓ more");
+    expect(canvas.text(6)).toContain("↓ more");
     dashboard.wheel(1, { kind: "peek" });
     expect(dashboard.list.selected?.key).toBe("EX-1"); // the list stays put
     canvas = draw(dashboard, 120, 30);
-    expect(canvas.text(5)).toContain("↑↓ more");
-    expect(canvas.text(7).slice(82)).not.toContain("EX-1"); // the key scrolled out of the peek
+    expect(canvas.text(6)).toContain("↑↓ more");
+    expect(canvas.text(8).slice(82)).not.toContain("EX-1"); // the key scrolled out of the peek
   });
 
   test("active filters show beside Filter; Clear filters in its menu removes them", () => {
