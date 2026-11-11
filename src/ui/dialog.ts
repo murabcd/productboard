@@ -1,57 +1,72 @@
 import { cells } from "../text";
-import type { Canvas } from "./canvas";
+import { Canvas } from "./canvas";
 import { DIALOG_WIDTH, pickerRows } from "./layout";
 import type { Picker } from "./picker";
 
 /** Text starts this far in; choices keep one more cell for the ● mark. */
-const INSET = 3;
+export const DIALOG_INSET = 3;
 
 export function drawDialog(canvas: Canvas, picker: Picker<string>, emptyText: string, status?: string): void {
-  const shown = picker.window(pickerRows(canvas.height));
+  const width = Math.min(DIALOG_WIDTH, canvas.width - 4);
+  const panel = pickerDialog(width, pickerRows(canvas.height), picker, emptyText, { status });
+  canvas.paste(panel, Math.floor((canvas.width - width) / 2), Math.floor((canvas.height - panel.height) / 2));
+}
+
+export function dialogPanel(width: number, height: number, title: string): Canvas {
+  const panel = new Canvas(width, height, "panel");
+  for (let y = 0; y < height; y++) panel.mark(y, 0, width, { kind: "dialog" });
+  const close = width - DIALOG_INSET - 3;
+  panel.put(1, DIALOG_INSET, title, "title", close - DIALOG_INSET - 2);
+  panel.put(1, close, "esc", "muted");
+  panel.mark(1, close, 3, { kind: "dismiss" });
+  return panel;
+}
+
+export function pickerDialog(
+  width: number,
+  capacity: number,
+  picker: Picker<string>,
+  emptyText: string,
+  { status, accentSelection = false }: { status?: string; accentSelection?: boolean } = {},
+): Canvas {
+  const shown = picker.window(capacity);
   const selected = picker.selected?.value;
   const tab = picker.tabName;
   const empty = shown.length === 0;
 
-  const width = Math.min(DIALOG_WIDTH, canvas.width - 4);
   const height = 5 + Math.max(1, shown.length) + (empty || tab || status ? 2 : 0) + 1;
-  const left = Math.floor((canvas.width - width) / 2);
-  const top = Math.floor((canvas.height - height) / 2);
-  const room = width - INSET * 2;
-  // Opaque: nothing from the page shows through.
-  for (let y = top; y < top + height; y++) {
-    canvas.put(y, left, " ".repeat(width), "text");
-    canvas.paint(y, left, width, "panel");
-    canvas.mark(y, left, width, { kind: "dialog" });
-  }
+  const canvas = dialogPanel(width, height, picker.title);
+  const inset = DIALOG_INSET;
+  const room = width - inset * 2;
+  const selectedLabel = accentSelection ? "onAccent" : "selectedBold";
+  const selectedDetail = accentSelection ? "onAccent" : "selection";
 
-  canvas.put(top + 1, left + INSET, picker.title, "title", room - 5);
-  canvas.put(top + 1, left + width - INSET - 3, "esc", "muted");
-  canvas.mark(top + 1, left + width - INSET - 3, 3, { kind: "dismiss" });
   const search = `${picker.query || picker.placeholder}▏`;
-  canvas.put(top + 3, left + INSET, search, picker.query ? "text" : "muted", room);
+  canvas.put(3, inset, search, picker.query ? "text" : "muted", room);
 
   shown.forEach((row, i) => {
-    const y = top + 5 + i;
+    const y = 5 + i;
     if (!row) return;
     if ("heading" in row) {
-      canvas.put(y, left + INSET, row.heading, "accentBold", room);
+      canvas.put(y, inset, row.heading, "accentBold", room);
       return;
     }
     const { choice } = row;
     const active = choice.value === selected;
-    if (active) canvas.paint(y, left + 1, width - 2, "selected");
-    if (choice.current) canvas.put(y, left + INSET - 1, "●", "accent");
+    if (active) canvas.paint(y, 1, width - 2, accentSelection ? "accent" : "selected");
+    if (choice.current) canvas.put(y, inset - 1, "●", active && accentSelection ? "onAccent" : "accent");
     const detail = Math.min(cells(choice.detail), Math.floor(room / 2));
-    canvas.put(y, left + INSET + 1, choice.label, active ? "selectedBold" : "text", room - detail - 3);
-    canvas.put(y, left + width - INSET - detail, choice.detail, active ? "selection" : "muted", detail);
-    canvas.mark(y, left + 1, width - 2, { kind: "choice", value: choice.value });
+    canvas.put(y, inset + 1, choice.label, active ? selectedLabel : "text", room - detail - 3);
+    canvas.put(y, width - inset - detail, choice.detail, active ? selectedDetail : "muted", detail);
+    canvas.mark(y, 1, width - 2, { kind: "choice", value: choice.value });
   });
 
-  const footer = top + height - 2;
+  const footer = height - 2;
   if (status || empty) {
-    canvas.put(footer, left + INSET, (status || emptyText).replaceAll("\n", " · "), status ? "muted" : "warning", room);
+    canvas.put(footer, inset, (status || emptyText).replaceAll("\n", " · "), status ? "muted" : "warning", room);
   } else if (tab) {
-    canvas.put(footer, left + INSET, "tab", "text");
-    canvas.put(footer, left + INSET + 4, `${tab} ${picker.kind}s`, "muted", room - 4);
+    canvas.put(footer, inset, "tab", "text");
+    canvas.put(footer, inset + 4, `${tab} ${picker.kind}s`, "muted", room - 4);
   }
+  return canvas;
 }

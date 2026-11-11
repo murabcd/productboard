@@ -14,6 +14,8 @@ Jira verifies the token before [[src/auth.ts]] saves it. The command palette's
 **Connect Agent** action reuses the provider picker and connects the current
 dashboard. The standalone login flags reuse the same prompts. The check flag
 uses saved Jira credentials without opening the terminal UI.
+If the terminal is too small for setup, the prompt accepts only cancellation
+until the form fits again.
 
 ## Refresh and scope
 
@@ -40,10 +42,10 @@ point restores the terminal on exit.
 
 Dashboard resolves the active input layer from the open views and the pane
 size. Rendering and the OpenTUI adapter use that layer for composer focus and
-key routing. The OpenTUI adapter routes keys and paste to the connection prompt
-while it is open. The command palette follows the same activation path for keys and
-clicks, so dismissing it returns to the page beneath it. The minimum-size
-screen owns its quit shortcut even when Agent was active.
+key routing. A connection prompt dims the workspace and takes keyboard and
+paste input while it is open. The command palette follows the same activation
+path for keys and clicks, so dismissing it returns to the page beneath it. The
+minimum-size screen owns its quit shortcut even when Agent was active.
 
 Use [[src/text.ts]] for remote text sanitization, grapheme handling, and cell
 widths.

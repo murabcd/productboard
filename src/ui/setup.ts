@@ -1,14 +1,24 @@
-import { type CliRenderer, type KeyEvent, type OptimizedBuffer, type PasteEvent, Renderable } from "@opentui/core";
+import {
+  type CliRenderer,
+  type KeyEvent,
+  type OptimizedBuffer,
+  type PasteEvent,
+  Renderable,
+  RGBA,
+} from "@opentui/core";
 import type { ThemeId } from "../theme";
 import { Canvas } from "./canvas";
-import { drawDialog } from "./dialog";
+import { DIALOG_INSET, dialogPanel, pickerDialog } from "./dialog";
 import { editLine, type Key, keyId } from "./input";
-import { pickerRows } from "./layout";
-import { Picker, type PickerItem } from "./picker";
+import { DIALOG_WIDTH, pickerRows } from "./layout";
+import { Picker } from "./picker";
 import { textKeys, toKeys } from "./terminal-input";
 import { drawCanvas, resolveTheme } from "./theme";
 
 const LINE_BREAK = /[\r\n]/;
+const SCRIM = RGBA.fromInts(0, 0, 0, 150);
+const MIN_SETUP_WIDTH = 36;
+const MIN_SETUP_HEIGHT = 12;
 
 interface Field<Result> {
   label: string;
@@ -28,6 +38,7 @@ interface Choice<Result> {
 export type SetupPrompt<Result> = { title: string } & ({ field: Field<Result> } | { choices: Choice<Result>[] });
 
 interface FieldEntry<Result> {
+  title: string;
   field: Field<Result>;
   value: string;
   status: { kind: "editing"; error?: string } | { kind: "submitting" };
@@ -35,10 +46,9 @@ interface FieldEntry<Result> {
 
 export class SetupView<Result> extends Renderable {
   private readonly theme: ReturnType<typeof resolveTheme>;
-  private readonly title: string;
-  private readonly dialog: FieldEntry<Result> | { picker: Picker<string>; items: PickerItem[] };
+  private readonly dialog: FieldEntry<Result> | Picker<"provider">;
   private readonly abort = new AbortController();
-  private canvas?: Canvas;
+  private frame?: { panel: Canvas; left: number; top: number };
 
   constructor(
     renderer: CliRenderer,
@@ -56,18 +66,19 @@ export class SetupView<Result> extends Renderable {
       left: 0,
       zIndex: 10,
       onMouseDown: (event) => {
-        if (event.button !== 0) return;
-        const target = this.canvas?.targetAt(event.x, event.y);
+        if (event.button !== 0 || !this.fits) return;
+        const frame = this.frame;
+        const target = frame?.panel.targetAt(event.x - frame.left, event.y - frame.top);
         if (target?.kind === "dismiss") this.dismiss();
-        if (target?.kind === "choice" && "items" in this.dialog) {
-          this.dialog.items.find((item) => item.value === target.value)?.run();
+        if (target?.kind === "choice" && this.dialog instanceof Picker) {
+          this.dialog.select(target.value)?.run();
         }
       },
     });
-    this.title = prompt.title;
     this.theme = resolveTheme(theme);
     if ("field" in prompt) {
-      this.dialog = { field: prompt.field, value: prompt.field.value ?? "", status: { kind: "editing" } };
+      const { field, title } = prompt;
+      this.dialog = { title, field, value: field.value ?? "", status: { kind: "editing" } };
     } else {
       const items = prompt.choices.map(({ value, label, detail }, index) => ({
         value: String(index),
@@ -75,12 +86,22 @@ export class SetupView<Result> extends Renderable {
         detail,
         run: () => this.dismiss(value),
       }));
-      this.dialog = { items, picker: new Picker("provider", prompt.title, items, { placeholder: "Search providers" }) };
+      this.dialog = new Picker("provider", prompt.title, items);
     }
+  }
+
+  private get fits(): boolean {
+    const { width, height } = this.ctx;
+    return width >= MIN_SETUP_WIDTH && height >= MIN_SETUP_HEIGHT;
   }
 
   key(event: KeyEvent): void {
     event.preventDefault();
+    if (event.name === "escape" || (event.ctrl && event.name === "c")) {
+      this.dismiss();
+      return;
+    }
+    if (!this.fits) return;
     const dialog = this.dialog;
     if (event.ctrl && event.name === "o" && "field" in dialog && dialog.field.url && dialog.status.kind === "editing") {
       void this.open(dialog.field.url).catch(() => {
@@ -95,6 +116,7 @@ export class SetupView<Result> extends Renderable {
 
   paste(event: PasteEvent): void {
     event.preventDefault();
+    if (!this.fits) return;
     const line = new TextDecoder().decode(event.bytes).split(LINE_BREAK, 1)[0] ?? "";
     for (const key of textKeys(line)) this.handle(key);
   }
@@ -109,13 +131,9 @@ export class SetupView<Result> extends Renderable {
   private handle(key: Key): void {
     if (this.abort.signal.aborted) return;
     const id = keyId(key);
-    if (id === "escape" || id === "ctrl-c") {
-      this.dismiss();
-      return;
-    }
     const dialog = this.dialog;
-    if ("picker" in dialog) {
-      const picked = dialog.picker.handle(key, pickerRows(this.height));
+    if (dialog instanceof Picker) {
+      const picked = dialog.handle(key, pickerRows(this.ctx.height));
       if (picked && picked !== "dismiss") picked.run();
     } else if (dialog.status.kind === "editing") {
       if (id === "enter") void this.submit(dialog);
@@ -144,48 +162,50 @@ export class SetupView<Result> extends Renderable {
   }
 
   protected override renderSelf(buffer: OptimizedBuffer): void {
-    const canvas = new Canvas(buffer.width, buffer.height);
-    this.canvas = canvas;
-    if (buffer.width < 36 || buffer.height < 12) {
-      canvas.put(0, 0, "Enlarge the terminal · Esc to exit", "muted");
-    } else if ("picker" in this.dialog) {
-      const { picker } = this.dialog;
-      drawDialog(canvas, picker, "No providers match", picker.selected && "↑ ↓ Select · Enter Continue");
-    } else {
-      this.drawField(canvas, this.dialog);
+    const { width, height } = buffer;
+    buffer.fillRect(0, 0, width, height, SCRIM);
+    if (!this.fits) {
+      this.frame = undefined;
+      const message = new Canvas(width, 1, "panel");
+      message.put(0, 0, "Enlarge the terminal · Esc to exit", "muted");
+      drawCanvas(buffer, message, this.theme);
+      return;
     }
-    drawCanvas(buffer, canvas, this.theme);
+    const panelWidth = Math.min(DIALOG_WIDTH, width - 2);
+    const panel =
+      this.dialog instanceof Picker
+        ? pickerDialog(panelWidth, pickerRows(height), this.dialog, "No integrations found", {
+            accentSelection: true,
+          })
+        : this.fieldPanel(panelWidth, this.dialog);
+    const left = Math.floor((width - panel.width) / 2);
+    const top = Math.min(Math.floor(height / 4), height - panel.height - 1);
+    this.frame = { panel, left, top };
+    drawCanvas(buffer, panel, this.theme, { left, top });
   }
 
-  private drawField(canvas: Canvas, entry: FieldEntry<Result>): void {
+  private fieldPanel(width: number, entry: FieldEntry<Result>): Canvas {
     const { field, status } = entry;
-    const width = Math.min(68, canvas.width - 4);
-    const left = Math.floor((canvas.width - width) / 2);
-    const top = Math.floor((canvas.height - 10) / 2);
-    const room = width - 6;
-    for (let y = top; y < top + 10; y++) canvas.paint(y, left, width, "panel");
-    canvas.put(top + 1, left + 3, this.title, "title", room - 5);
-    canvas.put(top + 1, left + width - 6, "esc", "muted");
-    canvas.mark(top + 1, left + width - 6, 3, { kind: "dismiss" });
-    if (field.hint) canvas.put(top + 3, left + 3, field.hint, "muted", room);
-    if (field.url) canvas.put(top + 4, left + 3, field.url, "link", room);
-    const value = field.secret ? "•".repeat(entry.value.length) : entry.value;
-    canvas.paint(top + 6, left + 2, width - 4, "raised");
     const error = status.kind === "editing" ? status.error : undefined;
-    canvas.put(
-      top + 6,
-      left + 3,
-      value ? `${value.slice(1 - room)}▏` : `${field.label}▏`,
-      value ? "text" : "muted",
-      room,
-    );
-    canvas.put(
-      top + 8,
-      left + 3,
-      error ||
-        (status.kind === "submitting" ? "Connecting…" : `Enter Continue${field.url ? " · Ctrl+O Open link" : ""}`),
-      error ? "error" : "muted",
-      room,
-    );
+    const inset = DIALOG_INSET;
+    const room = width - inset * 2;
+    const panel = dialogPanel(width, 7 + Number(!!field.hint) + Number(!!field.url) + Number(!!error), entry.title);
+    let row = 3;
+    if (field.hint) panel.put(row++, inset, field.hint, "muted", room);
+    if (field.url) panel.put(row++, inset, field.url, "link", room);
+    const value = field.secret ? "•".repeat(entry.value.length) : entry.value;
+    panel.put(row++, inset, value ? `${value.slice(1 - room)}▏` : `${field.label}▏`, value ? "text" : "muted", room);
+    if (error) panel.put(row++, inset, error, "error", room);
+    if (status.kind === "submitting") {
+      panel.put(row + 1, inset, "Connecting…", "muted", room);
+    } else {
+      panel.put(row + 1, inset, "submit", "text");
+      panel.put(row + 1, inset + 7, "enter", "muted");
+      if (field.url) {
+        panel.put(row + 1, inset + 15, "open", "text");
+        panel.put(row + 1, inset + 20, "ctrl+o", "muted");
+      }
+    }
+    return panel;
   }
 }

@@ -520,8 +520,9 @@ export class Dashboard {
         else this.searching = true;
         return;
       case "choice": {
-        const picked = this.picker?.click(target.value);
-        if (picked) this.pick(picked);
+        const wasSelected = this.picker?.selected?.value === target.value;
+        const picked = this.picker?.select(target.value);
+        if (wasSelected && picked) this.pick(picked);
         return;
       }
       case "peek":

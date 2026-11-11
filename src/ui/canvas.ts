@@ -26,6 +26,7 @@ export type TextStyle =
   | "mutedBold"
   | "accent"
   | "accentBold"
+  | "onAccent"
   | "done"
   | "italic"
   | "code"
@@ -41,7 +42,7 @@ export type TextStyle =
   | "selectedBold";
 
 /** Background layers for the workspace, controls, selections, and panels. */
-export type Surface = "workspace" | "raised" | "selected" | "panel";
+export type Surface = "workspace" | "raised" | "selected" | "panel" | "accent";
 
 export interface Run {
   text: string;

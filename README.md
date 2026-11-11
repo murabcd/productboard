@@ -32,8 +32,8 @@ account email, and an [API token without scopes](https://id.atlassian.com/manage
 Press `Ctrl+O` on the token prompt to open Atlassian's token page. Productboard
 checks your sign-in before saving the token to macOS Keychain.
 
-Next, choose **OpenAI** or **Anthropic** and paste a provider API key, or select
-**Skip for now** to open Inbox with Jira only.
+In **Connect an integration**, choose **OpenAI** or **Anthropic** and paste a
+provider API key, or select **Skip for now** to open Inbox with Jira only.
 
 To run it as `board` from anywhere, link the launcher from the project directory.
 Make sure `~/.local/bin` is on your `PATH`.

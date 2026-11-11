@@ -45,6 +45,7 @@ class DashboardView extends Renderable {
     private readonly renderer: CliRenderer,
     private readonly dashboard: Dashboard,
     private readonly quit: () => void,
+    private readonly hasPrompt: () => boolean,
   ) {
     super(renderer, {
       id: "dashboard",
@@ -131,8 +132,9 @@ class DashboardView extends Renderable {
     const canvas = frame(this.dashboard);
     this.canvas = canvas;
     drawCanvas(buffer, canvas, this.theme);
-    this.placeImage(canvas.reserved("image"));
-    this.placeComposer(canvas.reserved("composer"));
+    const covered = this.hasPrompt();
+    this.placeImage(covered ? undefined : canvas.reserved("image"));
+    this.placeComposer(canvas.reserved("composer"), !covered);
     this.animate();
   }
 
@@ -165,13 +167,11 @@ class DashboardView extends Renderable {
     if (this.image.source !== state.bytes) this.image.source = state.bytes;
   }
 
-  private placeComposer(area: Rect | undefined): void {
-    if (!this.place(this.composer, area)) {
-      this.composer.blur();
-      return;
-    }
-    this.composer.sync();
-    this.composer.focus();
+  private placeComposer(area: Rect | undefined, focused: boolean): void {
+    const shown = this.place(this.composer, area);
+    if (shown) this.composer.sync();
+    if (shown && focused) this.composer.focus();
+    else this.composer.blur();
   }
 
   /** Let the frame grow the box with its lines. Wrapped lines are counted
@@ -215,14 +215,14 @@ export async function openScreen(open: (url: string) => Promise<void>): Promise<
 
 export function useRenderer(renderer: CliRenderer, open: (url: string) => Promise<void>): Screen {
   let dashboard: DashboardView | undefined;
-  let prompt: { view: Pick<SetupView<unknown>, "key" | "paste">; dismiss(): void } | undefined;
-  renderer.keyInput.on("keypress", (event) => (prompt?.view ?? dashboard)?.key(event));
-  renderer.keyInput.on("paste", (event) => (prompt?.view ?? dashboard)?.paste(event));
+  let prompt: (Pick<SetupView<unknown>, "key" | "paste"> & { dismiss(): void }) | undefined;
+  renderer.keyInput.on("keypress", (event) => (prompt ?? dashboard)?.key(event));
+  renderer.keyInput.on("paste", (event) => (prompt ?? dashboard)?.paste(event));
   return {
     redraw: () => renderer.requestRender(),
     show: (model) =>
       new Promise<void>((resolve) => {
-        dashboard = new DashboardView(renderer, model, resolve);
+        dashboard = new DashboardView(renderer, model, resolve, () => prompt !== undefined);
         renderer.root.add(dashboard);
         renderer.requestRender();
       }),
@@ -232,12 +232,11 @@ export function useRenderer(renderer: CliRenderer, open: (url: string) => Promis
         const view = new SetupView(renderer, theme, request, open, (value) => {
           prompt = undefined;
           view.destroyRecursively();
-          if (dashboard) dashboard.visible = true;
           renderer.requestRender();
           resolve(value);
         });
-        prompt = { view, dismiss: () => view.dismiss() };
-        if (dashboard) dashboard.visible = false;
+        prompt = view;
+        if (!dashboard) renderer.setBackgroundColor(resolveTheme(theme).surfaces.workspace);
         renderer.root.add(view);
         renderer.requestRender();
       }),

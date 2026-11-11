@@ -90,10 +90,23 @@ describe("OpenTUI shell", () => {
     );
     setup.mockInput.pressKey("o", { ctrl: true });
     expect(open).toHaveBeenCalledWith("https://example.com/keys");
-    await setup.mockInput.typeText("test-rejected");
+    await setup.mockInput.pasteBracketedText("test-rejected");
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).toContain("••••");
-    expect(setup.captureCharFrame()).not.toContain("test-rejected");
+    const frame = setup.captureCharFrame();
+    expect(frame.split("\n")[8]).toContain("Connect OpenAI");
+    expect(frame).toContain("submit enter");
+    expect(frame).toContain("••••");
+    expect(frame).not.toContain("test-rejected");
+
+    setup.resize(35, 11);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Enlarge the terminal");
+    await setup.mockInput.pasteBracketedText("ignored");
+    setup.mockInput.pressEnter();
+    expect(submit).not.toHaveBeenCalled();
+    setup.resize(100, 30);
+    await setup.renderOnce();
+
     setup.mockInput.pressEnter();
     await setup.renderOnce();
     expect(setup.captureCharFrame()).toContain("Connecting…");
@@ -115,7 +128,7 @@ describe("OpenTUI shell", () => {
     const connectAgent = mock(async () => {
       const provider = await screen.prompt(
         {
-          title: "Connect Agent",
+          title: "Connect an integration",
           choices: [
             { value: "openai", label: "OpenAI", detail: "API key" },
             { value: "anthropic", label: "Anthropic", detail: "API key" },
@@ -129,14 +142,28 @@ describe("OpenTUI shell", () => {
     await clickSidebar(setup, "Agent");
     await setup.renderOnce();
     await setup.mockInput.typeText("Keep this draft");
+    const wordmark = () => setup.captureSpans().lines[0]?.spans.find((span) => span.text.includes("PRODUCT"))?.fg;
+    const visible = wordmark();
     setup.mockInput.pressKey("k", { ctrl: true });
     await setup.mockInput.typeText("Connect Agent");
     setup.mockInput.pressEnter();
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).toContain("Search providers");
-    expect(setup.captureCharFrame()).not.toContain("Keep this draft");
-    await setup.mockInput.typeText("anthropic");
-    setup.mockInput.pressEnter();
+    const frame = setup.captureCharFrame();
+    expect(frame.split("\n")[8]).toContain("Connect an integration");
+    expect(frame).toContain("Search▏");
+    expect(frame).toContain("PRODUCTBOARD");
+    expect(frame).toContain("Keep this draft");
+    const dimmed = wordmark();
+    if (!visible || !dimmed) throw new Error("Expected the wordmark behind the prompt");
+    expect(dimmed.r).toBeLessThan(visible.r);
+    await clickSidebar(setup, "Inbox");
+    expect(dashboard.agent.tab).toBe(true);
+    await setup.mockInput.typeText("api key");
+    await setup.renderOnce();
+    const rows = setup.captureCharFrame().split("\n");
+    const providerRow = rows.find((row) => row.includes("Anthropic"));
+    if (!providerRow) throw new Error("Expected Anthropic in the provider picker");
+    await setup.mockMouse.click(providerRow.indexOf("Anthropic"), rows.indexOf(providerRow));
     await settle();
     expect(dashboard.agent.chat.backend).toBe(backend);
     expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Keep this draft");

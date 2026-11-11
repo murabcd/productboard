@@ -1,7 +1,7 @@
 import { type OptimizedBuffer, RGBA, TextAttributes } from "@opentui/core";
 import { cells } from "../text";
 import { THEMES, type ThemeId } from "../theme";
-import type { Canvas, ScannerStyle, Style, Surface, TextStyle } from "./canvas";
+import type { Canvas, Rect, ScannerStyle, Style, Surface, TextStyle } from "./canvas";
 
 const SCANNER: Record<ScannerStyle, number> = {
   trail0: 1,
@@ -18,17 +18,22 @@ const SCANNER: Record<ScannerStyle, number> = {
 
 export const isScanner = (style: Style): style is ScannerStyle => style in SCANNER;
 
-export function drawCanvas(buffer: OptimizedBuffer, canvas: Canvas, theme: ReturnType<typeof resolveTheme>): void {
+export function drawCanvas(
+  buffer: OptimizedBuffer,
+  canvas: Canvas,
+  theme: ReturnType<typeof resolveTheme>,
+  { left, top }: Pick<Rect, "left" | "top"> = { left: 0, top: 0 },
+): void {
   const { surfaces, styles, scanner } = theme;
   for (let y = 0; y < canvas.height; y++) {
-    let x = 0;
+    let x = left;
     for (const run of canvas.runs(y)) {
       const surface = surfaces[run.surface ?? "workspace"];
       if (isScanner(run.style)) {
-        buffer.drawText(run.text, x, y, scanner(run.style, surface), surface, TextAttributes.NONE);
+        buffer.drawText(run.text, x, top + y, scanner(run.style, surface), surface, TextAttributes.NONE);
       } else {
         const style = styles[run.style];
-        buffer.drawText(run.text, x, y, style.fg, style.bg ?? surface, style.attributes);
+        buffer.drawText(run.text, x, top + y, style.fg, style.bg ?? surface, style.attributes);
       }
       x += cells(run.text);
     }
@@ -43,10 +48,11 @@ export function resolveTheme(id: ThemeId) {
     raised: hex(palette.raised),
     panel: hex(palette.panel),
     selected: hex(palette.selection),
+    accent: hex(palette.accent),
   };
   const text = hex(palette.text);
   const muted = hex(palette.muted);
-  const accent = hex(palette.accent);
+  const { accent } = surfaces;
   const warning = hex(palette.warning);
   const { BOLD, ITALIC, UNDERLINE, STRIKETHROUGH, NONE } = TextAttributes;
   const style = (fg: RGBA, attributes: number = NONE, bg?: RGBA) => ({ fg, bg, attributes });
@@ -58,6 +64,7 @@ export function resolveTheme(id: ThemeId) {
     mutedBold: style(muted, BOLD),
     accent: style(accent),
     accentBold: style(accent, BOLD),
+    onAccent: style(surfaces.workspace, BOLD),
     done: style(hex(palette.done)),
     italic: style(text, ITALIC),
     code: style(hex(palette.code), NONE, hex(palette.codeBackground)),

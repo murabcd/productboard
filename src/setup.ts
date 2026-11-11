@@ -112,14 +112,14 @@ export async function connectAgent(
   const choices = providers.map((provider) => ({
     value: provider,
     label: PROVIDER_NAMES[provider],
-    detail: "API key",
+    detail: "",
   }));
   const provider =
     override && mode === "explicit"
       ? override
       : await screen.prompt<AgentProvider | null>(
           {
-            title: "Connect Agent",
+            title: "Connect an integration",
             choices:
               mode === "first-run"
                 ? [...choices, { value: null, label: "Skip for now", detail: "Jira only" }]
@@ -134,7 +134,6 @@ export async function connectAgent(
         title: `Connect ${PROVIDER_NAMES[provider]}`,
         field: {
           label: "API key",
-          hint: "Create or copy an API key from your provider.",
           url: AGENT_KEY_PAGES[provider],
           secret: true,
           submit: (key) => {
