@@ -6,8 +6,8 @@ the terminal to draw.
 
 ## Refresh and scope
 
-The current list stays visible during refresh and on refresh failure. Earlier
-results cannot replace a new scope.
+The current list stays visible during refresh and on refresh failure. A scope
+change cancels the previous read and rejects any late result.
 
 Startup opens Inbox and loads mentions alongside the board catalog.
 A scope starts loading as soon as it is ready. Clearing server filters applies

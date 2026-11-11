@@ -15,11 +15,14 @@ Keychain and stores the site, email, and last board in
 and follows attachment redirects without forwarding it. Search uses POST as a
 read operation.
 
-Transport owns timeouts, retries, rate limit handling, and request priority.
+Transport owns timeouts, retries, rate limit handling, request priority, and
+the 20 MiB attachment preview limit. It stops reading an oversized stream
+even when Jira omits its size.
 Catalog pagination and Agent searches run at background priority, leaving
 slots for interactive reads. The timeout starts when a read receives a slot.
-Canceling an Agent search removes it from the queue or aborts the active
-request. Closing the transport cancels all reads.
+Canceling an Agent search or replacing an issue or sprint scope removes
+queued reads and aborts active requests, including follow-up pages and
+comment reads. Closing the transport cancels all reads.
 
 ## Issue queries
 
@@ -28,7 +31,9 @@ scope. Assigned and Created match the current user against the issue's
 assignee and creator fields, respectively. The local filter searches loaded rows.
 
 The optional sprint filter adds a Jira sprint ID to the current view's query.
-Team focus applies that filter to each of its searches.
+Team focus applies the project, sprint, and status filters to its searches.
+With the Done filter, only recent mentions and changes to your issues are
+queried because the other sections show open work.
 
 Each site stores sprints in its own custom field, so [[src/jira/client.ts#JiraClient]]
 looks up the field ID once per session and asks for it with every search. Lists

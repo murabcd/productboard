@@ -106,10 +106,10 @@ export class JiraClient {
     return issues.slice(0, limit);
   }
 
-  async snapshot(query: IssueQuery): Promise<Snapshot> {
-    if (query.view === View.Mentions) return { query, ...(await this.mentions(jql(query), query.limit)) };
-    if (query.view === View.Today) return { query, scanned: 0, ...(await today(this, query)) };
-    const found = await this.search(jql(query), LIST_FIELDS, query.limit + 1);
+  async snapshot(query: IssueQuery, signal?: AbortSignal): Promise<Snapshot> {
+    if (query.view === View.Mentions) return { query, ...(await this.mentions(jql(query), query.limit, signal)) };
+    if (query.view === View.Today) return { query, scanned: 0, ...(await today(this, query, { signal })) };
+    const found = await this.search(jql(query), LIST_FIELDS, query.limit + 1, { signal });
     return { issues: found.slice(0, query.limit).map(toIssue), query, more: found.length > query.limit, scanned: 0 };
   }
 
@@ -120,28 +120,30 @@ export class JiraClient {
   }
 
   /** Issues matching the JQL whose comments @-mention you, newest mention first. */
-  async mentions(query: string, limit: number): Promise<{ issues: Issue[]; more: boolean; scanned: number }> {
-    const found = await this.search(query, [...LIST_FIELDS, "comment"], limit + 1);
-    const rows = found.slice(0, limit);
-    return { issues: await this.mentioned(rows), more: found.length > limit, scanned: rows.length };
-  }
-
-  /** The issues whose comments @-mention you, newest mention first. */
-  private async mentioned(rows: RawIssue[]): Promise<Issue[]> {
+  async mentions(
+    query: string,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<{ issues: Issue[]; more: boolean; scanned: number }> {
+    const candidates = await this.search(query, [...LIST_FIELDS, "comment"], limit + 1, { signal });
+    const rows = candidates.slice(0, limit);
+    signal?.throwIfAborted();
     const { accountId } = await this.myself();
+    signal?.throwIfAborted();
     const found = await Promise.all(
       rows.map(async (row): Promise<Issue[]> => {
         const page = row.fields.comment;
-        const thread = isComplete(page) ? page.comments : await this.allComments(row.key);
+        const thread = isComplete(page) ? page.comments : await this.allComments(row.key, signal);
         const mention = latestMention(toComments(thread, accountId));
         return mention ? [{ ...toIssue(row), mention }] : [];
       }),
     );
-    return found.flat().sort((a, b) => (b.mention?.created ?? "").localeCompare(a.mention?.created ?? ""));
+    const issues = found.flat().sort((a, b) => (b.mention?.created ?? "").localeCompare(a.mention?.created ?? ""));
+    return { issues, more: candidates.length > limit, scanned: rows.length };
   }
 
   /** Every comment on an issue, oldest first. */
-  async allComments(key: string): Promise<CommentPage["comments"]> {
+  async allComments(key: string, signal?: AbortSignal): Promise<CommentPage["comments"]> {
     const comments: CommentPage["comments"] = [];
     for (;;) {
       const page = await this.http.get(
@@ -149,6 +151,7 @@ export class JiraClient {
         { startAt: comments.length, maxResults: 100 },
         CommentPage,
         "comment list",
+        { signal },
       );
       comments.push(...page.comments);
       if (page.comments.length === 0 || comments.length >= (page.total ?? 0)) return comments;
@@ -167,12 +170,13 @@ export class JiraClient {
     };
   }
 
-  async sprints(board: string): Promise<Sprint[]> {
+  async sprints(board: string, signal?: AbortSignal): Promise<Sprint[]> {
     try {
       const sprints = await this.pages(
         `/rest/agile/1.0/board/${encodeURIComponent(board)}/sprint`,
         RawSprint,
         "sprint list",
+        signal,
       );
       return sortSprints(sprints.map(toSprint));
     } catch (error) {
@@ -203,16 +207,13 @@ export class JiraClient {
 
   /** Every item of a startAt/isLast paginated list. These are the board,
    * project and sprint catalogs, which load behind the issue list. */
-  private async pages<T>(path: string, item: z.ZodType<T>, what: string): Promise<T[]> {
+  private async pages<T>(path: string, item: z.ZodType<T>, what: string, signal?: AbortSignal): Promise<T[]> {
     const items: T[] = [];
     for (;;) {
-      const page = await this.http.get(
-        path,
-        { startAt: items.length, maxResults: 50 },
-        pageOf(item),
-        what,
-        "background",
-      );
+      const page = await this.http.get(path, { startAt: items.length, maxResults: 50 }, pageOf(item), what, {
+        priority: "background",
+        signal,
+      });
       items.push(...page.values);
       const done = page.isLast ?? (page.total === undefined || items.length >= page.total);
       if (done || page.values.length === 0) return items;

@@ -14,7 +14,11 @@ interface SearchBody {
   nextPageToken?: string;
 }
 
-type Route = (url: URL, body: SearchBody | undefined) => Response | Promise<Response>;
+type Route = (
+  url: URL,
+  body: SearchBody | undefined,
+  signal: AbortSignal | null | undefined,
+) => Response | Promise<Response>;
 
 const SPRINT_FIELD = "customfield_10020";
 
@@ -32,7 +36,7 @@ function fakeJira(route: Route) {
     }
     const body: SearchBody | undefined = init?.body ? JSON.parse(String(init.body)) : undefined;
     requests.push({ path: url.pathname, body });
-    return route(url, body);
+    return route(url, body, init?.signal);
   });
   const http = new JiraHttp(credentials, fetcher, async () => {});
   return { client: new JiraClient(http), http, requests };
@@ -96,6 +100,21 @@ describe("HTTP", () => {
     expect(me.accountId).toBe("me-id");
     expect(calls).toBe(2);
     expect(performance.now() - started).toBeLessThan(3000);
+  });
+
+  test("when both hedged attempts answer together only the losing connection is aborted", async () => {
+    const signals: AbortSignal[] = [];
+    const bothStarted = deferred<void>();
+    const fetcher = fakeFetch(async (_input: string | URL | Request, init?: RequestInit) => {
+      if (!init?.signal) throw new Error("Missing request signal");
+      signals.push(init.signal);
+      if (signals.length === 2) bothStarted.resolve();
+      await bothStarted.promise;
+      return json({ accountId: "me-id", displayName: "Avery" });
+    });
+    const client = new JiraClient(new JiraHttp(credentials, fetcher, async () => {}));
+    expect((await client.myself()).accountId).toBe("me-id");
+    expect(signals.map(({ aborted }) => aborted)).toEqual([false, true]);
   });
 
   test("closing rejects queued catalog reads without waiting for active reads", async () => {
@@ -195,6 +214,30 @@ describe("attachments", () => {
     expect(seen[0]?.auth).toStartWith("Basic ");
     expect(seen[1]).toEqual({ url: "https://api.media.atlassian.com/file/x?token=signed", auth: null });
   });
+
+  test("an oversized stream with no declared length is canceled before it finishes", async () => {
+    let canceled = false;
+    let pulled = 0;
+    const chunk = new Uint8Array(1024 * 1024);
+    const body = new ReadableStream({
+      pull(controller) {
+        if (++pulled < 24) controller.enqueue(chunk);
+        else controller.close();
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const client = new JiraClient(
+      new JiraHttp(
+        credentials,
+        fakeFetch(async () => new Response(body)),
+      ),
+    );
+    await expect(client.attachment("42")).rejects.toThrow("too large to preview");
+    expect(canceled).toBe(true);
+    expect(pulled).toBeLessThan(24);
+  });
 });
 
 describe("search", () => {
@@ -220,6 +263,33 @@ describe("search", () => {
 });
 
 describe("mentions", () => {
+  test("canceling an inbox snapshot aborts active comment reads and skips queued threads", async () => {
+    const read = new AbortController();
+    const threads = Array.from({ length: 9 }, (_, i) => rawIssue(`EX-${i + 1}`));
+    const active = deferred<void>();
+    const signals: AbortSignal[] = [];
+    const { client, http } = fakeJira((url, _body, signal) => {
+      if (url.pathname.endsWith("/myself")) return json({ accountId: "me-id", displayName: "Avery" });
+      if (!url.pathname.endsWith("/comment")) return json({ issues: threads, isLast: true });
+      if (!signal) throw new Error("Missing request signal");
+      signals.push(signal);
+      if (signals.length === 8) active.resolve();
+      return new Promise<Response>((_, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+      );
+    });
+    const result = client.snapshot(withView(initialQuery, View.Mentions), read.signal).catch((error: unknown) => error);
+    try {
+      await active.promise;
+      const reason = new Error("Scope changed");
+      read.abort(reason);
+      expect(signals.map(({ aborted }) => aborted)).toEqual(Array(8).fill(true));
+      expect(await result).toBe(reason);
+    } finally {
+      http.close();
+    }
+  });
+
   test("found from search comments, reading only truncated threads, newest mention first", async () => {
     const { client, requests } = fakeJira((url) => {
       if (url.pathname.endsWith("/myself")) return json({ accountId: "me-id", displayName: "Avery" });

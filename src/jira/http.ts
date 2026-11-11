@@ -59,19 +59,13 @@ export class JiraHttp {
     private readonly sleep = pause,
   ) {}
 
-  get<T>(
-    path: string,
-    params: Params,
-    schema: z.ZodType<T>,
-    what: string,
-    priority: Priority = "foreground",
-  ): Promise<T> {
+  get<T>(path: string, params: Params, schema: z.ZodType<T>, what: string, options?: ReadOptions): Promise<T> {
     const query = new URLSearchParams();
     for (const [name, value] of Object.entries(params)) {
       if (value !== undefined) query.set(name, String(value));
     }
     const suffix = query.size ? `?${query}` : "";
-    return this.request("GET", `${path}${suffix}`, undefined, schema, what, { priority });
+    return this.request("GET", `${path}${suffix}`, undefined, schema, what, options);
   }
 
   /** Jira's search is a POST, but it only reads. */
@@ -92,16 +86,10 @@ export class JiraHttp {
     });
     const location = response.headers.get("Location");
     if (response.status >= 300 && response.status < 400 && location) {
+      void response.body?.cancel().catch(() => {});
       response = await this.send(new URL(location, `https://${this.credentials.site}`).href, "foreground", {});
     }
-    if (Number(response.headers.get("Content-Length")) > MAX_DOWNLOAD_BYTES) {
-      throw new JiraError("This file is too large to preview. Press o to open it in Helium.");
-    }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.length > MAX_DOWNLOAD_BYTES) {
-      throw new JiraError("This file is too large to preview. Press o to open it in Helium.");
-    }
-    return bytes;
+    return previewBytes(response);
   }
 
   private auth(): Record<string, string> {
@@ -170,12 +158,12 @@ export class JiraHttp {
     const attempts = own.map(async (mine, n) => {
       const stop = AbortSignal.any([signal, mine.signal]);
       if (n > 0) await pause(n * HEDGE_MS, stop);
-      const response = await this.fetcher(url, { ...init, signal: stop });
-      for (const other of own) if (other !== mine) other.abort();
-      return response;
+      return { response: await this.fetcher(url, { ...init, signal: stop }), mine };
     });
     try {
-      return await Promise.any(attempts);
+      const { response, mine } = await Promise.any(attempts);
+      for (const other of own) if (other !== mine) other.abort();
+      return response;
     } catch (error) {
       throw error instanceof AggregateError ? error.errors[0] : error;
     }
@@ -215,6 +203,29 @@ export class JiraHttp {
         next.resolve();
       }
     }
+  }
+}
+
+async function previewBytes(response: Response): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  const announcedSize = Number(response.headers.get("Content-Length")) || 0;
+  let size = 0;
+  const reader = response.body?.getReader();
+  try {
+    if (announcedSize <= MAX_DOWNLOAD_BYTES) {
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_DOWNLOAD_BYTES) break;
+        chunks.push(value);
+      }
+      if (size <= MAX_DOWNLOAD_BYTES) return Buffer.concat(chunks, size);
+    }
+    throw new JiraError("This file is too large to preview. Press o to open it in Helium.");
+  } finally {
+    void reader?.cancel().catch(() => {});
+    reader?.releaseLock();
   }
 }
 

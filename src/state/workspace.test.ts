@@ -7,15 +7,15 @@ import { REFRESH_MS, Workspace } from "./workspace";
 
 /** A workspace whose requests stay pending until the test answers them. */
 function setup() {
-  const requests: { query: IssueQuery; reply: Deferred<Snapshot> }[] = [];
+  const requests: { query: IssueQuery; signal: AbortSignal; reply: Deferred<Snapshot> }[] = [];
   const source = {
-    snapshot: mock((query: IssueQuery) => {
+    snapshot: mock((query: IssueQuery, signal: AbortSignal) => {
       const reply = deferred<Snapshot>();
-      requests.push({ query, reply });
+      requests.push({ query, signal, reply });
       return reply.promise;
     }),
     catalog: mock((): Promise<Catalog> => deferred<Catalog>().promise),
-    sprints: mock((_board: string): Promise<Sprint[]> => deferred<Sprint[]>().promise),
+    sprints: mock((_board: string, _signal: AbortSignal): Promise<Sprint[]> => deferred<Sprint[]>().promise),
   };
   let now = 1_000_000;
   const work = new Workspace(source, { now: () => now });
@@ -33,6 +33,7 @@ describe("workspace", () => {
     await settle();
     expect(work.issues.map((i) => i.key)).toEqual(["EX-1", "EX-2"]);
     expect(work.error).toContain("network failed");
+    expect(requests[0]?.signal.aborted).toBe(true);
     work.refresh();
     expect(work.error).toBe("");
     expect(work.pending).toBe(true);
@@ -43,6 +44,7 @@ describe("workspace", () => {
     work.refresh();
     work.change({ ...initialQuery, view: View.Created });
     expect(work.issues).toEqual([]);
+    expect(requests.map(({ signal }) => signal.aborted)).toEqual([true, false]);
     requests[0]?.reply.resolve(snapshot(team, ["EX-OLD"]));
     await settle();
     expect(work.issues).toEqual([]);
@@ -148,7 +150,7 @@ describe("workspace", () => {
 
     work.change({ ...work.query, sprintFilter: 42 });
     work.chooseBoard("1");
-    expect(source.snapshot).toHaveBeenLastCalledWith(initialQuery);
+    expect(requests.at(-1)?.query).toEqual(initialQuery);
   });
 
   test("switching boards starts a sprint read immediately and ignores earlier requests for the same board", async () => {
@@ -165,7 +167,11 @@ describe("workspace", () => {
     work.chooseBoard("2");
     work.chooseBoard("1");
     work.loadSprints();
-    expect(source.sprints.mock.calls).toEqual([["1"], ["2"], ["1"]]);
+    expect(source.sprints.mock.calls.map(([board, signal]) => [board, signal.aborted])).toEqual([
+      ["1", true],
+      ["2", true],
+      ["1", false],
+    ]);
 
     first.resolve([{ id: 1, name: "Old sprint", state: "active", start: "", end: "", goal: "" }]);
     second.reject(new Error("Previous board failed"));

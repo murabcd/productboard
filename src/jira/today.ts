@@ -3,7 +3,7 @@
 import { localDay, usDate } from "../dates";
 import type { JiraClient } from "./client";
 import { jiraTime, LIST_FIELDS, openBlocker, type RawIssue, toIssue } from "./parse";
-import { type IssueQuery, initialQuery, jql, View } from "./query";
+import { type IssueQuery, jql, View } from "./query";
 import {
   BACKLOG_STATUS,
   BLOCKED_STATUS,
@@ -61,21 +61,24 @@ function attention(issue: Issue, raw: RawIssue, flagged: Set<string>, now: numbe
 export async function today(
   source: Source,
   query: IssueQuery,
-  now = Date.now(),
+  { now = Date.now(), signal }: { now?: number; signal?: AbortSignal } = {},
 ): Promise<{ issues: Issue[]; more: boolean }> {
-  const scope = { ...initialQuery, view: View.All, project: query.project, sprintFilter: query.sprintFilter };
-  const where = (...terms: string[]) => jql(scope, ...terms);
-  const inSprint = ["sprint in openSprints()", "statusCategory != Done"];
+  const scope = { ...query, view: View.All, assignee: "" };
+  const open = { ...scope, status: "open" } satisfies IssueQuery;
+  const showOpen = scope.status !== "done";
+  const inSprint = "sprint in openSprints()";
+  const options = { signal };
   const [sprintWork, flagged, mentioned, created, assigned] = await Promise.all([
-    source.search(where(...inSprint), SPRINT_FIELDS, query.limit + 1),
-    source.search(where(...inSprint, "flagged = Impediment"), LIST_FIELDS, query.limit),
-    source.mentions(where("updated >= startOfDay(-1)"), query.limit),
+    showOpen ? source.search(jql(open, inSprint), SPRINT_FIELDS, query.limit + 1, options) : [],
+    showOpen ? source.search(jql(open, inSprint, "flagged = Impediment"), LIST_FIELDS, query.limit, options) : [],
+    source.mentions(jql(scope, "updated >= startOfDay(-1)"), query.limit, signal),
     source.search(
-      where("(creator = currentUser() OR reporter = currentUser())", "updated >= startOfDay(-1)"),
+      jql(scope, "(creator = currentUser() OR reporter = currentUser())", "updated >= startOfDay(-1)"),
       TIMED_FIELDS,
       query.limit,
+      options,
     ),
-    source.search(where("assignee = currentUser()", "statusCategory != Done"), TIMED_FIELDS, query.limit),
+    showOpen ? source.search(jql(open, "assignee = currentUser()"), TIMED_FIELDS, query.limit, options) : [],
   ]);
 
   const sections = new Map<TodaySection, Issue[]>(TODAY_SECTIONS.map((name) => [name, []]));

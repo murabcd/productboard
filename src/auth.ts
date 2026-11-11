@@ -9,6 +9,7 @@ import { THEME_IDS, type ThemeId } from "./theme";
 
 const KEYCHAIN_SERVICE = "productboard";
 const CONFIG_PATH = join(homedir(), ".config", "productboard", "config.json");
+export const SITE_PATTERN = /^[a-z0-9-]+\.atlassian\.net$/;
 
 const AGENT_PROVIDERS = ["openai", "anthropic"] as const;
 export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
@@ -32,7 +33,7 @@ const AgentChoice = z.object({
 export type AgentChoice = z.infer<typeof AgentChoice>;
 
 const Config = z.object({
-  site: z.string(),
+  site: z.string().regex(SITE_PATTERN),
   email: z.string(),
   /** The board chosen last, opened again on the next start. */
   board: z.string().optional(),
@@ -41,7 +42,6 @@ const Config = z.object({
 });
 type Config = z.infer<typeof Config>;
 
-export const SITE_PATTERN = /^[a-z0-9-]+\.atlassian\.net$/;
 // Keychain commands are sent as text, so values must not contain quotes.
 const EMAIL_PATTERN = /^[^\s"\\]+@[^\s"\\]+$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9_=+/.-]+$/;

@@ -1,11 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { AgentBackend } from "../agent/chat";
 import { plainText, toDoc } from "../jira/adf";
-import type { Snapshot } from "../jira/client";
 import { toComments } from "../jira/parse";
 import { initialQuery, View } from "../jira/query";
 import type { Detail } from "../jira/types";
-import { Workspace } from "../state/workspace";
+import { type Source, Workspace } from "../state/workspace";
 import { deferred, fakeAgent, rawComment, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
@@ -56,7 +55,7 @@ function setup() {
   };
   const opener = { open: mock(async () => {}), copy: mock(async () => {}) };
   const source = {
-    snapshot: mock((): Promise<Snapshot> => deferred<Snapshot>().promise),
+    snapshot: mock<Source["snapshot"]>(() => deferred<never>().promise),
     catalog: mock(() => deferred<never>().promise),
     sprints: mock(() => deferred<never>().promise),
   };
@@ -493,20 +492,16 @@ describe("concept layout", () => {
     work.sprints = [{ id: 36, name: "Sprint 36", state: "active", start: "", end: "", goal: "" }];
     dashboard.handle({ text: "6" });
     expect(dashboard.picker).toBeNull();
-    expect(source.snapshot).toHaveBeenLastCalledWith(expect.objectContaining({ view: View.All, sprintFilter: null }));
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.All, sprintFilter: null });
 
     for (const key of [...text("Fsprint"), ENTER, ...text("36"), ENTER]) dashboard.handle(key);
-    expect(source.snapshot).toHaveBeenLastCalledWith(expect.objectContaining({ view: View.All, sprintFilter: 36 }));
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.All, sprintFilter: 36 });
     expect(frame(dashboard).text(4)).toContain("Filter 1 ▾");
 
     dashboard.handle({ text: "3" });
-    expect(source.snapshot).toHaveBeenLastCalledWith(
-      expect.objectContaining({ view: View.Mentions, sprintFilter: 36 }),
-    );
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Mentions, sprintFilter: 36 });
     for (const key of [...text("Fsprint"), ENTER, ...text("any sprint"), ENTER]) dashboard.handle(key);
-    expect(source.snapshot).toHaveBeenLastCalledWith(
-      expect.objectContaining({ view: View.Mentions, sprintFilter: null }),
-    );
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Mentions, sprintFilter: null });
   });
 
   test("a folded group hides its rows and the selection skips them", () => {

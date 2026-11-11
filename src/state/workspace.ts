@@ -6,9 +6,9 @@ import type { Choice, Issue, Sprint } from "../jira/types";
 import { clean } from "../text";
 
 export interface Source {
-  snapshot(query: IssueQuery): Promise<Snapshot>;
+  snapshot(query: IssueQuery, signal: AbortSignal): Promise<Snapshot>;
   catalog(): Promise<Catalog>;
-  sprints(board: string): Promise<Sprint[]>;
+  sprints(board: string, signal: AbortSignal): Promise<Sprint[]>;
 }
 
 export const REFRESH_MS = 60_000;
@@ -30,8 +30,8 @@ export class Workspace {
   boardCatalogError = "";
   sprintCatalogError = "";
 
-  private request: { query: IssueQuery } | undefined;
-  private sprintRequest: { board: string } | undefined;
+  private request: AbortController | undefined;
+  private sprintRequest: AbortController | undefined;
   private nextRefresh = Number.POSITIVE_INFINITY;
   private catalogRetryAt = Number.POSITIVE_INFINITY;
   private sprintsRetryAt = Number.POSITIVE_INFINITY;
@@ -87,6 +87,7 @@ export class Workspace {
   change(query: IssueQuery): void {
     if (sameQuery(query, this.query)) return;
     this.query = query;
+    this.request?.abort();
     this.request = undefined;
     this.error = "";
     this.nextRefresh = Number.POSITIVE_INFINITY;
@@ -98,20 +99,20 @@ export class Workspace {
     this.changed();
   }
 
-  /** Load the current scope, unless that exact request is already running.
-   * A request for an older scope is dropped rather than waited for. */
   private async load(): Promise<void> {
     if (!isReady(this.query) || this.request) return;
-    const request = { query: this.query };
+    const query = this.query;
+    const request = new AbortController();
     this.request = request;
     this.error = "";
     try {
-      const snapshot = await this.source.snapshot(request.query);
-      if (this.request === request && sameQuery(snapshot.query, request.query)) {
+      const snapshot = await this.source.snapshot(query, request.signal);
+      if (this.request === request && sameQuery(snapshot.query, query)) {
         this.snapshot = snapshot;
         this.updated = new Date(this.now());
       }
     } catch (error) {
+      request.abort();
       if (this.request === request) this.error = message(error);
     } finally {
       if (this.request === request) {
@@ -177,15 +178,19 @@ export class Workspace {
       return;
     }
     const candidates = this.boards.slice(0, DEFAULT_BOARD_CANDIDATES);
+    if (!candidates.length || this.sprintRequest) return;
+    const request = new AbortController();
+    this.sprintRequest = request;
     void Promise.all(
       candidates.map((board) =>
-        this.source.sprints(board.value).then(
+        this.source.sprints(board.value, request.signal).then(
           (sprints) => ({ board: board.value, sprints }),
           () => ({ board: board.value, sprints: [] }),
         ),
       ),
     ).then((found) => {
-      if (this.board) return; // the user chose a board meanwhile
+      if (this.sprintRequest !== request) return;
+      this.sprintRequest = undefined;
       const active = (sprints: Sprint[]) => sprints.filter((s) => s.state === "active").length;
       const best = found.reduce<(typeof found)[number] | undefined>(
         (top, next) => (!top || active(next.sprints) > active(top.sprints) ? next : top),
@@ -197,6 +202,7 @@ export class Workspace {
 
   private openBoard(board: string, sprints?: Sprint[]): void {
     this.board = board;
+    this.sprintRequest?.abort();
     this.sprintRequest = undefined;
     this.sprints = sprints ?? [];
     this.sprintCatalogError = "";
@@ -208,13 +214,14 @@ export class Workspace {
 
   async loadSprints(): Promise<void> {
     if (!this.board || this.sprintRequest) return;
-    const request = { board: this.board };
+    const board = this.board;
+    const request = new AbortController();
     this.sprintRequest = request;
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
     this.changed();
     try {
-      const sprints = await this.source.sprints(request.board);
+      const sprints = await this.source.sprints(board, request.signal);
       if (this.sprintRequest === request) this.sprints = sprints;
     } catch (error) {
       if (this.sprintRequest === request) {

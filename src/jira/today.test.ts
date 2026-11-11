@@ -106,7 +106,7 @@ describe("Today", () => {
         { flagged: ["EX-2"] },
       ),
       query,
-      NOW,
+      { now: NOW },
     );
     expect(rows(result.issues)).toEqual([
       ["Blocked", "EX-1", undefined], // the status column already says "QA Blocked"
@@ -131,7 +131,7 @@ describe("Today", () => {
         assigned: ["EX-9", "EX-10"],
       }),
       query,
-      NOW,
+      { now: NOW },
     );
     expect(rows(result.issues)).toEqual([
       ["Blocked", "EX-1", undefined],
@@ -145,7 +145,7 @@ describe("Today", () => {
     const result = await today(
       source([], { assigned: [timed("EX-1", "new", "Backlog"), timed("EX-2"), timed("EX-3", "indeterminate")] }),
       query,
-      NOW,
+      { now: NOW },
     );
     expect(result.issues.filter((i) => i.section === "Assigned to you").map((i) => i.key)).toEqual([
       "EX-3",
@@ -156,12 +156,24 @@ describe("Today", () => {
 
   test("project and sprint filters narrow every search, including mentions", async () => {
     const fake = source([]);
-    await today(fake, { ...query, project: "EX", sprintFilter: 42 }, NOW);
+    await today(fake, { ...query, project: "EX", sprintFilter: 42 }, { now: NOW });
     expect(fake.searches).toHaveLength(5);
     for (const jql of fake.searches) {
       expect(jql).toContain('project = "EX"');
       expect(jql).toContain("sprint = 42");
     }
+  });
+
+  test("the status filter narrows recent activity and skips open-only sections when set to Done", async () => {
+    const open = source([]);
+    await today(open, { ...query, status: "open" }, { now: NOW });
+    expect(open.searches).toHaveLength(5);
+    expect(open.searches.every((jql) => jql.includes("statusCategory != Done"))).toBe(true);
+
+    const done = source([]);
+    await today(done, { ...query, status: "done" }, { now: NOW });
+    expect(done.searches).toHaveLength(2);
+    expect(done.searches.every((jql) => jql.includes("statusCategory = Done"))).toBe(true);
   });
 });
 
