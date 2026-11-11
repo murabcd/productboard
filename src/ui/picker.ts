@@ -117,11 +117,10 @@ export class Picker<Kind extends string = PickerKind> {
     return this.rows.slice(this.offset, this.offset + capacity);
   }
 
-  select(value: string): PickerItem | undefined {
-    const index = this.rows.findIndex((row) => row && "choice" in row && row.choice.value === value);
-    if (index < 0) return;
-    this.cursor = index;
-    return this.selected;
+  choice(value: string): PickerItem | undefined {
+    for (const row of this.rows) {
+      if (row && "choice" in row && row.choice.value === value) return row.choice;
+    }
   }
 
   move(direction: -1 | 1, distance = 1): void {

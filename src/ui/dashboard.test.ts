@@ -9,7 +9,7 @@ import { deferred, fakeAgent, rawComment, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key } from "./input";
-import { pickerRows, sidebarWidth } from "./layout";
+import { pickerRows } from "./layout";
 import { NAVIGATION, navKey } from "./navigation";
 import { detailBlocks } from "./panel";
 import { Picker } from "./picker";
@@ -136,14 +136,14 @@ describe("dashboard", () => {
     expect(dashboard.workspace.query.view).toBe(View.Mine);
   });
 
-  test("clicking a picker choice highlights it; a second click chooses it", () => {
+  test("one click chooses a picker row even when it isn't highlighted", () => {
     const { dashboard, work } = setup();
     work.projects = [{ value: "EX", label: "Example", detail: "", state: "" }];
     dashboard.handle({ text: "p" });
-    dashboard.click({ kind: "choice", value: "EX" });
-    expect(dashboard.picker?.selected?.value).toBe("EX");
+    expect(dashboard.picker?.selected?.value).not.toBe("EX");
     dashboard.click({ kind: "choice", value: "EX" });
     expect(work.query.project).toBe("EX");
+    expect(dashboard.picker).toBeNull();
   });
 
   test("typing a search never triggers navigation", () => {
@@ -755,19 +755,14 @@ describe("frame", () => {
       [60, 18],
       [121, 60],
     ] as const) {
-      const centered = draw(dashboard, width, height);
-      const middle = Math.floor(height / 2);
-      const columns = Array.from({ length: width }, (_, x) => centered.targetAt(x, middle)?.kind);
+      const dialog = draw(dashboard, width, height);
+      const top = Math.floor(height / 4);
+      const columns = Array.from({ length: width }, (_, x) => dialog.targetAt(x, top)?.kind);
       const left = columns.indexOf("dialog");
       const right = columns.lastIndexOf("dialog");
-      expect(left).toBeGreaterThan(sidebarWidth(width));
-      expect(Math.abs(left - sidebarWidth(width) - (width - 1 - right))).toBeLessThanOrEqual(1);
-
-      const rows = Array.from({ length: height }, (_, y) => centered.targetAt(left, y)?.kind);
-      const top = rows.indexOf("dialog");
-      const bottom = rows.lastIndexOf("dialog");
-      expect(top).toBeGreaterThan(0);
-      expect(Math.abs(top - (height - 1 - bottom))).toBeLessThanOrEqual(1);
+      expect(right - left + 1).toBe(Math.min(60, width - 2));
+      expect(left).toBe(Math.floor((width - (right - left + 1)) / 2));
+      expect(dialog.targetAt(left, top - 1)?.kind).not.toBe("dialog");
     }
     expect(screen).toMatch(/● HR Team - Sprint 36 +Active · Nov 3–17/);
     expect(screen).toMatch(/ HR Team - Sprint 35 +Active · Oct 20–Nov 2/);

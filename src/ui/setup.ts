@@ -8,9 +8,9 @@ import {
 } from "@opentui/core";
 import type { ThemeId } from "../theme";
 import { Canvas } from "./canvas";
-import { DIALOG_INSET, dialogPanel, pickerDialog } from "./dialog";
+import { DIALOG_INSET, type DialogFrame, dialogPanel, pickerDialog } from "./dialog";
 import { editLine, type Key, keyId } from "./input";
-import { DIALOG_WIDTH, pickerRows } from "./layout";
+import { pickerRows } from "./layout";
 import { Picker } from "./picker";
 import { textKeys, toKeys } from "./terminal-input";
 import { drawCanvas, resolveTheme } from "./theme";
@@ -48,7 +48,7 @@ export class SetupView<Result> extends Renderable {
   private readonly theme: ReturnType<typeof resolveTheme>;
   private readonly dialog: FieldEntry<Result> | Picker<"provider">;
   private readonly abort = new AbortController();
-  private frame?: { panel: Canvas; left: number; top: number };
+  private frame?: DialogFrame;
 
   constructor(
     renderer: CliRenderer,
@@ -71,7 +71,7 @@ export class SetupView<Result> extends Renderable {
         const target = frame?.panel.targetAt(event.x - frame.left, event.y - frame.top);
         if (target?.kind === "dismiss") this.dismiss();
         if (target?.kind === "choice" && this.dialog instanceof Picker) {
-          this.dialog.select(target.value)?.run();
+          this.dialog.choice(target.value)?.run();
         }
       },
     });
@@ -171,25 +171,23 @@ export class SetupView<Result> extends Renderable {
       drawCanvas(buffer, message, this.theme);
       return;
     }
-    const panelWidth = Math.min(DIALOG_WIDTH, width - 2);
-    const panel =
+    const frame =
       this.dialog instanceof Picker
-        ? pickerDialog(panelWidth, pickerRows(height), this.dialog, "No integrations found", {
+        ? pickerDialog(buffer, this.dialog, "No integrations found", {
             accentSelection: true,
           })
-        : this.fieldPanel(panelWidth, this.dialog);
-    const left = Math.floor((width - panel.width) / 2);
-    const top = Math.min(Math.floor(height / 4), height - panel.height - 1);
-    this.frame = { panel, left, top };
-    drawCanvas(buffer, panel, this.theme, { left, top });
+        : this.fieldPanel(buffer, this.dialog);
+    this.frame = frame;
+    drawCanvas(buffer, frame.panel, this.theme, frame);
   }
 
-  private fieldPanel(width: number, entry: FieldEntry<Result>): Canvas {
+  private fieldPanel(viewport: Pick<OptimizedBuffer, "width" | "height">, entry: FieldEntry<Result>): DialogFrame {
     const { field, status } = entry;
     const error = status.kind === "editing" ? status.error : undefined;
     const inset = DIALOG_INSET;
-    const room = width - inset * 2;
-    const panel = dialogPanel(width, 7 + Number(!!field.hint) + Number(!!field.url) + Number(!!error), entry.title);
+    const frame = dialogPanel(viewport, 7 + Number(!!field.hint) + Number(!!field.url) + Number(!!error), entry.title);
+    const { panel } = frame;
+    const room = panel.width - inset * 2;
     let row = 3;
     if (field.hint) panel.put(row++, inset, field.hint, "muted", room);
     if (field.url) panel.put(row++, inset, field.url, "link", room);
@@ -206,6 +204,6 @@ export class SetupView<Result> extends Renderable {
         panel.put(row + 1, inset + 20, "ctrl+o", "muted");
       }
     }
-    return panel;
+    return frame;
   }
 }

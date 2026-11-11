@@ -9,7 +9,7 @@ import { drawAgent } from "./agent";
 import { Canvas, type Style } from "./canvas";
 import { action, buttons } from "./controls";
 import type { Dashboard, Layer } from "./dashboard";
-import { drawDialog } from "./dialog";
+import { pickerDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
 import { drawHeader, type PageHeader, pageHeader } from "./header";
 import type { Target } from "./input";
@@ -45,13 +45,16 @@ export function frame(d: Dashboard): Canvas {
   const header = pageHeader(d);
   drawHeader(content, header, sidebar ? 1 : 2);
   drawWorkspace(content, d, layer);
-  if (layer.kind === "picker") {
-    const source = PICKERS[layer.picker.kind];
-    drawDialog(content, layer.picker, source.empty?.(d) ?? "No matches", source.status?.(d));
-  }
   canvas.paste(content, sidebar, 0);
   if (sidebar) drawSidebar(canvas, d, sidebar);
   drawTopBar(canvas, d, sidebar, header);
+  if (layer.kind === "picker") {
+    const source = PICKERS[layer.picker.kind];
+    const { panel, left, top } = pickerDialog(canvas, layer.picker, source.empty?.(d) ?? "No matches", {
+      status: source.status?.(d),
+    });
+    canvas.paste(panel, left, top);
+  }
 
   return canvas;
 }

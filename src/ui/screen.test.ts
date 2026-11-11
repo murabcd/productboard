@@ -145,11 +145,18 @@ describe("OpenTUI shell", () => {
     const wordmark = () => setup.captureSpans().lines[0]?.spans.find((span) => span.text.includes("PRODUCT"))?.fg;
     const visible = wordmark();
     setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.renderOnce();
+    const commands = setup.captureCharFrame().split("\n")[8];
+    expect(commands).toContain("Commands");
     await setup.mockInput.typeText("Connect Agent");
     setup.mockInput.pressEnter();
-    await setup.renderOnce();
-    const frame = setup.captureCharFrame();
-    expect(frame.split("\n")[8]).toContain("Connect an integration");
+    const frame = await setup.waitForFrame(
+      (frame) => frame.includes("Connect an integration") && frame.includes("Keep this draft"),
+    );
+    const header = frame.split("\n")[8];
+    expect(header).toContain("Connect an integration");
+    expect(header?.indexOf("Connect an integration")).toBe(commands?.indexOf("Commands"));
+    expect(header?.indexOf("esc")).toBe(commands?.indexOf("esc"));
     expect(frame).toContain("Search▏");
     expect(frame).toContain("PRODUCTBOARD");
     expect(frame).toContain("Keep this draft");

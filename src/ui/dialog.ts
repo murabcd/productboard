@@ -1,41 +1,45 @@
 import { cells } from "../text";
-import { Canvas } from "./canvas";
-import { DIALOG_WIDTH, pickerRows } from "./layout";
+import { Canvas, type Rect } from "./canvas";
+import { pickerRows } from "./layout";
 import type { Picker } from "./picker";
 
 /** Text starts this far in; choices keep one more cell for the ● mark. */
 export const DIALOG_INSET = 3;
+const DIALOG_WIDTH = 60;
 
-export function drawDialog(canvas: Canvas, picker: Picker<string>, emptyText: string, status?: string): void {
-  const width = Math.min(DIALOG_WIDTH, canvas.width - 4);
-  const panel = pickerDialog(width, pickerRows(canvas.height), picker, emptyText, { status });
-  canvas.paste(panel, Math.floor((canvas.width - width) / 2), Math.floor((canvas.height - panel.height) / 2));
-}
+type Viewport = Pick<Rect, "width" | "height">;
+export type DialogFrame = Pick<Rect, "left" | "top"> & { panel: Canvas };
 
-export function dialogPanel(width: number, height: number, title: string): Canvas {
+export function dialogPanel(viewport: Viewport, height: number, title: string): DialogFrame {
+  const width = Math.min(DIALOG_WIDTH, viewport.width - 2);
   const panel = new Canvas(width, height, "panel");
   for (let y = 0; y < height; y++) panel.mark(y, 0, width, { kind: "dialog" });
   const close = width - DIALOG_INSET - 3;
   panel.put(1, DIALOG_INSET, title, "title", close - DIALOG_INSET - 2);
   panel.put(1, close, "esc", "muted");
   panel.mark(1, close, 3, { kind: "dismiss" });
-  return panel;
+  return {
+    panel,
+    left: Math.floor((viewport.width - width) / 2),
+    top: Math.min(Math.floor(viewport.height / 4), viewport.height - height - 1),
+  };
 }
 
 export function pickerDialog(
-  width: number,
-  capacity: number,
+  viewport: Viewport,
   picker: Picker<string>,
   emptyText: string,
   { status, accentSelection = false }: { status?: string; accentSelection?: boolean } = {},
-): Canvas {
-  const shown = picker.window(capacity);
+): DialogFrame {
+  const shown = picker.window(pickerRows(viewport.height));
   const selected = picker.selected?.value;
   const tab = picker.tabName;
   const empty = shown.length === 0;
 
   const height = 5 + Math.max(1, shown.length) + (empty || tab || status ? 2 : 0) + 1;
-  const canvas = dialogPanel(width, height, picker.title);
+  const frame = dialogPanel(viewport, height, picker.title);
+  const { panel: canvas } = frame;
+  const { width } = canvas;
   const inset = DIALOG_INSET;
   const room = width - inset * 2;
   const selectedLabel = accentSelection ? "onAccent" : "selectedBold";
@@ -68,5 +72,5 @@ export function pickerDialog(
     canvas.put(footer, inset, "tab", "text");
     canvas.put(footer, inset + 4, `${tab} ${picker.kind}s`, "muted", room - 4);
   }
-  return canvas;
+  return frame;
 }

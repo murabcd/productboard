@@ -92,9 +92,11 @@ selection and viewport changes together across filtering and refresh.
 Status groups are workflow stages from [[src/ui/status.ts#stage]]. Rows show
 the key, the title, then reason, assignee, sprint and priority columns. A
 column is left out when the view or headings already say the same thing.
-[[src/ui/dialog.ts#drawDialog]] centers each picker in the content area beside
-the sidebar. The picker has a search field and grouped choices and marks the
-current choice.
+[[src/ui/dialog.ts#dialogPanel]] centers setup prompts and workspace pickers
+horizontally across the terminal and places them a quarter of the way down,
+moving them up when needed to fit. They share a 60-column width with a
+one-column margin on narrow panes. Pickers share search, grouped choices,
+the current choice marker, and one-click selection.
 
 [[src/ui/peek.ts#drawPeek]] shows the selected issue beside the list. The
 dashboard loads details outside rendering. [[src/ui/issue-details.ts#IssueDetails]]
