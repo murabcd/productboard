@@ -1,22 +1,29 @@
 # Changelog
 
-## v0.1.0
+Release notes for Productboard, newest first.
+
+## v0.1.0 — 2026-11-12
 
 ### Highlights
 
-- **Track work across Jira.** Open Team focus to see blockers, overdue work, and issues that need an owner. Inbox collects mentions, and My issues shows work assigned to you or created by you.
-- **Read issues in the terminal.** Press `Space` to peek at an issue beside the list. Read its description and latest comment, or open its details to preview image attachments.
-- **Ask Agent about Jira.** [Eve](https://github.com/vercel/eve) powers the Agent tab. Connect OpenAI or Anthropic, type `@` to add an issue or sprint to your message, and open cited issues directly from replies.
+- **Track Work Across Jira**: Open **Team focus** to see blockers, overdue work and issues that need an owner. Find mentions in **Inbox** and switch between **Assigned** and **Created** in **My issues**.
+- **Peek at Issue Details**: Press `Space` in a wide pane to read the selected issue beside the list. Use `Shift+↑` or `Shift+↓` to scroll through its description and latest comment.
+- **Ask Agent About Jira**: Choose **Connect Agent** from `Ctrl+K` and connect **OpenAI** or **Anthropic**. Type `@` to add an issue or sprint to your message.
+
+### Core
+
+#### Improvements
+
+- Run `brew install murabcd/tap/productboard` to install the macOS CLI, then launch it with `productboard`.
+- **Connect Jira** checks your Jira Cloud site, Atlassian account email and API token without scopes before saving the token to macOS Keychain. Run `productboard --login` to update your sign-in or `productboard --check` to verify saved access from the terminal.
+- **Agent** uses [Eve](https://github.com/vercel/eve) to run locally, search Jira with read-only tools and stream replies from the provider you connect.
 
 ### TUI
 
-- Filter issue lists by project, assignee, status, or sprint.
-- Press `Ctrl+K` to open the command palette and switch themes, connect Agent, or change models.
-- On first launch, sign in with your Jira Cloud site, Atlassian account email, and an API token without scopes. Productboard verifies the token before saving it to macOS Keychain. Agent setup is optional.
+#### Improvements
 
-### Installation
-
-```sh
-brew install murabcd/tap/productboard
-productboard
-```
+- The dashboard opens in **Inbox** with your Jira mentions. **My issues** shows work assigned to you or created by you, and **Team focus** groups blockers, overdue work and issues that need an owner.
+- Filter issue lists by project, assignee or status. Choose **Filter → Sprint** to show one sprint or **Any sprint** to clear the selection.
+- Press `Space` to open issue peek. In the full issue view, press `i` to preview an image attachment or choose one when there are several.
+- In **Connect an integration**, choose **OpenAI** or **Anthropic**, or select **Skip for now** to open **Inbox** with Jira only. In **Agent**, type `@` to find issues and sprints, and press `Ctrl+O` to open a cited issue.
+- Press `Ctrl+K` and choose **Change theme** to switch palettes or **Select Agent model** to pick a model and reasoning level.
