@@ -5,7 +5,8 @@ productboard is a local read-only terminal workspace for product management. The
 local credentials, the Jira client, workspace state, and the terminal UI.
 
 The [Homebrew tap](https://github.com/murabcd/homebrew-tap) installs a tagged
-release with the launcher, locked production dependencies, and Node.js for Agent.
+release with the launcher, a private Bun runtime, and locked production
+dependencies. It installs Node.js for Agent.
 
 - [[jira-api]] covers authentication, the read boundary, and issue queries.
 - [[terminal-workspace]] covers refresh, interaction, and rendering ownership.
