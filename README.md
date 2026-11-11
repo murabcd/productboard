@@ -136,7 +136,7 @@ remembers both settings and shows them together, for example
 ## Development
 
 Install [Bun](https://bun.sh) on macOS to run from source.
-Agent also needs Node.js 24 or newer for the local [Eve](https://github.com/vercel/eve) runtime.
+Agent also needs Node.js 24 or newer.
 
 ```bash
 git clone https://github.com/murabcd/productboard.git
