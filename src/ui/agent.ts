@@ -47,7 +47,7 @@ export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLay
   } else if (thread.draft.loading) {
     canvas.put(status, left + 1, "Attaching image…", "muted", room - 1);
   } else if (!chat.configured) {
-    canvas.put(status, left + 1, "Set up Agent with board --agent-login", "muted", room - 1);
+    canvas.put(status, left + 1, "Ctrl+K · Connect Agent", "muted", room - 1);
   }
 }
 

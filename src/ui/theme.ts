@@ -1,6 +1,7 @@
-import { RGBA, TextAttributes } from "@opentui/core";
+import { type OptimizedBuffer, RGBA, TextAttributes } from "@opentui/core";
+import { cells } from "../text";
 import { THEMES, type ThemeId } from "../theme";
-import type { ScannerStyle, Style, Surface, TextStyle } from "./canvas";
+import type { Canvas, ScannerStyle, Style, Surface, TextStyle } from "./canvas";
 
 const SCANNER: Record<ScannerStyle, number> = {
   trail0: 1,
@@ -16,6 +17,23 @@ const SCANNER: Record<ScannerStyle, number> = {
 };
 
 export const isScanner = (style: Style): style is ScannerStyle => style in SCANNER;
+
+export function drawCanvas(buffer: OptimizedBuffer, canvas: Canvas, theme: ReturnType<typeof resolveTheme>): void {
+  const { surfaces, styles, scanner } = theme;
+  for (let y = 0; y < canvas.height; y++) {
+    let x = 0;
+    for (const run of canvas.runs(y)) {
+      const surface = surfaces[run.surface ?? "workspace"];
+      if (isScanner(run.style)) {
+        buffer.drawText(run.text, x, y, scanner(run.style, surface), surface, TextAttributes.NONE);
+      } else {
+        const style = styles[run.style];
+        buffer.drawText(run.text, x, y, style.fg, style.bg ?? surface, style.attributes);
+      }
+      x += cells(run.text);
+    }
+  }
+}
 
 export function resolveTheme(id: ThemeId) {
   const palette = THEMES[id];

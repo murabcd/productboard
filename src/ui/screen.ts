@@ -4,10 +4,10 @@ import {
   ImageRenderable,
   type KeyEvent,
   type OptimizedBuffer,
+  type PasteEvent,
   Renderable,
-  TextAttributes,
 } from "@opentui/core";
-import { cells, splitGraphemes } from "../text";
+import type { ThemeId } from "../theme";
 import { SCANNER_FRAME_MS } from "./agent";
 import type { Canvas, Rect } from "./canvas";
 import { AgentComposer } from "./composer";
@@ -15,7 +15,9 @@ import type { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key, KeyName } from "./input";
 import { COMPOSER_MAX_ROWS } from "./layout";
-import { isScanner, resolveTheme } from "./theme";
+import { type SetupPrompt, SetupView } from "./setup";
+import { textKeys, toKeys } from "./terminal-input";
+import { drawCanvas, resolveTheme } from "./theme";
 
 /** Keys the dashboard keeps while the Agent text box has focus; the rest are typing. */
 const COMPOSER_KEYS = new Set<KeyName>([
@@ -42,6 +44,7 @@ class DashboardView extends Renderable {
   constructor(
     private readonly renderer: CliRenderer,
     private readonly dashboard: Dashboard,
+    private readonly quit: () => void,
   ) {
     super(renderer, {
       id: "dashboard",
@@ -72,7 +75,46 @@ class DashboardView extends Renderable {
     this.add(this.composer);
   }
 
-  applyContext(): void {
+  key(event: KeyEvent): void {
+    const keys = toKeys(event);
+    const editing = this.dashboard.layer().kind === "agent";
+    if (editing) {
+      this.composer.sync();
+      if (event.sequence === "@" && this.composer.canMention()) {
+        event.preventDefault();
+        this.dashboard.openPicker("agent-context");
+        this.requestRender();
+        return;
+      }
+    }
+    const dashboardKeys = editing ? keys.filter((key) => "name" in key && COMPOSER_KEYS.has(key.name)) : keys;
+    if (dashboardKeys.length === 0) return;
+    event.preventDefault();
+    this.feed(dashboardKeys);
+  }
+
+  paste(event: PasteEvent): void {
+    const text = new TextDecoder().decode(event.bytes);
+    if (this.dashboard.layer().kind === "agent") {
+      if (this.composer.paste(text)) event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    this.feed(textKeys(text));
+  }
+
+  private feed(keys: Key[]): void {
+    for (const key of keys) {
+      if (!this.dashboard.handle(key)) {
+        this.quit();
+        return;
+      }
+      this.applyContext();
+    }
+    this.requestRender();
+  }
+
+  private applyContext(): void {
     const reference = this.dashboard.contextPicker.takeReference();
     if (reference) this.composer.attachReference(reference);
   }
@@ -84,25 +126,11 @@ class DashboardView extends Renderable {
       this.renderer.setBackgroundColor(this.theme.surfaces.workspace);
       Object.assign(this.composer, this.theme.composer);
     }
-    const { surfaces, styles, scanner } = this.theme;
     if (this.composer.visible) this.fitComposer();
     this.dashboard.resize(width, height);
     const canvas = frame(this.dashboard);
     this.canvas = canvas;
-    for (let y = 0; y < height; y++) {
-      let x = 0;
-      for (const run of canvas.runs(y)) {
-        const surface = surfaces[run.surface ?? "workspace"];
-        if (isScanner(run.style)) {
-          buffer.drawText(run.text, x, y, scanner(run.style, surface), surface, TextAttributes.NONE);
-        } else {
-          const style = styles[run.style];
-          const background = style.bg ?? surface;
-          buffer.drawText(run.text, x, y, style.fg, background, style.attributes);
-        }
-        x += cells(run.text);
-      }
-    }
+    drawCanvas(buffer, canvas, this.theme);
     this.placeImage(canvas.reserved("image"));
     this.placeComposer(canvas.reserved("composer"));
     this.animate();
@@ -166,110 +194,55 @@ class DashboardView extends Renderable {
   }
 }
 
-const NAMED: Record<string, KeyName> = {
-  up: "up",
-  down: "down",
-  left: "left",
-  right: "right",
-  pageup: "pageup",
-  pagedown: "pagedown",
-  home: "home",
-  end: "end",
-  return: "enter",
-  enter: "enter",
-  linefeed: "enter",
-  escape: "escape",
-  tab: "tab",
-  backspace: "backspace",
-  delete: "backspace",
-};
-
-export function toKeys(key: Pick<KeyEvent, "name" | "ctrl" | "meta" | "shift" | "sequence" | "super">): Key[] {
-  if ((key.ctrl && key.name === "k") || (key.super && key.name === "k")) return [{ name: "commands" }];
-  if (key.ctrl && key.name === "n") return [{ name: "agent-new" }];
-  if (key.ctrl && key.name === "x") return [{ name: "agent-stop" }];
-  if (key.ctrl && key.name === "up") return [{ name: "agent-previous" }];
-  if (key.ctrl && key.name === "down") return [{ name: "agent-next" }];
-  if (key.ctrl && key.name === "o") return [{ name: "agent-cited" }];
-  if (key.ctrl && key.name === "c") return [{ name: "ctrl-c" }];
-  if (key.shift && !key.ctrl && !key.meta && !key.super) {
-    if (key.name === "up" || key.name === "down") return [{ name: key.name, shift: true }];
-  }
-  const named = NAMED[key.name];
-  if (named) return named === "tab" && key.shift ? [] : [{ name: named }];
-  if (key.ctrl || key.meta) return [];
-  return textKeys(key.sequence);
-}
-
-/** Typed or pasted text, one key per character, without control characters. */
-export function textKeys(text: string): Key[] {
-  return splitGraphemes(text)
-    .filter((ch) => ch >= " " && ch !== "\u007f")
-    .map((ch) => ({ text: ch }));
-}
-
-/** Attach the dashboard to a renderer; `quit` runs when the user exits. */
-export function mount(renderer: CliRenderer, dashboard: Dashboard, quit: () => void): void {
-  const view = new DashboardView(renderer, dashboard);
-  renderer.root.add(view);
-  const feed = (keys: Key[]) => {
-    for (const next of keys) {
-      if (!dashboard.handle(next)) {
-        quit();
-        return;
-      }
-      view.applyContext();
-    }
-    renderer.requestRender();
-  };
-  renderer.keyInput.on("keypress", (key) => {
-    const keys = toKeys(key);
-    const editing = dashboard.layer().kind === "agent";
-    if (editing) {
-      view.composer.sync();
-      if (key.sequence === "@" && view.composer.canMention()) {
-        key.preventDefault();
-        dashboard.openPicker("agent-context");
-        renderer.requestRender();
-        return;
-      }
-    }
-    const dashboardKeys = editing ? keys.filter((k) => "name" in k && COMPOSER_KEYS.has(k.name)) : keys;
-    if (dashboardKeys.length === 0) return;
-    key.preventDefault();
-    feed(dashboardKeys);
-  });
-  renderer.keyInput.on("paste", (event) => {
-    const text = new TextDecoder().decode(event.bytes);
-    if (dashboard.layer().kind === "agent") {
-      if (view.composer.paste(text)) event.preventDefault();
-      return;
-    }
-    event.preventDefault();
-    feed(textKeys(text));
-  });
-  renderer.requestRender();
-}
-
 export interface Screen {
   redraw(): void;
   show(dashboard: Dashboard): Promise<void>;
+  prompt<Result>(request: SetupPrompt<Result>, theme: ThemeId): Promise<Result | undefined>;
   /** Restore the terminal. Safe to call more than once. */
   close(): Promise<void>;
 }
 
 /** Take over the terminal; call `close` when done, even after an error. */
-export async function openScreen(): Promise<Screen> {
+export async function openScreen(open: (url: string) => Promise<void>): Promise<Screen> {
   const renderer = await createCliRenderer({
     screenMode: "alternate-screen",
     exitOnCtrlC: false,
     useMouse: true,
     targetFps: 30,
   });
+  return useRenderer(renderer, open);
+}
+
+export function useRenderer(renderer: CliRenderer, open: (url: string) => Promise<void>): Screen {
+  let dashboard: DashboardView | undefined;
+  let prompt: { view: Pick<SetupView<unknown>, "key" | "paste">; dismiss(): void } | undefined;
+  renderer.keyInput.on("keypress", (event) => (prompt?.view ?? dashboard)?.key(event));
+  renderer.keyInput.on("paste", (event) => (prompt?.view ?? dashboard)?.paste(event));
   return {
     redraw: () => renderer.requestRender(),
-    show: (dashboard) => new Promise<void>((resolve) => mount(renderer, dashboard, resolve)),
+    show: (model) =>
+      new Promise<void>((resolve) => {
+        dashboard = new DashboardView(renderer, model, resolve);
+        renderer.root.add(dashboard);
+        renderer.requestRender();
+      }),
+    prompt: (request, theme) =>
+      new Promise((resolve) => {
+        if (prompt) throw new Error("A connection prompt is already open.");
+        const view = new SetupView(renderer, theme, request, open, (value) => {
+          prompt = undefined;
+          view.destroyRecursively();
+          if (dashboard) dashboard.visible = true;
+          renderer.requestRender();
+          resolve(value);
+        });
+        prompt = { view, dismiss: () => view.dismiss() };
+        if (dashboard) dashboard.visible = false;
+        renderer.root.add(view);
+        renderer.requestRender();
+      }),
     close: async () => {
+      prompt?.dismiss();
       if (!renderer.isDestroyed) renderer.destroy();
       await renderer.closed;
     },

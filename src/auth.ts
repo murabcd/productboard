@@ -11,7 +11,7 @@ const KEYCHAIN_SERVICE = "productboard";
 const CONFIG_PATH = join(homedir(), ".config", "productboard", "config.json");
 export const SITE_PATTERN = /^[a-z0-9-]+\.atlassian\.net$/;
 
-const AGENT_PROVIDERS = ["openai", "anthropic"] as const;
+export const AGENT_PROVIDERS = ["openai", "anthropic"] as const;
 export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
 
 /** How long a model thinks before answering, as Eve names the levels. */
@@ -45,6 +45,11 @@ type Config = z.infer<typeof Config>;
 // Keychain commands are sent as text, so values must not contain quotes.
 const EMAIL_PATTERN = /^[^\s"\\]+@[^\s"\\]+$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9_=+/.-]+$/;
+const JIRA_FIELDS = {
+  site: [SITE_PATTERN, "Enter a site like your-team.atlassian.net."],
+  email: [EMAIL_PATTERN, "Enter your Atlassian account email."],
+  token: [TOKEN_PATTERN, "Paste your Atlassian API token."],
+} as const;
 
 export function readConfig(): Config | undefined {
   try {
@@ -79,11 +84,9 @@ export function loadCredentials(): Credentials | string {
   return { site: config.site, email: config.email, token };
 }
 
-export function validate(credentials: Credentials): string | undefined {
-  if (!SITE_PATTERN.test(credentials.site)) return "The site must look like your-team.atlassian.net";
-  if (!EMAIL_PATTERN.test(credentials.email)) return "That doesn't look like an email address";
-  if (!TOKEN_PATTERN.test(credentials.token)) return "That doesn't look like an Atlassian API token";
-  return undefined;
+export function validateJiraField(field: keyof Credentials, value: string): void {
+  const [pattern, error] = JIRA_FIELDS[field];
+  if (!pattern.test(value)) throw new Error(error);
 }
 
 /** Save settings, and the token to Keychain without putting it on a command line. */
@@ -98,8 +101,9 @@ export function saveCredentials(credentials: Credentials): void {
 
 const AGENT_SERVICE = "productboard-agent";
 
-export function agentProvider(): AgentProvider {
-  return process.env.PRODUCTBOARD_AGENT_PROVIDER === "anthropic" ? "anthropic" : "openai";
+export function agentProviderOverride(): AgentProvider | undefined {
+  const provider = process.env.PRODUCTBOARD_AGENT_PROVIDER;
+  if (provider) return provider === "anthropic" ? "anthropic" : "openai";
 }
 
 const DEFAULT_MODELS: Record<AgentProvider, string> = { openai: "gpt-6-luna", anthropic: "claude-sonnet-5-5" };
@@ -108,11 +112,23 @@ const DEFAULT_MODELS: Record<AgentProvider, string> = { openai: "gpt-6-luna", an
  * else the provider's default; and the reasoning chosen last, else medium. */
 export function agentChoice(): AgentChoice {
   const saved = readConfig()?.agent;
-  const provider = process.env.PRODUCTBOARD_AGENT_PROVIDER ? agentProvider() : (saved?.provider ?? "openai");
-  const model =
-    process.env.PRODUCTBOARD_AGENT_MODEL?.trim() ||
-    (saved?.provider === provider ? saved.model : DEFAULT_MODELS[provider]);
-  return { provider, model, reasoning: saved?.reasoning ?? DEFAULT_REASONING };
+  const choice = choiceForProvider(agentProviderOverride() ?? saved?.provider ?? "openai", saved);
+  return { ...choice, model: process.env.PRODUCTBOARD_AGENT_MODEL?.trim() || choice.model };
+}
+
+function choiceForProvider(provider: AgentProvider, saved?: AgentChoice): AgentChoice {
+  return {
+    provider,
+    model: saved?.provider === provider ? saved.model : DEFAULT_MODELS[provider],
+    reasoning: saved?.reasoning ?? DEFAULT_REASONING,
+  };
+}
+
+function rememberAgentProvider(provider: AgentProvider): void {
+  const config = readConfig();
+  if (config && config.agent?.provider !== provider) {
+    writeConfig({ ...config, agent: choiceForProvider(provider, config.agent) });
+  }
 }
 
 /** Keep the model chosen in Agent for the next start. */
@@ -129,9 +145,21 @@ export function loadAgentKey(provider: AgentProvider): string | undefined {
   return process.env[agentKeyName(provider)]?.trim() || readToken(AGENT_SERVICE, provider);
 }
 
+/** On first run, reuse the selected provider or adopt another saved key if the provider is unpinned. */
+export function reuseAgentKey(): boolean {
+  const { provider } = agentChoice();
+  if (loadAgentKey(provider)) return true;
+  if (agentProviderOverride()) return false;
+  const alternate = AGENT_PROVIDERS.find((candidate) => candidate !== provider && loadAgentKey(candidate));
+  if (!alternate) return false;
+  rememberAgentProvider(alternate);
+  return true;
+}
+
 export function saveAgentKey(provider: AgentProvider, token: string): void {
   if (!TOKEN_PATTERN.test(token)) throw new Error("That doesn't look like a provider API key");
   saveToken(AGENT_SERVICE, provider, `Productboard Agent (${provider})`, token);
+  rememberAgentProvider(provider);
 }
 
 function readToken(service: string, account: string): string | undefined {

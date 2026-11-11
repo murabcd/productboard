@@ -15,7 +15,8 @@ import { Workspace } from "../state/workspace";
 import { deferred, fakeAgent, issues, rawIssue, settle, snapshot } from "../testing";
 import { Dashboard, type DashboardOptions } from "./dashboard";
 import { MIN_WIDTH } from "./layout";
-import { mount, toKeys } from "./screen";
+import { useRenderer } from "./screen";
+import { toKeys } from "./terminal-input";
 
 /** A 1×1 red PNG. */
 const PNG = Uint8Array.from(
@@ -55,9 +56,10 @@ async function start(
   const dashboard = new Dashboard(work, client, { open: async () => {}, copy: async () => {} }, () => {}, options);
   setup = await createTestRenderer({ width, height: 30, exitOnCtrlC: false });
   const quit = mock(() => {});
-  mount(setup.renderer, dashboard, quit);
+  const screen = useRenderer(setup.renderer, async () => {});
+  void screen.show(dashboard).then(quit);
   await setup.renderOnce();
-  return { setup, dashboard, quit };
+  return { setup, dashboard, quit, screen };
 }
 
 async function clickSidebar(setup: TestRendererSetup, name: string): Promise<void> {
@@ -73,6 +75,79 @@ async function clickSidebar(setup: TestRendererSetup, name: string): Promise<voi
 }
 
 describe("OpenTUI shell", () => {
+  test("connection prompts mask pasted keys and allow retry after rejection", async () => {
+    setup = await createTestRenderer({ width: 100, height: 30 });
+    const open = mock(async () => {});
+    const screen = useRenderer(setup.renderer, open);
+    const first = deferred<boolean>();
+    const submit = mock((value: string) => (value === "test-rejected" ? first.promise : true));
+    const prompt = screen.prompt(
+      {
+        title: "Connect OpenAI",
+        field: { label: "API key", secret: true, url: "https://example.com/keys", submit },
+      },
+      "productboard",
+    );
+    setup.mockInput.pressKey("o", { ctrl: true });
+    expect(open).toHaveBeenCalledWith("https://example.com/keys");
+    await setup.mockInput.typeText("test-rejected");
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("••••");
+    expect(setup.captureCharFrame()).not.toContain("test-rejected");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Connecting…");
+    first.reject(new Error("Check your API key."));
+    await settle();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Check your API key.");
+    await setup.mockInput.typeText("test-accepted");
+    setup.mockInput.pressEnter();
+    expect(await prompt).toBe(true);
+    expect(submit.mock.calls.map(([value]) => value)).toEqual(["test-rejected", "test-accepted"]);
+    expect(setup.renderer.root.getRenderable("setup")).toBeUndefined();
+  });
+
+  test("Connect Agent accepts a provider without sending setup input to the dashboard", async () => {
+    const backend = fakeAgent(async () => {});
+    const close = mock(backend.close);
+    backend.close = close;
+    const connectAgent = mock(async () => {
+      const provider = await screen.prompt(
+        {
+          title: "Connect Agent",
+          choices: [
+            { value: "openai", label: "OpenAI", detail: "API key" },
+            { value: "anthropic", label: "Anthropic", detail: "API key" },
+          ],
+        },
+        dashboard.theme,
+      );
+      return provider === "anthropic" ? backend : undefined;
+    });
+    const { setup, screen, dashboard } = await start(100, { connectAgent });
+    await clickSidebar(setup, "Agent");
+    await setup.renderOnce();
+    await setup.mockInput.typeText("Keep this draft");
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("Connect Agent");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Search providers");
+    expect(setup.captureCharFrame()).not.toContain("Keep this draft");
+    await setup.mockInput.typeText("anthropic");
+    setup.mockInput.pressEnter();
+    await settle();
+    expect(dashboard.agent.chat.backend).toBe(backend);
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Keep this draft");
+    await setup.renderOnce();
+    const composer = setup.renderer.root.getRenderable("dashboard")?.getRenderable("composer");
+    expect(composer).toBeInstanceOf(TextareaRenderable);
+    if (composer instanceof TextareaRenderable) expect(composer.placeholder).toBe("Message Agent… (@ for context)");
+    await dashboard.dispose();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   test("the theme command recolors the screen and the focused Agent composer", async () => {
     const rememberTheme = mock(() => {});
     const { setup, dashboard } = await start(100, { appearance: { initial: "vercel-dark", save: rememberTheme } });

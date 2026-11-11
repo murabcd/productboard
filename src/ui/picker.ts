@@ -41,7 +41,7 @@ export interface PickerOptions {
 
 type Row = { choice: PickerItem } | { heading: string } | null;
 
-export class Picker {
+export class Picker<Kind extends string = PickerKind> {
   private text = "";
   private cursor = 0;
   private offset = 0;
@@ -52,7 +52,7 @@ export class Picker {
   private rows: Row[] = [];
 
   constructor(
-    readonly kind: PickerKind,
+    readonly kind: Kind,
     readonly title: string,
     private choices: PickerItem[],
     options: PickerOptions = {},

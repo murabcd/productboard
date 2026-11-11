@@ -22,7 +22,7 @@ export class AgentPanel {
   readonly chat: AgentChat;
 
   constructor(
-    private readonly backend: AgentBackend | undefined,
+    backend: AgentBackend | undefined,
     /** Schedules a new frame after a reply streams in. */
     redraw: () => void,
     /** Refreshes open pickers when their data changes. */
@@ -32,14 +32,15 @@ export class AgentPanel {
   }
 
   get current(): AgentChoice | undefined {
-    return this.backend?.current;
+    return this.chat.backend?.current;
   }
 
   loadModels(): void {
-    if (!this.backend || this.modelsPending) return;
+    const backend = this.chat.backend;
+    if (!backend || this.modelsPending) return;
     this.modelsPending = true;
     this.modelsError = "";
-    this.backend
+    backend
       .models()
       .then(
         (models) => {
@@ -67,9 +68,10 @@ export class AgentPanel {
 
   /** Answer with `choice` from the next question on; a failure shows under the box. */
   private use(choice: AgentChoice): void {
-    if (!this.backend) return;
+    const backend = this.chat.backend;
+    if (!backend) return;
     const thread = this.chat.current;
-    this.backend.use(choice).then(
+    backend.use(choice).then(
       () => this.changed(),
       (error: unknown) => {
         thread.draft.error = message(error);
@@ -116,9 +118,5 @@ export class AgentPanel {
   private scroll(transcript: AgentLayout["transcript"], delta: number): void {
     const thread = this.chat.current;
     thread.scroll = transcriptWindow(thread.turns, transcript, thread.scroll, delta).scroll;
-  }
-
-  dispose(): void {
-    this.chat.dispose();
   }
 }

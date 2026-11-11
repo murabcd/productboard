@@ -4,6 +4,17 @@
 It reads typed snapshots through [[jira-api]] and publishes state changes for
 the terminal to draw.
 
+## Connection setup
+
+[[src/main.ts]] opens [[src/setup.ts]] on an interactive launch that needs Jira
+credentials. [[src/ui/setup.ts]] draws the credential fields and the Agent
+provider picker. Agent setup follows Jira and can be skipped.
+
+Jira verifies the token before [[src/auth.ts]] saves it. The command palette's
+**Connect Agent** action reuses the provider picker and connects the current
+dashboard. The standalone login flags reuse the same prompts. The check flag
+uses saved Jira credentials without opening the terminal UI.
+
 ## Refresh and scope
 
 The current list stays visible during refresh and on refresh failure. A scope
@@ -24,12 +35,13 @@ results or schedule a retry.
 
 [[src/ui/dashboard.ts#Dashboard]] owns keyboard and mouse interactions, issue
 selection, and panels. [[src/ui/frame.ts#frame]] computes what to draw, and
-[[src/ui/screen.ts#mount]] connects input and drawing to OpenTUI. The CLI entry
+[[src/ui/screen.ts#useRenderer]] connects input and drawing to OpenTUI. The CLI entry
 point restores the terminal on exit.
 
 Dashboard resolves the active input layer from the open views and the pane
 size. Rendering and the OpenTUI adapter use that layer for composer focus and
-key routing. The command palette follows the same activation path for keys and
+key routing. The OpenTUI adapter routes keys and paste to the connection prompt
+while it is open. The command palette follows the same activation path for keys and
 clicks, so dismissing it returns to the page beneath it. The minimum-size
 screen owns its quit shortcut even when Agent was active.
 
@@ -99,8 +111,9 @@ to an image reuses its in-flight read or a recent successful result.
 ## Agent
 
 The Agent page holds conversations about issues across Jira, managed by
-[[src/agent/chat.ts#AgentChat]]. [[src/ui/agent-panel.ts#AgentPanel]] owns
-whether Agent is shown and its keys.
+[[src/agent/chat.ts#AgentChat]], which also owns connecting and closing the
+Agent backend. [[src/ui/agent-panel.ts#AgentPanel]] owns whether Agent is shown
+and its keys.
 
 The frame reserves areas that OpenTUI draws itself: the Agent text box and image
 previews. Issue citations open the normal detail panel and can

@@ -1,48 +1,68 @@
-import { createInterface } from "node:readline/promises";
 import { EveAgent } from "./agent/eve";
-import {
-  agentProvider,
-  loadCredentials,
-  readConfig,
-  rememberBoard,
-  rememberTheme,
-  saveAgentKey,
-  saveCredentials,
-  validate,
-} from "./auth";
+import { loadCredentials, readConfig, rememberBoard, rememberTheme } from "./auth";
 import { JiraClient } from "./jira/client";
 import { type Credentials, JiraHttp } from "./jira/http";
 import { initialQuery, View, withView } from "./jira/query";
+import { connectAgent, connectJira } from "./setup";
 import { Workspace } from "./state/workspace";
 import { clean } from "./text";
+import { DEFAULT_THEME } from "./theme";
 import { Dashboard, type Opener } from "./ui/dashboard";
-import { openScreen } from "./ui/screen";
+import { openScreen, type Screen } from "./ui/screen";
 
 const USAGE = `Usage: board [--login | --agent-login | --check | --help]
 
-  board           Open the Inbox
-  board --login   Save your Jira site, email and API token (token goes to Keychain)
-  board --agent-login   Save the Agent provider API key to Keychain
+  board           Open the Inbox or start setup
+  board --login   Connect or update your Jira account
+  board --agent-login   Connect an Agent provider
   board --check   Check Jira access without opening the dashboard`;
 
-const TOKEN_PAGE = "https://id.atlassian.com/manage-profile/security/api-tokens";
+const COMMANDS = ["--login", "--agent-login", "--check"] as const;
+type LoginCommand = Exclude<(typeof COMMANDS)[number], "--check">;
 
 async function main(args: string[]): Promise<number> {
   if (args.includes("--help") || args.includes("-h")) return say(USAGE);
-  if (args.includes("--login")) return login();
-  if (args.includes("--agent-login")) return agentLogin();
-  const credentials = loadCredentials();
-  if (typeof credentials === "string") return fail(credentials);
-  const http = new JiraHttp(credentials);
-  const client = new JiraClient(http);
+  const command = COMMANDS.find((flag) => args.includes(flag));
+  if (args.length && !command) return fail(`Unknown option ${args[0]}\n\n${USAGE}`);
+  if (command === "--check") {
+    const saved = loadCredentials();
+    return typeof saved === "string" ? fail(saved) : withJira(saved, check);
+  }
+  const saved = command ? undefined : loadCredentials();
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    if (command) return fail(`Run board ${command} in a terminal.`);
+    return fail(typeof saved === "string" ? saved : "Run board in a terminal, or use board --check.");
+  }
+  const screen = await openScreen((url) => run(["open", url]));
+  let result: number | string;
   try {
-    if (args.includes("--check")) return await check(client);
-    if (args.length) return fail(`Unknown option ${args[0]}\n\n${USAGE}`);
-    if (!process.stdin.isTTY || !process.stdout.isTTY) return fail("Run board in a terminal, or use board --check.");
-    await dashboard(client);
-    return 0;
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : String(error));
+    result = await interactive(screen, command, typeof saved === "string" ? undefined : saved);
+  } finally {
+    await screen.close();
+  }
+  return typeof result === "string" ? say(result) : result;
+}
+
+async function interactive(
+  screen: Screen,
+  command: LoginCommand | undefined,
+  saved?: Credentials,
+): Promise<number | string> {
+  if (command === "--agent-login") {
+    const connected = await connectAgent(screen, readConfig()?.theme ?? DEFAULT_THEME);
+    return connected ? "Agent API key saved to Keychain." : 130;
+  }
+  const credentials = saved ?? (await connectJira(screen));
+  if (!credentials) return 130;
+  if (command === "--login") return `Connected to ${credentials.site}. Jira API token saved to Keychain.`;
+  if (!saved) await connectAgent(screen, readConfig()?.theme ?? DEFAULT_THEME, "first-run");
+  return withJira(credentials, (client) => dashboard(client, screen));
+}
+
+async function withJira(credentials: Credentials, use: (client: JiraClient) => Promise<number>): Promise<number> {
+  const http = new JiraHttp(credentials);
+  try {
+    return await use(new JiraClient(http));
   } finally {
     http.close();
   }
@@ -57,27 +77,25 @@ async function check(client: JiraClient): Promise<number> {
   );
 }
 
-async function dashboard(client: JiraClient): Promise<void> {
+async function dashboard(client: JiraClient, screen: Screen): Promise<number> {
   const config = readConfig();
-  const screen = await openScreen();
   const workspace = new Workspace(client, { preferredBoard: config?.board, rememberBoard });
-  // Scheduled refreshes and retries; the screen redraws only when state changes.
-  const timer = setInterval(() => workspace.tick(), 1000);
-  const agent = EveAgent.create(client);
   const board = new Dashboard(workspace, client, macOpener, screen.redraw, {
-    agent,
+    agent: EveAgent.create(client),
+    connectAgent: async (theme) => ((await connectAgent(screen, theme)) ? EveAgent.create(client) : undefined),
     appearance: { initial: config?.theme, save: rememberTheme },
   });
+  // Scheduled refreshes and retries; the screen redraws only when state changes.
+  const timer = setInterval(() => workspace.tick(), 1000);
   try {
     workspace.change(withView(workspace.query, View.Mentions));
     workspace.loadCatalog();
     await screen.show(board);
   } finally {
     clearInterval(timer);
-    board.dispose();
-    await screen.close();
-    await agent?.close();
+    await board.dispose();
   }
+  return 0;
 }
 
 const macOpener: Opener = {
@@ -98,82 +116,6 @@ async function run(command: string[], input?: string): Promise<void> {
   }
 }
 
-async function agentLogin(): Promise<number> {
-  if (!process.stdin.isTTY) return fail("Run board --agent-login in a terminal.");
-  const provider = agentProvider();
-  try {
-    const token = await askHidden(provider === "openai" ? "OpenAI API key" : "Anthropic API key");
-    saveAgentKey(provider, token);
-    return say("Agent API key saved to Keychain.");
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : String(error));
-  }
-}
-
-/** A pasted site URL keeps only its host: https://x.atlassian.net/jira reads as x.atlassian.net. */
-const URL_SCHEME = /^https?:\/\//;
-const URL_PATH = /\/.*$/;
-
-async function login(): Promise<number> {
-  if (!process.stdin.isTTY) return fail("Run board --login in a terminal.");
-  const previous = readConfig();
-  say("Sign in to Jira with an API token. The token is saved to your macOS Keychain.");
-  const site = (await ask("Jira site", previous?.site)).replace(URL_SCHEME, "").replace(URL_PATH, "");
-  const email = await ask("Email", previous?.email);
-  say(`Create a token at ${TOKEN_PAGE}`);
-  const token = await askHidden("API token");
-  const credentials: Credentials = { site: site.toLowerCase(), email, token };
-  const problem = validate(credentials);
-  if (problem) return fail(problem);
-  const http = new JiraHttp(credentials);
-  try {
-    const me = await new JiraClient(http).myself();
-    saveCredentials(credentials);
-    return say(`Signed in as ${clean(me.displayName)} on ${credentials.site}. Token saved to Keychain.`);
-  } catch (error) {
-    return fail(`Jira did not accept these details: ${error instanceof Error ? error.message : error}`);
-  } finally {
-    http.close();
-  }
-}
-
-async function ask(question: string, fallback = ""): Promise<string> {
-  const prompt = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = (await prompt.question(fallback ? `${question} [${fallback}]: ` : `${question}: `)).trim();
-    return answer || fallback;
-  } finally {
-    prompt.close();
-  }
-}
-
-/** Read a line without echoing it. */
-function askHidden(question: string): Promise<string> {
-  process.stdout.write(`${question} (hidden): `);
-  return new Promise((resolve, reject) => {
-    let value = "";
-    const stdin = process.stdin;
-    stdin.setRawMode(true);
-    stdin.resume();
-    const done = (finish: () => void) => {
-      stdin.off("data", onData);
-      stdin.setRawMode(false);
-      stdin.pause();
-      process.stdout.write("\n");
-      finish();
-    };
-    const onData = (chunk: Buffer) => {
-      for (const char of chunk.toString("utf8")) {
-        if (char === "\r" || char === "\n") return done(() => resolve(value.trim()));
-        if (char === "\u0003") return done(() => reject(new Error("Cancelled")));
-        if (char === "\u007f" || char === "\b") value = value.slice(0, -1);
-        else if (char >= " ") value += char;
-      }
-    };
-    stdin.on("data", onData);
-  });
-}
-
 function say(text: string): number {
   process.stdout.write(`${text}\n`);
   return 0;
@@ -184,5 +126,7 @@ function fail(text: string): number {
   return 1;
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exitCode = await main(process.argv.slice(2)).catch((error: unknown) =>
+  fail(error instanceof Error ? error.message : String(error)),
+);
 process.exit();

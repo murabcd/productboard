@@ -6,7 +6,7 @@ import type { Picker } from "./picker";
 /** Text starts this far in; choices keep one more cell for the ● mark. */
 const INSET = 3;
 
-export function drawDialog(canvas: Canvas, picker: Picker, emptyText: string, status?: string): void {
+export function drawDialog(canvas: Canvas, picker: Picker<string>, emptyText: string, status?: string): void {
   const shown = picker.window(pickerRows(canvas.height));
   const selected = picker.selected?.value;
   const tab = picker.tabName;

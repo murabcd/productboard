@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AgentChoice, AgentProvider, ModelRef, Reasoning } from "../auth";
+import { AGENT_PROVIDERS, type AgentChoice, type AgentProvider, type ModelRef, type Reasoning } from "../auth";
 import { clean } from "../text";
 
 export interface AgentModel extends ModelRef {
@@ -80,7 +80,7 @@ export async function listModels(
   keys: Partial<Record<AgentProvider, string>>,
   fetcher: typeof fetch = fetch,
 ): Promise<AgentModel[]> {
-  const providers = (["openai", "anthropic"] as const).flatMap((provider) => {
+  const providers = AGENT_PROVIDERS.flatMap((provider) => {
     const key = keys[provider];
     return key ? [{ provider, key }] : [];
   });

@@ -25,7 +25,6 @@ export class AgentComposer extends TextareaRenderable {
       visible: false,
       wrapMode: "word",
       ...style,
-      placeholder: chat.configured ? "Message Agent… (@ for context)" : "Agent is not set up",
       keyBindings: [
         { name: "return", action: "submit" },
         { name: "kpenter", action: "submit" },
@@ -46,6 +45,8 @@ export class AgentComposer extends TextareaRenderable {
   }
 
   sync(): void {
+    const placeholder = this.chat.configured ? "Message Agent… (@ for context)" : "Agent is not set up";
+    if (this.placeholder !== placeholder) this.placeholder = placeholder;
     const thread = this.chat.current;
     const parts = thread.draft.parts;
     if (this.thread === thread && this.parts === parts) return;

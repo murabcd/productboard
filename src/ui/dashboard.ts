@@ -35,6 +35,7 @@ export interface Opener {
 
 export interface DashboardOptions {
   agent?: AgentBackend;
+  connectAgent?(theme: ThemeId): Promise<AgentBackend | undefined>;
   appearance?: { initial?: ThemeId; save(theme: ThemeId): void };
 }
 
@@ -117,6 +118,23 @@ export class Dashboard {
     if (peekFit !== this.peekFits()) this.syncPeek();
   }
 
+  get canConnectAgent(): boolean {
+    return !!this.options.connectAgent && this.agent.chat.canConnect;
+  }
+
+  async connectAgent(): Promise<void> {
+    const connect = this.options.connectAgent;
+    if (!connect) return;
+    try {
+      if (await this.agent.chat.connect(() => connect(this.theme))) {
+        this.openAgent();
+        this.notify("Agent connected");
+      }
+    } catch (error) {
+      this.notify(message(error));
+    }
+  }
+
   get agentLayout() {
     return agentLayout(this.width - sidebarWidth(this.width), this.height, this.agent.composerRows);
   }
@@ -140,13 +158,13 @@ export class Dashboard {
     this.redraw();
   }
 
-  dispose(): void {
+  dispose(): Promise<void> {
     this.unsubscribe();
     this.details.dispose();
     this.images.close();
     this.closePicker();
-    this.agent.dispose();
     clearTimeout(this.noticeTimer);
+    return this.agent.chat.dispose();
   }
 
   /** Whether the peek panel fits beside the list; narrow panes open details instead. */

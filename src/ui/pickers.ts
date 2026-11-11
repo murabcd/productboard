@@ -165,6 +165,7 @@ function commandItems(d: Dashboard): PickerItem[] {
           item("Display options…", "D", () => d.openPicker("display"), act),
         ]),
     item("Change theme", THEMES[d.theme].label, () => d.openPicker("theme"), act),
+    ...(d.canConnectAgent ? [item("Connect Agent", "", () => void d.connectAgent(), act)] : []),
     item("Select Agent model", current ? modelName(current.model) : "Not set up", () => d.openPicker("model"), act),
     item(
       "Select reasoning",

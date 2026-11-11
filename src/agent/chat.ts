@@ -9,6 +9,7 @@ export interface AgentBackend {
   /** The model and reasoning that answer, shown under each reply. */
   readonly current: AgentChoice;
   models(): Promise<AgentModel[]>;
+  close(): Promise<void>;
   /** Answer with another model or reasoning from now on. */
   use(choice: AgentChoice): Promise<void>;
   ask(request: {
@@ -51,14 +52,19 @@ const conversation = (): Conversation => ({
   scroll: 0,
 });
 
+type Connection = { kind: "offline" | "connecting" | "closed" } | { kind: "online"; backend: AgentBackend };
+
 export class AgentChat {
   private active = conversation();
   private readonly threads = [this.active];
+  private connection: Connection;
 
   constructor(
-    private readonly backend: AgentBackend | undefined,
+    backend: AgentBackend | undefined,
     private readonly redraw: () => void,
-  ) {}
+  ) {
+    this.connection = backend ? { kind: "online", backend } : { kind: "offline" };
+  }
 
   get current(): Conversation {
     return this.active;
@@ -73,7 +79,35 @@ export class AgentChat {
   }
 
   get configured(): boolean {
-    return this.backend !== undefined;
+    return this.connection.kind === "online";
+  }
+
+  get canConnect(): boolean {
+    return this.connection.kind === "offline";
+  }
+
+  get backend(): AgentBackend | undefined {
+    return this.connection.kind === "online" ? this.connection.backend : undefined;
+  }
+
+  async connect(start: () => Promise<AgentBackend | undefined>): Promise<boolean> {
+    if (!this.canConnect) return false;
+    const connecting: Connection = { kind: "connecting" };
+    this.connection = connecting;
+    try {
+      const backend = await start();
+      if (this.connection !== connecting) {
+        await backend?.close();
+        return false;
+      }
+      if (!backend) return false;
+      this.connection = { kind: "online", backend };
+      this.current.draft.error = "";
+      this.redraw();
+      return true;
+    } finally {
+      if (this.connection === connecting) this.connection = { kind: "offline" };
+    }
   }
 
   select(delta: number): void {
@@ -91,8 +125,11 @@ export class AgentChat {
     this.current.pending?.abort();
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
+    const backend = this.backend;
+    this.connection = { kind: "closed" };
     for (const thread of this.threads) thread.pending?.abort();
+    await backend?.close();
   }
 
   async send(): Promise<void> {
@@ -103,8 +140,9 @@ export class AgentChat {
     if (!message) return;
     const parts = draft.parts;
     const { displayPrompt, ...request } = message;
-    if (!this.backend) {
-      draft.error = "Agent is not set up: run board --agent-login";
+    const backend = this.backend;
+    if (!backend) {
+      draft.error = "Connect Agent from the command palette (Ctrl+K).";
       this.redraw();
       return;
     }
@@ -113,7 +151,7 @@ export class AgentChat {
       prompt: request.prompt,
       displayPrompt,
       answer: "",
-      choice: this.backend.current,
+      choice: backend.current,
       started: Date.now(),
     };
     thread.pending = pending;
@@ -124,7 +162,7 @@ export class AgentChat {
     thread.turns.push(turn);
     let failure = "";
     try {
-      const reply = this.backend.ask({
+      const reply = backend.ask({
         thread: thread.id,
         ...request,
         signal: pending.signal,

@@ -24,12 +24,16 @@ Run from the project directory on macOS with [Bun](https://bun.sh) installed.
 
 ```bash
 bun install
-bun run start --login
 bun run start
 ```
 
-Sign in with your Jira Cloud site, Atlassian account email, and an [unscoped API token](https://id.atlassian.com/manage-profile/security/api-tokens).
-The dashboard only reads Jira data and stores the token in macOS Keychain.
+On first launch, **Connect Jira** asks for your Jira Cloud site, Atlassian
+account email, and an [API token without scopes](https://id.atlassian.com/manage-profile/security/api-tokens).
+Press `Ctrl+O` on the token prompt to open Atlassian's token page. Productboard
+checks your sign-in before saving the token to macOS Keychain.
+
+Next, choose **OpenAI** or **Anthropic** and paste a provider API key, or select
+**Skip for now** to open Inbox with Jira only.
 
 To run it as `board` from anywhere, link the launcher from the project directory.
 Make sure `~/.local/bin` is on your `PATH`.
@@ -38,6 +42,9 @@ Make sure `~/.local/bin` is on your `PATH`.
 mkdir -p ~/.local/bin
 ln -s "$PWD/bin/board" ~/.local/bin/board
 ```
+
+Run `board --login` to update your Jira sign-in or `board --check` to verify
+saved access without opening the dashboard.
 
 ## Features
 
@@ -61,10 +68,12 @@ launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/g
 ## Agent
 
 Install Node.js 24 or newer for the local [Eve](https://github.com/vercel/eve) runtime.
-In Rex, run `board --agent-login` once to save your OpenAI API key to macOS
-Keychain. An existing `OPENAI_API_KEY` in your shell works too.
+If you skipped Agent during setup, press `Ctrl+K` and choose **Connect Agent**,
+or run `board --agent-login`. Choose a provider, open its key page with
+`Ctrl+O`, and paste the key into the hidden field. Productboard stores it in
+macOS Keychain. An existing provider API key in your shell works too.
 
-Open `board` and select **Agent** in the sidebar (or press `4`). Ask about any
+Open `board` and select **Agent** in the sidebar (or press `2`). Ask about any
 project, sprint, or issue you can access in Jira. The message box grows as you type.
 `Enter` sends and `Shift+Enter` (or `Ctrl+J`) adds a line. While Agent answers,
 `Esc` interrupts it. Use `Ctrl+N` to start a chat, `Ctrl+↑` / `Ctrl+↓` to
@@ -89,10 +98,10 @@ to Jira issues in the terminal. Productboard keeps chat history for the current
 run. Reattach images if you switch models or reasoning levels and want to refer
 to them again.
 
-For Anthropic, set `PRODUCTBOARD_AGENT_PROVIDER=anthropic` and supply
-`ANTHROPIC_API_KEY` or run `board --agent-login` with that provider set.
+Choose Anthropic during setup or set `PRODUCTBOARD_AGENT_PROVIDER=anthropic`
+with `ANTHROPIC_API_KEY` in your shell.
 Agent uses `gpt-6-luna` with OpenAI and `claude-sonnet-5-5` with Anthropic. To
-switch, click the model button on the Agent page (or **Choose Agent model** in
+switch, click the model button on the Agent page (or **Select Agent model** in
 `Ctrl+K`): it lists the GPT-6 and Claude 5 models your keys can use, the one in
 use first, then asks how much the model should reason (None, Low, Medium, High
 or Extra high; Medium unless you change it). Both are remembered and show with

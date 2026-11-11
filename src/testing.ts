@@ -69,6 +69,7 @@ export function fakeAgent(ask: AgentBackend["ask"]): AgentBackend & { choice: Ag
       { provider: "openai", model: "test-model", created: 2 },
       { provider: "anthropic", model: "other-model", created: 1 },
     ],
+    async close() {},
     async use(choice) {
       this.choice = choice;
     },
