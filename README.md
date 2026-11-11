@@ -1,8 +1,6 @@
 <p align="center">
-  <img alt="Productboard showing Team focus and an issue peek with fictional Jira data" src="./preview/productboard.png" width="760">
+  <img src="./preview/logo.svg" alt="Productboard" width="354">
 </p>
-
-<h1 align="center">productboard</h1>
 
 <p align="center">
   Browse team issues, track your work, and search Jira Cloud from your terminal.
@@ -16,15 +14,30 @@
   <a href="#development">Development</a>
 </p>
 
+<p align="center">
+  <img alt="Productboard showing Team focus and an issue peek with fictional Jira data" src="./preview/productboard.png" width="760">
+</p>
+
 ---
 
 ## Installation
 
-Run from the project directory on macOS with [Bun](https://bun.sh) installed.
+```bash
+# Homebrew (macOS)
+brew tap murabcd/productboard https://github.com/murabcd/productboard.git
+brew install --HEAD murabcd/productboard/productboard
+```
+
+Homebrew installs Bun and Node.js for you. The formula tracks the `main` branch.
+Update with `brew upgrade --fetch-HEAD murabcd/productboard/productboard`.
+
+If you previously linked the checkout to `~/.local/bin/productboard`, remove that
+symlink so your shell picks up the Homebrew command.
+
+## Getting started
 
 ```bash
-bun install
-bun run start
+productboard
 ```
 
 On first launch, **Connect Jira** asks for your Jira Cloud site, Atlassian
@@ -35,16 +48,8 @@ checks your sign-in before saving the token to macOS Keychain.
 In **Connect an integration**, choose **OpenAI** or **Anthropic** and paste a
 provider API key, or select **Skip for now** to open Inbox with Jira only.
 
-To run `productboard` from anywhere, link the launcher from the project directory.
-Make sure `~/.local/bin` and the directory containing `bun` are on your `PATH`.
-
-```bash
-mkdir -p ~/.local/bin
-ln -s "$PWD/bin/productboard" ~/.local/bin/productboard
-```
-
-Run `productboard --login` to update your Jira sign-in or `productboard --check` to verify
-saved access without opening the dashboard.
+Run `productboard --login` to update your Jira sign-in or
+`productboard --check` to verify saved access without opening the dashboard.
 
 ## Features
 
@@ -67,7 +72,6 @@ launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/g
 
 ## Agent
 
-Install Node.js 24 or newer for the local [Eve](https://github.com/vercel/eve) runtime.
 If you skipped Agent during setup, press `Ctrl+K` and choose **Connect Agent**,
 or run `productboard --agent-login`. Choose a provider, open its key page with
 `Ctrl+O`, and paste the key into the hidden field. Productboard stores it in
@@ -118,6 +122,16 @@ answered.
 - [Zod](https://zod.dev) validates Jira responses and local settings before the app uses them.
 
 ## Development
+
+Install [Bun](https://bun.sh) on macOS to run from source.
+Agent also needs Node.js 24 or newer for the local [Eve](https://github.com/vercel/eve) runtime.
+
+```bash
+git clone https://github.com/murabcd/productboard.git
+cd productboard
+bun install
+bun run start
+```
 
 Run `bun run check` for Biome lint and formatting checks, TypeScript type
 checks, and Bun tests. It also checks repository structure with Konsistent

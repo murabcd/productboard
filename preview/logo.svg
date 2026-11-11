@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="354" height="42" viewBox="0 0 354 42">
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .shade { fill: #4B4646; }
+      .product { fill: #B7B1B1; }
+      .board { fill: #F1ECEC; }
+    }
+  </style>
+  <path class="shade" fill="#CFCECD"
+    d="M6 18h12v12H6z M66 18h12v12H66z M96 18h12v12H96z M126 18h12v12h-12z M156 18h18v12h-18z
+       M192 18h12v12h-12z M216 18h12v12h-12z M246 18h12v12h-12z M276 27h12v3h-12z M336 18h12v12h-12z"/>
+  <path class="product" fill="#656363" fill-rule="evenodd"
+    d="M0 6h24v30H6v6H0z M6 12h12v18H6z M30 6h24v12h-6v-6H36v24h-6z M60 6h24v30H60z M66 12h12v18H66z
+       M108 0h6v36H90V6h18z M96 12h12v18H96z M120 6h6v24h12V6h6v30h-24z M150 6h24v6h-18v18h18v6h-24z
+       M186 0h6v6h12v6h-12v18h12v6h-18V12h-6V6h6z"/>
+  <path class="board" fill="#211E1E" fill-rule="evenodd"
+    d="M210 0h6v6h18v30h-24z M216 12h12v18h-12z M240 6h24v30h-24z M246 12h12v18h-12z
+       M270 6h24v30h-24V18h18v-6h-18z M276 24h12v6h-12z M300 6h24v12h-6v-6h-12v24h-6z
+       M348 0h6v36h-24V6h18z M336 12h12v18h-12z"/>
+</svg>
