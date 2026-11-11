@@ -67,8 +67,8 @@ function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number, header: PageH
   const product = "PRODUCT";
   const board = "BOARD";
   const boardStart = 2 + cells(product);
-  canvas.put(0, 2, product, "title");
-  canvas.put(0, boardStart, board, "mutedBold");
+  canvas.put(0, 2, product, "mutedBold");
+  canvas.put(0, boardStart, board, "title");
   const shortcut = " ^K ";
   const right = width - 2 - cells(shortcut);
   canvas.put(0, right, shortcut, "muted");
