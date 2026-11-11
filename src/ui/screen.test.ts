@@ -6,6 +6,7 @@ import { RGBA, TextareaRenderable } from "@opentui/core";
 import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testing";
 import type { AgentBackend } from "../agent/chat";
 import { draftText } from "../agent/draft";
+import { toDoc } from "../jira/adf";
 import type { JiraClient } from "../jira/client";
 import { toIssue } from "../jira/parse";
 import { initialQuery, View } from "../jira/query";
@@ -162,6 +163,35 @@ describe("OpenTUI shell", () => {
     await setup.mockMouse.scroll(40, 7, "down"); // over the list
     await setup.renderOnce();
     expect(dashboard.list.selected?.key).toBe("EX-2");
+  });
+
+  test("shift arrows scroll a long peek while plain arrows select issues", async () => {
+    const description = toDoc("Issue details. ".repeat(150));
+    const { setup, dashboard } = await start(130, {
+      reads: { detail: async () => ({ description, facts: [], comments: [], attachments: [] }) },
+    });
+    await setup.mockInput.typeText(" ");
+    await settle();
+    await setup.renderOnce();
+
+    await setup.mockInput.pressArrow("down", { shift: true });
+    await setup.renderOnce();
+    expect(dashboard.peek?.scroll).toBeGreaterThan(0);
+    expect(dashboard.list.selected?.key).toBe("EX-1");
+    const rows = setup.captureCharFrame().trimEnd().split("\n");
+    expect(rows.at(-1)).toContain("Scroll peek");
+    expect(rows.at(-2)?.replace("│", "").trim()).toBe("");
+
+    await setup.mockInput.pressArrow("up", { shift: true });
+    await setup.renderOnce();
+    expect(dashboard.peek?.scroll).toBe(0);
+
+    await setup.mockInput.pressArrow("down");
+    expect(dashboard.list.selected?.key).toBe("EX-2");
+
+    await setup.mockInput.typeText(" ");
+    await setup.mockInput.pressArrow("up", { shift: true });
+    expect(dashboard.list.selected?.key).toBe("EX-1");
   });
 
   test("search typing and pasting go to the search box", async () => {

@@ -12,15 +12,15 @@ export const LIST_TOP = 6;
 export const BOX_ROWS = 2;
 /** Picker choices and panel text start on this row. */
 export const BODY_TOP = 8;
-/** The footer bar: counts, sync status and a few keys. */
-export const FOOTER_ROWS = 1;
+/** The footer and the blank row above it. */
+export const FOOTER_ROWS = 2;
 /** The peek panel opens beside the list when the workspace is this wide. */
 export const PEEK_MIN_WIDTH = 100;
 export const peekWidth = (workspace: number): number => Math.min(56, Math.max(38, Math.floor(workspace * 0.38)));
 
 export const listRows = (height: number, boxed = false): number =>
   height - LIST_TOP - FOOTER_ROWS - (boxed ? BOX_ROWS : 0);
-export const modalRows = (height: number): number => height - BODY_TOP - FOOTER_ROWS - 1;
+export const modalRows = (height: number): number => height - BODY_TOP - FOOTER_ROWS;
 export const DIALOG_WIDTH = 60;
 /** Rows a dialog's list may take, headings included, capped on tall panes. */
 export const pickerRows = (height: number): number => Math.min(12, Math.max(3, Math.floor(height / 2) - 6));
@@ -36,7 +36,7 @@ export function agentLayout(width: number, height: number, composerRows: number)
   const room = Math.min(width - 5, 72);
   const left = Math.floor((width - room) / 2);
   const rows = Math.max(1, Math.min(COMPOSER_MAX_ROWS, composerRows));
-  const status = height - FOOTER_ROWS - 2;
+  const status = height - FOOTER_ROWS - 1;
   const boxBottom = status - 1;
   const boxTop = boxBottom - rows - 1;
   return {

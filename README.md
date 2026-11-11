@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="productboard showing the All issues view with fictional Jira issues" src="./preview/productboard.png" width="760">
+  <img alt="Productboard showing Team focus and an issue peek with fictional Jira data" src="./preview/productboard.png" width="760">
 </p>
 
 <h1 align="center">productboard</h1>
@@ -48,6 +48,7 @@ ln -s "$PWD/bin/board" ~/.local/bin/board
 - Find issues assigned to you or created by you, and search across Jira.
 - See blockers, overdue issues, and mentions in one place.
 - Read comments and preview image attachments in the terminal.
+  Open issue peek with `Space` and scroll it with `Shift+↑` or `Shift+↓`.
 - Ask Agent about issues across Jira from its page in the sidebar.
 
 The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,

@@ -192,6 +192,9 @@ export function toKeys(key: Pick<KeyEvent, "name" | "ctrl" | "meta" | "shift" | 
   if (key.ctrl && key.name === "down") return [{ name: "agent-next" }];
   if (key.ctrl && key.name === "o") return [{ name: "agent-cited" }];
   if (key.ctrl && key.name === "c") return [{ name: "ctrl-c" }];
+  if (key.shift && !key.ctrl && !key.meta && !key.super) {
+    if (key.name === "up" || key.name === "down") return [{ name: key.name, shift: true }];
+  }
   const named = NAMED[key.name];
   if (named) return named === "tab" && key.shift ? [] : [{ name: named }];
   if (key.ctrl || key.meta) return [];

@@ -49,7 +49,8 @@ and composer while preserving the active page and draft.
 ## Screen layout
 
 The frame has a top bar, navigation sidebar, page header, body, and footer.
-The footer shows counts, sync status, and shortcuts.
+A blank row separates the body from the footer, which shows counts, sync
+status, and shortcuts.
 
 [[src/ui/navigation.ts#NAV_GROUPS]] puts one blank row between Search and Agent
 and the rest of the sidebar pages.

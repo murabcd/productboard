@@ -418,6 +418,8 @@ export class Dashboard {
         if (id === "q" || id === "ctrl-c") return false;
         // Space can't sit in a space-separated binding table.
         if (id === " ") this.runAction("peek");
+        else if (this.peek && "name" in key && key.shift && (id === "up" || id === "down"))
+          this.scrollPeek(id === "down" ? 1 : -1);
         else this.listKeys.get(id)?.();
     }
     this.syncPeek();

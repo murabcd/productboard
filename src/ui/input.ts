@@ -24,7 +24,7 @@ export type KeyName =
   | "agent-cited";
 
 /** A named key, or one typed character. */
-export type Key = { name: KeyName } | { text: string };
+export type Key = { name: KeyName; shift?: true } | { text: string };
 
 /** One identifier per key for binding tables: the key's name or its character. */
 export const keyId = (key: Key): string => ("name" in key ? key.name : key.text);

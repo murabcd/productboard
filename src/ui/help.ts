@@ -18,7 +18,7 @@ export const HELP = [
     ["Home End", "First / last"],
     ["Enter", "Details"],
     ["Space", "Peek; Esc closes it"],
-    ["J K", "Scroll the peek"],
+    ["Shift-↑ ↓  J K", "Scroll the peek"],
     ["o  y", "Open in Helium / copy link"],
     ["z  Z", "Fold the group / unfold all"],
     ["n", "Load more"],

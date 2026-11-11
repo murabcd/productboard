@@ -234,7 +234,7 @@ function drawList(canvas: Canvas, d: Dashboard): void {
     canvas.put(y, x, mark, active ? "selection" : markStyle);
   });
 
-  if (peek) drawPeek(canvas, peek, width, top, canvas.width - width, height - 1);
+  if (peek) drawPeek(canvas, peek, width, top, canvas.width - width, height - FOOTER_ROWS);
 
   const total = work.issues.length;
   let count = `${shown} ${shown === 1 ? "issue" : "issues"}`;
@@ -242,6 +242,7 @@ function drawList(canvas: Canvas, d: Dashboard): void {
   if (work.query.view === View.Mentions && work.current) count += ` · read ${work.snapshot?.scanned ?? 0}`;
   let hints: Hint[] = [["?", "Shortcuts", action("help")]];
   if (d.peekFits()) hints.unshift(["Space", d.peekOpen ? "Close peek" : "Peek", action("peek")]);
+  if (peek) hints.unshift(["⇧↑↓", "Scroll peek"]);
   if (work.more) hints.unshift(["n", `Load ${PAGE} more`, action("load-more")]);
   if (d.finding !== null || d.searching) hints = [];
   drawFooter(canvas, d, count, hints);
@@ -367,7 +368,7 @@ function drawPreview(canvas: Canvas, d: Dashboard, preview: Preview): void {
   else if (state.kind === "loading") canvas.put(BODY_TOP, 2, "Loading image…", "warning");
   // OpenTUI draws the image itself, with the best protocol the terminal has.
   else {
-    const height = canvas.height - BODY_TOP - FOOTER_ROWS - 1;
+    const height = modalRows(canvas.height);
     canvas.reserve("image", {
       left: 2,
       top: BODY_TOP,
