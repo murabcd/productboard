@@ -129,6 +129,7 @@ remembers both settings and shows them together, for example
 - [TypeScript](https://www.typescriptlang.org) defines the app's types for issues, sprints, and filters.
 - [Bun](https://bun.sh) runs the dashboard and its tests and manages dependencies.
 - [OpenTUI](https://github.com/sst/opentui) renders the terminal interface and handles keyboard input.
+- [Eve](https://github.com/vercel/eve) runs Agent locally and connects it to your model provider.
 - [Jira Cloud REST APIs](https://developer.atlassian.com/cloud/jira/platform/rest/v3/) provide issues and comments. The [Jira Software REST API](https://developer.atlassian.com/cloud/jira/software/rest/) provides boards and sprints.
 - [Zod](https://zod.dev) validates Jira responses and local settings before the app uses them.
 
