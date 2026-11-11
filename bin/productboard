@@ -1,0 +1,4 @@
+#!/bin/sh
+# Follow the launcher symlink to the checkout, then run the app with Bun.
+launcher=$(readlink -f "$0") || exit 1
+exec "${BUN:-bun}" "${launcher%/*}/../src/main.ts" "$@"

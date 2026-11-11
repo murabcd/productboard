@@ -1,4 +1,0 @@
-#!/bin/sh
-# Resolve the repo through the ~/.local/bin symlink, then run the app with Bun.
-ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd) || exit 1
-exec "${BUN:-$HOME/.bun/bin/bun}" "$ROOT/src/main.ts" "$@"

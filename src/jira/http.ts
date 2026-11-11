@@ -239,7 +239,7 @@ const ErrorPayload = z.object({
 
 /** A short, readable reason for a failed Jira response. */
 async function failure(response: Response): Promise<string> {
-  if (response.status === 401) return "Jira rejected your API token. Run board --login to set a new one.";
+  if (response.status === 401) return "Jira rejected your API token. Run productboard --login to set a new one.";
   if (response.status === 429) return "Jira is rate-limiting requests. Try again in a minute.";
   const body = ErrorPayload.safeParse(await response.json().catch(() => undefined));
   const detail = body.success ? [...body.data.errorMessages, ...Object.values(body.data.errors)] : [];

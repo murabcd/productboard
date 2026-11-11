@@ -182,7 +182,7 @@ describe("HTTP", () => {
       return json({}, { status: 401 });
     });
     const http = new JiraHttp(credentials, fetcher, async () => {});
-    await expect(new JiraClient(http).myself()).rejects.toThrow("board --login");
+    await expect(new JiraClient(http).myself()).rejects.toThrow("Run productboard --login");
     expect(calls).toBe(1);
   });
 

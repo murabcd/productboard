@@ -69,7 +69,7 @@ export class EveAgent implements AgentBackend {
   /** Restart Eve with the saved model and reasoning for subsequent turns. */
   async use(choice: AgentChoice): Promise<void> {
     const key = this.deps.key(choice.provider);
-    if (!key) throw new Error(`No ${PROVIDER_NAMES[choice.provider]} API key: run board --agent-login`);
+    if (!key) throw new Error(`No ${PROVIDER_NAMES[choice.provider]} API key: run productboard --agent-login`);
     this.deps.remember(choice);
     this.config = { choice, apiKey: key };
     await this.close();

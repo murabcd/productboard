@@ -10,12 +10,12 @@ import { DEFAULT_THEME } from "./theme";
 import { Dashboard, type Opener } from "./ui/dashboard";
 import { openScreen, type Screen } from "./ui/screen";
 
-const USAGE = `Usage: board [--login | --agent-login | --check | --help]
+const USAGE = `Usage: productboard [--login | --agent-login | --check | --help]
 
-  board           Open the Inbox or start setup
-  board --login   Connect or update your Jira account
-  board --agent-login   Connect an Agent provider
-  board --check   Check Jira access without opening the dashboard`;
+  productboard                Open the Inbox or start setup
+  productboard --login        Connect or update your Jira account
+  productboard --agent-login  Connect an Agent provider
+  productboard --check        Check Jira access without opening the dashboard`;
 
 const COMMANDS = ["--login", "--agent-login", "--check"] as const;
 type LoginCommand = Exclude<(typeof COMMANDS)[number], "--check">;
@@ -30,8 +30,8 @@ async function main(args: string[]): Promise<number> {
   }
   const saved = command ? undefined : loadCredentials();
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    if (command) return fail(`Run board ${command} in a terminal.`);
-    return fail(typeof saved === "string" ? saved : "Run board in a terminal, or use board --check.");
+    if (command) return fail(`Run productboard ${command} in a terminal.`);
+    return fail(typeof saved === "string" ? saved : "Run productboard in a terminal, or use productboard --check.");
   }
   const screen = await openScreen((url) => run(["open", url]));
   let result: number | string;
@@ -122,7 +122,7 @@ function say(text: string): number {
 }
 
 function fail(text: string): number {
-  process.stderr.write(`board: ${text}\n`);
+  process.stderr.write(`productboard: ${text}\n`);
   return 1;
 }
 

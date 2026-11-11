@@ -1,7 +1,7 @@
 # productboard Knowledge Graph
 
 productboard is a local read-only terminal workspace for product management. The
-[launcher](../bin/board) runs [[src/main.ts]] with Bun. The entry point connects
+[launcher](../bin/productboard) runs [[src/main.ts]] with Bun. The entry point connects
 local credentials, the Jira client, workspace state, and the terminal UI.
 
 - [[jira-api]] covers authentication, the read boundary, and issue queries.

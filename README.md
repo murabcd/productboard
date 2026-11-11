@@ -35,15 +35,15 @@ checks your sign-in before saving the token to macOS Keychain.
 In **Connect an integration**, choose **OpenAI** or **Anthropic** and paste a
 provider API key, or select **Skip for now** to open Inbox with Jira only.
 
-To run it as `board` from anywhere, link the launcher from the project directory.
-Make sure `~/.local/bin` is on your `PATH`.
+To run `productboard` from anywhere, link the launcher from the project directory.
+Make sure `~/.local/bin` and the directory containing `bun` are on your `PATH`.
 
 ```bash
 mkdir -p ~/.local/bin
-ln -s "$PWD/bin/board" ~/.local/bin/board
+ln -s "$PWD/bin/productboard" ~/.local/bin/productboard
 ```
 
-Run `board --login` to update your Jira sign-in or `board --check` to verify
+Run `productboard --login` to update your Jira sign-in or `productboard --check` to verify
 saved access without opening the dashboard.
 
 ## Features
@@ -69,11 +69,11 @@ launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/g
 
 Install Node.js 24 or newer for the local [Eve](https://github.com/vercel/eve) runtime.
 If you skipped Agent during setup, press `Ctrl+K` and choose **Connect Agent**,
-or run `board --agent-login`. Choose a provider, open its key page with
+or run `productboard --agent-login`. Choose a provider, open its key page with
 `Ctrl+O`, and paste the key into the hidden field. Productboard stores it in
 macOS Keychain. An existing provider API key in your shell works too.
 
-Open `board` and select **Agent** in the sidebar (or press `2`). Ask about any
+Open `productboard` and select **Agent** in the sidebar (or press `2`). Ask about any
 project, sprint, or issue you can access in Jira. The message box grows as you type.
 `Enter` sends and `Shift+Enter` (or `Ctrl+J`) adds a line. While Agent answers,
 `Esc` interrupts it. Use `Ctrl+N` to start a chat, `Ctrl+↑` / `Ctrl+↓` to

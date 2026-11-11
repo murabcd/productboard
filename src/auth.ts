@@ -78,9 +78,9 @@ export function rememberTheme(theme: ThemeId): void {
 /** The saved sign-in, or a sentence telling the user how to create one. */
 export function loadCredentials(): Credentials | string {
   const config = readConfig();
-  if (!config) return "Sign in first: board --login";
+  if (!config) return "Sign in first: productboard --login";
   const token = readToken(KEYCHAIN_SERVICE, config.email);
-  if (!token) return "Your API token is missing from Keychain. Run board --login.";
+  if (!token) return "Your API token is missing from Keychain. Run productboard --login.";
   return { site: config.site, email: config.email, token };
 }
 

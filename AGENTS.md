@@ -12,7 +12,7 @@ contract changes and run `bun run check:lat` after graph edits.
 
 ## Project Structure & Module Organization
 
-- `bin/board` is the shell launcher. `src/main.ts` handles CLI flags and wires
+- `bin/productboard` is the shell launcher. `src/main.ts` handles CLI flags and wires
   together authentication, the Jira client, workspace state, and the terminal.
 - `src/auth.ts` owns credential handling and local preferences.
 - `src/jira/http.ts` owns authenticated transport, retries, request priority,
@@ -46,8 +46,8 @@ rendering and OpenTUI details out of Jira and workspace modules. Update
 ## Build, Test, and Development Commands
 
 Run `bun install` at the repository root. Use `bun run start` to launch from the
-checkout and `board` for the installed launcher. Use `board --login` to configure
-credentials and `board --check` to verify live access.
+checkout and `productboard` for the installed launcher. Use `productboard --login`
+to configure credentials and `productboard --check` to verify live access.
 
 Run `bun run check` for Lat, Konsistent, Biome, TypeScript, and tests. Use
 `bun run check:lat`, `bun run check:konsistent`, `bun run lint`,
@@ -78,9 +78,9 @@ test at the owning boundary when existing tests would miss the failure.
 
 Run the relevant test file during development and `bun run check` before
 opening a PR with code changes. For changes that depend on terminal behavior,
-exercise the affected flow in Rex. Use `board --check` to verify authentication
-when relevant. Verify the affected data path in the dashboard for live API
-changes.
+exercise the affected flow in Rex. Use `productboard --check` to verify
+authentication when relevant. Verify the affected data path in the dashboard
+for live API changes.
 
 ## Commit & Pull Request Guidelines
 
