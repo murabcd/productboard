@@ -24,12 +24,12 @@
 
 ```bash
 # Homebrew (macOS)
-brew tap murabcd/productboard https://github.com/murabcd/productboard.git
-brew install --HEAD murabcd/productboard/productboard
+brew install murabcd/tap/productboard
 ```
 
-Homebrew installs Bun and Node.js for you. The formula tracks the `main` branch.
-Update with `brew upgrade --fetch-HEAD murabcd/productboard/productboard`.
+Homebrew installs Bun and Node.js for you. Update with
+`brew upgrade murabcd/tap/productboard`. See [GitHub Releases](https://github.com/murabcd/productboard/releases)
+for version history.
 
 If you previously linked the checkout to `~/.local/bin/productboard`, remove that
 symlink so your shell picks up the Homebrew command.
@@ -61,7 +61,10 @@ Run `productboard --login` to update your Jira sign-in or
 - See blockers, overdue issues, and mentions in one place.
 - Read comments and preview image attachments in the terminal.
   Open issue peek with `Space` and scroll it with `Shift+↑` or `Shift+↓`.
-- Ask Agent about issues across Jira from its page in the sidebar.
+- [Eve](https://github.com/vercel/eve) powers the **Agent** tab.
+  - Search Jira with read-only tools and open issues cited in replies.
+  - Attach issues, sprints, and screenshots to give Agent context.
+  - Stream replies from OpenAI or Anthropic in the terminal.
 
 The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,
 `3` for Inbox, `4` for My issues, `5` for Team focus, or `6` for All issues.
@@ -72,10 +75,12 @@ launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/g
 
 ## Agent
 
+Eve runs locally and sends model requests to the provider you connect.
+
 If you skipped Agent during setup, press `Ctrl+K` and choose **Connect Agent**,
 or run `productboard --agent-login`. Choose a provider, open its key page with
 `Ctrl+O`, and paste the key into the hidden field. Productboard stores it in
-macOS Keychain. An existing provider API key in your shell works too.
+macOS Keychain.
 
 Open `productboard` and select **Agent** in the sidebar (or press `2`). Ask about any
 project, sprint, or issue you can access in Jira. The message box grows as you type.
@@ -102,16 +107,22 @@ to Jira issues in the terminal. Productboard keeps chat history for the current
 run. Reattach images if you switch models or reasoning levels and want to refer
 to them again.
 
-Choose Anthropic during setup or set `PRODUCTBOARD_AGENT_PROVIDER=anthropic`
-with `ANTHROPIC_API_KEY` in your shell.
-Agent uses `gpt-6-luna` with OpenAI and `claude-sonnet-5-5` with Anthropic. To
-switch, click the model button on the Agent page (or **Select Agent model** in
-`Ctrl+K`): it lists the GPT-6 and Claude 5 models your keys can use, the one in
-use first, then asks how much the model should reason (None, Low, Medium, High
-or Extra high; Medium unless you change it). Both are remembered and show with
-the model, e.g. "GPT-6 Luna · Medium".
-`PRODUCTBOARD_AGENT_MODEL` overrides the model at start. Replies show which model
-answered.
+### Model providers
+
+OpenAI is the default. Choose a provider during setup or set
+`PRODUCTBOARD_AGENT_PROVIDER` to `openai` or `anthropic` in your shell.
+
+- **OpenAI** defaults to GPT-6 Luna (`gpt-6-luna`). Set `OPENAI_API_KEY` to use a key from your shell.
+- **Anthropic** defaults to Claude Sonnet 5.5 (`claude-sonnet-5-5`). Set `ANTHROPIC_API_KEY` to use a key from your shell.
+
+Click the model button on the Agent page or choose **Select Agent model** from
+the `Ctrl+K` menu. The picker lists the GPT-6 and Claude 5 models your keys can
+use, with the current model first. Choose a model, then a reasoning level
+(None, Low, Medium, High, or Extra high). The default is Medium. Productboard
+remembers both settings and shows them together, for example
+"GPT-6 Luna · Medium". Replies show which model answered.
+
+`PRODUCTBOARD_AGENT_MODEL` overrides the model at launch.
 
 ## Built with
 
