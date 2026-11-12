@@ -29,8 +29,8 @@ brew install murabcd/tap/productboard
 
 The formula includes Bun and installs Node.js for Agent. Update with
 `brew upgrade murabcd/tap/productboard`. Run `productboard --version` to see your
-installed version and visit [GitHub Releases](https://github.com/murabcd/productboard/releases)
-for version history.
+installed version, for example `productboard v0.1.1`. See
+[GitHub Releases](https://github.com/murabcd/productboard/releases) for version history.
 
 If you previously linked the checkout to `~/.local/bin/productboard`, remove that
 symlink so your shell picks up the Homebrew command.

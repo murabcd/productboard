@@ -24,7 +24,7 @@ type LoginCommand = Exclude<(typeof COMMANDS)[number], "--check">;
 
 async function main(args: string[]): Promise<number> {
   if (args.includes("--help") || args.includes("-h")) return say(USAGE);
-  if (args.includes("--version")) return say(version);
+  if (args.includes("--version")) return say(`productboard v${version}`);
   const command = COMMANDS.find((flag) => args.includes(flag));
   if (args.length && !command) return fail(`Unknown option ${args[0]}\n\n${USAGE}`);
   if (command === "--check") {

@@ -22,7 +22,7 @@ test("the installed productboard launcher finds Bun on PATH", async () => {
 
     const version = Bun.spawnSync([launcher, "--version"], options);
     expect(version.exitCode).toBe(0);
-    expect(version.stdout.toString()).toBe(`${packageVersion}\n`);
+    expect(version.stdout.toString()).toBe(`productboard v${packageVersion}\n`);
     expect(version.stderr.toString()).toBe("");
   } finally {
     await rm(directory, { recursive: true, force: true });

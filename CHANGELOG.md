@@ -8,7 +8,7 @@ Release notes for Productboard, newest first.
 
 #### Improvements
 
-- Print the installed version with `productboard --version`.
+- Print the command name and installed version with `productboard --version`.
 
 ### TUI
 
