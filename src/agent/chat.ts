@@ -1,4 +1,4 @@
-import type { AgentChoice } from "../auth";
+import type { AgentChoice, AgentChoiceChange, ModelRef } from "../auth";
 import type { Issue } from "../jira/types";
 import { clean } from "../text";
 import { AgentDraft, type SprintContext } from "./draft";
@@ -8,10 +8,11 @@ import type { AgentModel } from "./models";
 export interface AgentBackend {
   /** The model and reasoning that answer, shown under each reply. */
   readonly current: AgentChoice;
+  readonly recentModels: readonly ModelRef[];
   models(): Promise<AgentModel[]>;
   close(): Promise<void>;
   /** Answer with another model or reasoning from now on. */
-  use(choice: AgentChoice): Promise<void>;
+  use(choice: AgentChoice, change: AgentChoiceChange): Promise<void>;
   ask(request: {
     thread: string;
     prompt: string;

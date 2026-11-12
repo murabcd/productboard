@@ -19,18 +19,19 @@ export const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"] as co
 export type Reasoning = (typeof REASONING_LEVELS)[number];
 /** Set explicitly, so the level shown is the level used: providers' own defaults vary by model. */
 const DEFAULT_REASONING: Reasoning = "medium";
+const RECENT_MODEL_LIMIT = 5;
 
-export interface ModelRef {
-  provider: AgentProvider;
-  model: string;
-}
-
-const AgentChoice = z.object({
+const ModelRef = z.object({
   provider: z.enum(AGENT_PROVIDERS),
   model: z.string(),
+});
+export type ModelRef = z.infer<typeof ModelRef>;
+
+const AgentChoice = ModelRef.extend({
   reasoning: z.enum(REASONING_LEVELS).default(DEFAULT_REASONING),
 });
 export type AgentChoice = z.infer<typeof AgentChoice>;
+export type AgentChoiceChange = "model" | "reasoning";
 
 const Config = z.object({
   site: z.string().regex(SITE_PATTERN),
@@ -38,6 +39,7 @@ const Config = z.object({
   /** The board chosen last, opened again on the next start. */
   board: z.string().optional(),
   agent: AgentChoice.optional(),
+  recentAgentModels: z.array(ModelRef).optional().catch(undefined),
   theme: z.enum(THEME_IDS).optional().catch(undefined),
 });
 type Config = z.infer<typeof Config>;
@@ -131,10 +133,25 @@ function rememberAgentProvider(provider: AgentProvider): void {
   }
 }
 
-/** Keep the model chosen in Agent for the next start. */
-export function rememberAgentChoice(agent: AgentChoice): void {
+export function recentAgentModels(): readonly ModelRef[] {
+  return readConfig()?.recentAgentModels?.slice(0, RECENT_MODEL_LIMIT) ?? [];
+}
+
+export function promoteRecentModel({ provider, model }: ModelRef, recent: readonly ModelRef[]): ModelRef[] {
+  return [{ provider, model }, ...recent.filter((entry) => entry.provider !== provider || entry.model !== model)].slice(
+    0,
+    RECENT_MODEL_LIMIT,
+  );
+}
+
+/** Save the active choice and record explicit model picks in the same settings write. */
+export function rememberAgentChoice(agent: AgentChoice, change: AgentChoiceChange): readonly ModelRef[] {
   const config = readConfig();
-  if (config) writeConfig({ ...config, agent });
+  if (!config) return [];
+  const recent = config.recentAgentModels ?? [];
+  const updated = change === "model" ? promoteRecentModel(agent, recent) : recent.slice(0, RECENT_MODEL_LIMIT);
+  writeConfig({ ...config, agent, recentAgentModels: updated });
+  return updated;
 }
 
 export function agentKeyName(provider: AgentProvider): "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" {

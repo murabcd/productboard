@@ -86,7 +86,7 @@ export class SetupView<Result> extends Renderable {
         detail,
         run: () => this.dismiss(value),
       }));
-      this.dialog = new Picker("provider", prompt.title, items);
+      this.dialog = new Picker("provider", prompt.title, () => items);
     }
   }
 

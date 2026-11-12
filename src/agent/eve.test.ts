@@ -15,7 +15,7 @@ test("a model switch while a turn waits for Eve retirement cannot change its att
   const high = { ...low, reasoning: "high" } as const;
   const agent = EveAgent.create(
     { search: async () => [] },
-    { read: () => low, key: () => "fixture", remember: () => {}, start },
+    { read: () => low, recent: () => [], key: () => "fixture", remember: () => [], start },
   );
   if (!agent) throw new Error("Expected a configured Agent");
   const first = new AgentChat(agent, () => {});
@@ -26,10 +26,10 @@ test("a model switch while a turn waits for Eve retirement cannot change its att
     await settle();
     expect(start).toHaveBeenCalledTimes(1);
 
-    const changing = agent.use(medium);
+    const changing = agent.use(medium, "reasoning");
     second.current.draft.replace(["Turn admitted under Medium"]);
     const waiting = second.send();
-    const changedAgain = agent.use(high);
+    const changedAgain = agent.use(high, "reasoning");
     expect(second.current.turns[0]?.choice).toEqual(medium);
 
     ready.reject(new Error("Previous process closed"));

@@ -120,8 +120,9 @@ OpenAI is the default. Choose a provider during setup or set
 
 Type `/` in an empty Agent composer and choose `/models`, or choose **Select
 Agent model** from the `Ctrl+K` menu. The picker opens above
-the composer and lists the GPT-6 and Claude 5 models your keys can use, with the
-current model first. Choose a model, then a reasoning level
+the composer and lists the GPT-6 and Claude 5 models your keys can use. **Recent**
+shows your last five distinct model picks, newest first. A dot marks the active
+model. Choose a model, then a reasoning level
 (None, Low, Medium, High, or Extra high). The default is Medium. Productboard
 remembers both settings and shows them together, for example
 "GPT-6 Luna · Medium". Replies show which model answered.

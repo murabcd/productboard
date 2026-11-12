@@ -3,7 +3,7 @@
 
 import { type AgentBackend, AgentChat } from "../agent/chat";
 import type { AgentModel } from "../agent/models";
-import type { AgentChoice, ModelRef, Reasoning } from "../auth";
+import type { AgentChoice, AgentChoiceChange, ModelRef, Reasoning } from "../auth";
 import { message } from "../state/workspace";
 import { type Key, keyId } from "./input";
 import type { AgentLayout } from "./layout";
@@ -35,6 +35,10 @@ export class AgentPanel {
     return this.chat.backend?.current;
   }
 
+  get recentModels(): readonly ModelRef[] {
+    return this.chat.backend?.recentModels ?? [];
+  }
+
   loadModels(): void {
     const backend = this.chat.backend;
     if (!backend || this.modelsPending) return;
@@ -58,20 +62,20 @@ export class AgentPanel {
 
   useModel({ provider, model }: ModelRef): void {
     const current = this.current;
-    if (current) this.use({ provider, model, reasoning: current.reasoning });
+    if (current) this.use({ provider, model, reasoning: current.reasoning }, "model");
   }
 
   useReasoning(reasoning: Reasoning): void {
     const current = this.current;
-    if (current) this.use({ ...current, reasoning });
+    if (current) this.use({ ...current, reasoning }, "reasoning");
   }
 
   /** Answer with `choice` from the next question on; a failure shows under the box. */
-  private use(choice: AgentChoice): void {
+  private use(choice: AgentChoice, change: AgentChoiceChange): void {
     const backend = this.chat.backend;
     if (!backend) return;
     const thread = this.chat.current;
-    backend.use(choice).then(
+    backend.use(choice, change).then(
       () => this.changed(),
       (error: unknown) => {
         thread.draft.error = message(error);

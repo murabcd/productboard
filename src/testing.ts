@@ -1,7 +1,7 @@
 /** Shared test fixtures: Jira-shaped payloads and controllable promises. */
 
 import type { AgentBackend } from "./agent/chat";
-import type { AgentChoice } from "./auth";
+import { type AgentChoice, type ModelRef, promoteRecentModel } from "./auth";
 import type { Snapshot } from "./jira/client";
 import { type RawIssue, toIssue } from "./jira/parse";
 import type { IssueQuery } from "./jira/query";
@@ -60,18 +60,23 @@ export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** An Agent backend for tests: answers with `ask`, offers two models, and switches between them. */
 export function fakeAgent(ask: AgentBackend["ask"]): AgentBackend & { choice: AgentChoice } {
+  let recent: readonly ModelRef[] = [];
   return {
     choice: { provider: "openai", model: "test-model", reasoning: "medium" },
     get current() {
       return this.choice;
+    },
+    get recentModels() {
+      return recent;
     },
     models: async () => [
       { provider: "openai", model: "test-model", created: 2 },
       { provider: "anthropic", model: "other-model", created: 1 },
     ],
     async close() {},
-    async use(choice) {
+    async use(choice, change) {
       this.choice = choice;
+      if (change === "model") recent = promoteRecentModel(choice, recent);
     },
     ask,
   };

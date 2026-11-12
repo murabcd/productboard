@@ -306,7 +306,7 @@ describe("picker", () => {
     const picker = new Picker(
       "sprint",
       "Filter by sprint",
-      [
+      () => [
         { value: "1", label: "Current", detail: "", state: "active", run: () => {} },
         { value: "2", label: "Next", detail: "", state: "future", run: () => {} },
         { value: "3", label: "Previous", detail: "", state: "closed", run: () => {} },
@@ -365,7 +365,7 @@ describe("picker", () => {
       group: i < 2 ? "First" : "Second",
       run: () => {},
     }));
-    const picker = new Picker("commands", "Commands", choices);
+    const picker = new Picker("commands", "Commands", () => choices);
     picker.handle({ name: "pagedown" }, 4);
     expect(picker.handle(ENTER, 4)).toMatchObject({ value: "2" });
     picker.move(-1);
@@ -379,7 +379,7 @@ describe("picker", () => {
       detail: "",
       run: () => {},
     }));
-    const picker = new Picker("board", "Choose board", choices);
+    const picker = new Picker("board", "Choose board", () => choices);
     picker.handle({ name: "pagedown" }, pickerRows(40));
     expect(picker.selected?.value).toBe(String(pickerRows(40)));
   });
@@ -611,7 +611,7 @@ describe("concept layout", () => {
     dashboard.agent.chat.current.draft.replace(["First?"]);
     dashboard.agent.send();
     await settle();
-    expect(draw(dashboard, 120, 30).text(4)).not.toContain("Test Model");
+    expect(draw(dashboard, 120, 30).text(3)).not.toContain("Test Model");
     dashboard.openPicker("model");
     expect(dashboard.picker?.kind).toBe("model");
     const dialog = () => {
@@ -621,12 +621,9 @@ describe("concept layout", () => {
     expect(dialog()).toContain("Loading models…");
     await settle();
     expect(dialog()).toMatch(/Search models▏ +esc/);
-    const lines = dialog().split("\n");
-    const recent = lines.findIndex((line) => line.trim().endsWith("Recent"));
-    expect(lines[recent + 1]).toMatch(/● Test Model OpenAI\s*$/);
-    expect(lines[recent + 3]?.trim().endsWith("Anthropic")).toBe(true);
-    expect(lines[recent + 4]).toContain("Other Model");
-    for (const key of [{ name: "down" } as const, ENTER]) dashboard.handle(key); // the cursor starts on the model in use
+    expect(dialog()).toMatch(/● Test Model\s*$/m);
+    expect(dialog()).not.toContain("Recent");
+    for (const key of [...text("other"), ENTER]) dashboard.handle(key);
     await settle();
     expect(agent.choice).toEqual({ provider: "anthropic", model: "other-model", reasoning: "medium" });
     expect(dashboard.picker?.kind).toBe("reasoning");
@@ -635,7 +632,7 @@ describe("concept layout", () => {
     await settle();
     expect(agent.choice).toEqual({ provider: "anthropic", model: "other-model", reasoning: "high" });
     const canvas = draw(dashboard, 120, 30);
-    expect(canvas.text(4)).not.toContain("Other Model");
+    expect(canvas.text(3)).not.toContain("Other Model");
     expect(canvas.text(29)).toContain("Other Model · High");
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
     expect(screen).toMatch(/Test Model · Medium · \d/); // the first reply still says which model wrote it
@@ -655,25 +652,49 @@ describe("concept layout", () => {
     await settle();
     const canvas = draw(dashboard, 120, 30);
     const rows = Array.from({ length: dashboard.agentLayout.boxTop }, (_, y) => canvas.text(y).slice(20).trim());
-    expect(rows.slice(rows.indexOf("Recent")).filter(Boolean)).toEqual([
-      "Recent",
-      "● Test Model OpenAI",
+    expect(rows.slice(rows.indexOf("Anthropic")).filter(Boolean)).toEqual([
       "Anthropic",
       "Claude Fable 5.2",
       "Claude Haiku 5.5",
       "OpenAI",
       "GPT-6.1 Terra",
       "GPT-6 Luna",
+      "● Test Model",
     ]);
-    for (let step = 0; step < 4; step++) dashboard.handle({ name: "down" });
-    expect(dashboard.picker?.selected?.label).toBe("GPT-6 Luna");
-    expect(dashboard.picker?.window(2)).toMatchObject([{ heading: "OpenAI" }, { choice: { label: "GPT-6 Luna" } }]);
+    expect(dashboard.picker?.window(2)).toMatchObject([{ heading: "OpenAI" }, { choice: { label: "Test Model" } }]);
     for (const key of text("anthropic")) dashboard.handle(key);
     expect(dashboard.picker?.window(10)).toMatchObject([
       { heading: "Anthropic" },
       { choice: { label: "Claude Fable 5.2" } },
       { choice: { label: "Claude Haiku 5.5" } },
     ]);
+  });
+
+  test("Recent lists confirmed picks without sending a message and search puts them back under providers", async () => {
+    const ask = mock<AgentBackend["ask"]>(async () => {});
+    const { dashboard } = setup(fakeAgent(ask));
+    dashboard.openPicker("model");
+    await settle();
+    for (const key of [...text("other"), ENTER, ESC]) dashboard.handle(key);
+    dashboard.openPicker("model");
+    for (const key of [...text("test"), ENTER, ESC]) dashboard.handle(key);
+    dashboard.openPicker("model");
+    await settle();
+    expect(dashboard.picker?.window(10)).toMatchObject([
+      { heading: "Recent" },
+      { choice: { label: "Test Model", detail: "OpenAI", current: true } },
+      { choice: { label: "Other Model", detail: "Anthropic", current: false } },
+    ]);
+
+    for (const key of text("model")) dashboard.handle(key);
+    expect(dashboard.picker?.window(10)).toMatchObject([
+      { heading: "Anthropic" },
+      { choice: { label: "Other Model" } },
+      null,
+      { heading: "OpenAI" },
+      { choice: { label: "Test Model", current: true } },
+    ]);
+    expect(ask).not.toHaveBeenCalled();
   });
 
   test("everything clickable has a key: menus, folding, tabs and the peek", async () => {

@@ -4,7 +4,16 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { Client, type ClientSession, createDataUrlFilePart, isTurnFailureEvent } from "eve/client";
 import { JiraSearchResult } from "../../agent/lib/jira-search";
-import { type AgentChoice, agentChoice, agentKeyName, loadAgentKey, rememberAgentChoice } from "../auth";
+import {
+  type AgentChoice,
+  type AgentChoiceChange,
+  agentChoice,
+  agentKeyName,
+  loadAgentKey,
+  type ModelRef,
+  recentAgentModels,
+  rememberAgentChoice,
+} from "../auth";
 import type { JiraClient } from "../jira/client";
 import type { AgentBackend } from "./chat";
 import { openJiraSearch } from "./jira-search";
@@ -30,6 +39,7 @@ interface EveConfig {
 
 interface EveDependencies {
   read: typeof agentChoice;
+  recent: typeof recentAgentModels;
   key: typeof loadAgentKey;
   remember: typeof rememberAgentChoice;
   start: typeof openEveProcess;
@@ -37,6 +47,7 @@ interface EveDependencies {
 
 const localDependencies: EveDependencies = {
   read: agentChoice,
+  recent: recentAgentModels,
   key: loadAgentKey,
   remember: rememberAgentChoice,
   start: openEveProcess,
@@ -45,12 +56,15 @@ const localDependencies: EveDependencies = {
 export class EveAgent implements AgentBackend {
   private active?: EveProcess;
   private closing?: Promise<void>;
+  private recent: readonly ModelRef[];
 
   private constructor(
     private readonly jira: Pick<JiraClient, "search">,
     private config: EveConfig,
     private readonly deps: EveDependencies,
-  ) {}
+  ) {
+    this.recent = deps.recent();
+  }
 
   static create(jira: Pick<JiraClient, "search">, deps = localDependencies): EveAgent | undefined {
     const choice = deps.read();
@@ -62,15 +76,19 @@ export class EveAgent implements AgentBackend {
     return this.config.choice;
   }
 
+  get recentModels() {
+    return this.recent;
+  }
+
   models(): Promise<AgentModel[]> {
     return listModels({ openai: this.deps.key("openai"), anthropic: this.deps.key("anthropic") });
   }
 
   /** Restart Eve with the saved model and reasoning for subsequent turns. */
-  async use(choice: AgentChoice): Promise<void> {
+  async use(choice: AgentChoice, change: AgentChoiceChange): Promise<void> {
     const key = this.deps.key(choice.provider);
     if (!key) throw new Error(`No ${PROVIDER_NAMES[choice.provider]} API key: run productboard --agent-login`);
-    this.deps.remember(choice);
+    this.recent = this.deps.remember(choice, change);
     this.config = { choice, apiKey: key };
     await this.close();
   }

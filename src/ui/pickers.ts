@@ -1,5 +1,5 @@
 import { type AgentModel, modelName, PROVIDER_NAMES, REASONING_NAMES } from "../agent/models";
-import { REASONING_LEVELS, type Reasoning } from "../auth";
+import { type ModelRef, REASONING_LEVELS, type Reasoning } from "../auth";
 import { isPersonal, STATUSES, type StatusFilter, View } from "../jira/query";
 import { type Choice, describeAttachment, SPRINT_STATES, shortSprintName, sprintChoice } from "../jira/types";
 import { THEME_IDS, THEMES } from "../theme";
@@ -52,27 +52,35 @@ const REASONING_DETAILS: Record<Reasoning, string> = {
   xhigh: "Thinks longest",
 };
 
-/** The active model appears under Recent. Other models are grouped by provider. */
-function modelItems(d: Dashboard): PickerItem[] {
-  const now = d.agent.current;
-  const use = (m: AgentModel) => () => {
-    d.agent.useModel(m);
-    d.openPicker("reasoning");
-  };
-  return d.agent.models
-    .map((model) => {
-      const provider = PROVIDER_NAMES[model.provider];
-      const current = model.provider === now?.provider && model.model === now.model;
-      return {
-        value: `${model.provider}/${model.model}`,
-        label: modelName(model.model),
-        detail: current ? provider : "",
-        group: current ? "Recent" : provider,
-        current,
-        run: use(model),
-      };
-    })
-    .sort((a, b) => Number(b.current) - Number(a.current) || a.group.localeCompare(b.group));
+function modelItems(d: Dashboard, query: string): PickerItem[] {
+  const key = ({ provider, model }: ModelRef) => `${provider}/${model}`;
+  const active = d.agent.current;
+  const current = active && key(active);
+  const choice = (model: AgentModel, group: string, detail = ""): PickerItem =>
+    item(
+      modelName(model.model),
+      detail,
+      () => {
+        d.agent.useModel(model);
+        d.openPicker("reasoning");
+      },
+      { value: key(model), group, current: key(model) === current },
+    );
+  const available = new Map(d.agent.models.map((model) => [key(model), model]));
+  const recent: PickerItem[] = [];
+  if (!query.trim()) {
+    for (const ref of d.agent.recentModels) {
+      const value = key(ref);
+      const model = available.get(value);
+      if (!model) continue;
+      recent.push(choice(model, "Recent", PROVIDER_NAMES[model.provider]));
+      available.delete(value);
+    }
+  }
+  const byProvider = Array.from(available.values())
+    .sort((a, b) => PROVIDER_NAMES[a.provider].localeCompare(PROVIDER_NAMES[b.provider]))
+    .map((model) => choice(model, PROVIDER_NAMES[model.provider]));
+  return [...recent, ...byProvider];
 }
 
 function catalogStatus(error: string, pending: boolean): string {

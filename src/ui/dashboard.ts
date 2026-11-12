@@ -107,7 +107,7 @@ export class Dashboard {
       (key) => client.detail(key),
       (read) => {
         const visibleInModal = this.modal?.kind === "issue" && this.modal.read === read;
-        if (visibleInModal && this.picker?.kind === "attachment") this.refreshPicker();
+        if (visibleInModal && this.picker?.kind === "attachment") this.picker.refresh();
         if (visibleInModal || this.peek?.read === read) this.redraw();
       },
     );
@@ -220,21 +220,16 @@ export class Dashboard {
   }
 
   private update(): void {
-    this.refreshPicker();
+    this.picker?.refresh();
     this.syncPeek();
     this.redraw();
-  }
-
-  private refreshPicker(): void {
-    const picker = this.picker;
-    if (picker) picker.replace(PICKERS[picker.kind].items(this, picker.query));
   }
 
   openPicker(kind: PickerKind, onFinish?: () => void): void {
     const source = PICKERS[kind];
     if (source.placement === "composer" && !this.agent.tab) this.openAgent();
     this.closePicker();
-    this.picker = new Picker(kind, source.title, source.items(this, ""), {
+    this.picker = new Picker(kind, source.title, (query) => source.items(this, query), {
       ...source.options?.(this),
       placement: source.placement,
       onFinish,

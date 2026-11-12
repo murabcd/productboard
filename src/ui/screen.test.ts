@@ -179,7 +179,7 @@ describe("OpenTUI shell", () => {
     const composer = setup.renderer.root.getRenderable("dashboard")?.getRenderable("composer");
     expect(composer).toBeInstanceOf(TextareaRenderable);
     if (composer instanceof TextareaRenderable)
-      expect(composer.placeholder).toBe("Message Agent… (@ for context, / for commands)");
+      expect(composer.placeholder).toBe("Ask anything… (@ for context, / for commands)");
     await dashboard.dispose();
     expect(close).toHaveBeenCalledTimes(1);
   });

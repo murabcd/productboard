@@ -65,7 +65,7 @@ export class Picker<Kind extends string = PickerKind> {
   constructor(
     readonly kind: Kind,
     readonly title: string,
-    private choices: PickerItem[],
+    private readonly choices: (query: string) => PickerItem[],
     options: PickerOptions = {},
   ) {
     this.placeholder = options.placeholder ?? "Search";
@@ -101,10 +101,8 @@ export class Picker<Kind extends string = PickerKind> {
     return this.choiceAt(this.cursor);
   }
 
-  replace(choices: PickerItem[]): void {
-    const value = this.selected?.value;
-    this.choices = choices;
-    this.rebuild(value);
+  refresh(): void {
+    this.rebuild(this.selected?.value);
   }
 
   private rebuild(previous?: string): void {
@@ -115,7 +113,7 @@ export class Picker<Kind extends string = PickerKind> {
     let first = -1;
     let current = -1;
     let retained = -1;
-    for (const choice of this.choices) {
+    for (const choice of this.choices(this.text)) {
       if (tab && tab !== "all" && choice.state && choice.state !== tab) continue;
       if (!`${choice.label} ${choice.detail} ${choice.group ?? ""}`.toLocaleLowerCase().includes(needle)) continue;
       if (choice.group && choice.group !== group) {
