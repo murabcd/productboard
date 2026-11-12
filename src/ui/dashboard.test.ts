@@ -36,7 +36,7 @@ function draw(dashboard: Dashboard, width: number, height: number) {
   return frame(dashboard);
 }
 
-function setup() {
+function setup(agent?: AgentBackend) {
   const pending: ReturnType<typeof deferred<Detail>>[] = [];
   const downloads: { id: string; reply: ReturnType<typeof deferred<Uint8Array>> }[] = [];
   const client = {
@@ -62,7 +62,7 @@ function setup() {
   const work = new Workspace(source);
   work.query = { ...initialQuery, view: View.All };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
-  const dashboard = new Dashboard(work, client, opener, () => {});
+  const dashboard = new Dashboard(work, client, opener, () => {}, { agent });
   dashboard.resize(120, 40);
   return { dashboard, work, client, opener, pending, downloads, source };
 }
@@ -592,14 +592,7 @@ describe("concept layout", () => {
   test("the model picker switches models; earlier replies keep the model that wrote them", async () => {
     const ask = mock<AgentBackend["ask"]>(async ({ onText }) => onText("Done."));
     const agent = fakeAgent(ask);
-    const { work } = setup();
-    const dashboard = new Dashboard(
-      work,
-      { site: "x", detail: mock(), attachment: mock(), findIssues: mock() },
-      { open: mock(), copy: mock() },
-      () => {},
-      { agent },
-    );
+    const { dashboard } = setup(agent);
     dashboard.handle({ text: "2" });
     dashboard.agent.chat.current.draft.replace(["First?"]);
     dashboard.agent.send();
@@ -616,7 +609,7 @@ describe("concept layout", () => {
     expect(dialog()).toMatch(/Search models▏ +esc/);
     const lines = dialog().split("\n");
     const recent = lines.findIndex((line) => line.trim().endsWith("Recent"));
-    expect(lines[recent + 1]).toMatch(/● Test Model +OpenAI/);
+    expect(lines[recent + 1]).toMatch(/● Test Model OpenAI\s*$/);
     expect(lines[recent + 3]?.trim().endsWith("Anthropic")).toBe(true);
     expect(lines[recent + 4]).toContain("Other Model");
     for (const key of [{ name: "down" } as const, ENTER]) dashboard.handle(key); // the cursor starts on the model in use
@@ -632,6 +625,41 @@ describe("concept layout", () => {
     expect(canvas.text(29)).toContain("Other Model · High");
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
     expect(screen).toMatch(/Test Model · Medium · \d/); // the first reply still says which model wrote it
+  });
+
+  test("models stay under one heading per provider even when their release dates interleave", async () => {
+    const agent = fakeAgent(async () => {});
+    agent.models = async () => [
+      { provider: "openai", model: "gpt-6.1-terra", created: 5 },
+      { provider: "anthropic", model: "claude-fable-5-2", created: 4 },
+      { provider: "openai", model: "gpt-6-luna", created: 3 },
+      { provider: "anthropic", model: "claude-haiku-5-5", created: 2 },
+      { provider: "openai", model: "test-model", created: 1 },
+    ];
+    const { dashboard } = setup(agent);
+    dashboard.openPicker("model");
+    await settle();
+    const canvas = draw(dashboard, 120, 30);
+    const rows = Array.from({ length: dashboard.agentLayout.boxTop }, (_, y) => canvas.text(y).slice(20).trim());
+    expect(rows.slice(rows.indexOf("Recent")).filter(Boolean)).toEqual([
+      "Recent",
+      "● Test Model OpenAI",
+      "Anthropic",
+      "Claude Fable 5.2",
+      "Claude Haiku 5.5",
+      "OpenAI",
+      "GPT-6.1 Terra",
+      "GPT-6 Luna",
+    ]);
+    for (let step = 0; step < 4; step++) dashboard.handle({ name: "down" });
+    expect(dashboard.picker?.selected?.label).toBe("GPT-6 Luna");
+    expect(dashboard.picker?.window(2)).toMatchObject([{ heading: "OpenAI" }, { choice: { label: "GPT-6 Luna" } }]);
+    for (const key of text("anthropic")) dashboard.handle(key);
+    expect(dashboard.picker?.window(10)).toMatchObject([
+      { heading: "Anthropic" },
+      { choice: { label: "Claude Fable 5.2" } },
+      { choice: { label: "Claude Haiku 5.5" } },
+    ]);
   });
 
   test("everything clickable has a key: menus, folding, tabs and the peek", async () => {

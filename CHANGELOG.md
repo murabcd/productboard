@@ -20,6 +20,7 @@ Release notes for Productboard, newest first.
 #### Fixes
 
 - Set the terminal title to **ProductBoard** in setup and the dashboard.
+- Group Agent models by provider and keep provider names visible while scrolling.
 
 ## v0.1.0 — 2026-11-12
 

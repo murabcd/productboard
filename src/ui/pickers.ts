@@ -55,26 +55,24 @@ const REASONING_DETAILS: Record<Reasoning, string> = {
 /** The active model appears under Recent. Other models are grouped by provider. */
 function modelItems(d: Dashboard): PickerItem[] {
   const now = d.agent.current;
-  const inUse = (m: AgentModel) => m.provider === now?.provider && m.model === now.model;
   const use = (m: AgentModel) => () => {
     d.agent.useModel(m);
     d.openPicker("reasoning");
   };
-  const value = (m: AgentModel) => `${m.provider}/${m.model}`;
   return d.agent.models
-    .toSorted((a, b) => Number(inUse(b)) - Number(inUse(a)))
-    .map((m) =>
-      inUse(m)
-        ? {
-            value: value(m),
-            label: modelName(m.model),
-            detail: PROVIDER_NAMES[m.provider],
-            group: "Recent",
-            current: true,
-            run: use(m),
-          }
-        : { value: value(m), label: modelName(m.model), detail: "", group: PROVIDER_NAMES[m.provider], run: use(m) },
-    );
+    .map((model) => {
+      const provider = PROVIDER_NAMES[model.provider];
+      const current = model.provider === now?.provider && model.model === now.model;
+      return {
+        value: `${model.provider}/${model.model}`,
+        label: modelName(model.model),
+        detail: current ? provider : "",
+        group: current ? "Recent" : provider,
+        current,
+        run: use(model),
+      };
+    })
+    .sort((a, b) => Number(b.current) - Number(a.current) || a.group.localeCompare(b.group));
 }
 
 function catalogStatus(error: string, pending: boolean): string {
@@ -193,6 +191,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   "agent-commands": {
     title: "Agent commands",
     placement: "completion",
+    options: () => ({ detailLayout: 16 }),
     items: (d) => [item("/models", "Switch model", () => d.openPicker("model"))],
   },
   project: {
@@ -243,7 +242,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   },
   model: {
     placement: "composer",
-    options: () => ({ placeholder: "Search models" }),
+    options: () => ({ placeholder: "Search models", keepGroupHeading: true, detailLayout: "inline" }),
     title: "Select model",
     items: modelItems,
     load: (d) => d.agent.loadModels(),

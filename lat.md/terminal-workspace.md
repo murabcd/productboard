@@ -135,7 +135,9 @@ same model picker as the command palette.
 suggestions at the composer's width. Model and reasoning searches receive input
 until selection or dismissal while the message draft stays in place.
 [[src/agent/models.ts#listModels]] lists GPT-6 and Claude 5 models from each
-provider with a key. Choosing one, then a reasoning level, restarts the Eve process with both
+provider with a key. The picker shows the current model and its provider under
+Recent, then lists the remaining models newest first under each provider.
+Choosing one, then a reasoning level, restarts the Eve process with both
 and saves them. Each turn captures those settings before waiting for Eve. If
 another switch overtakes a waiting turn, the question returns to the draft
 instead of running with a different model or reasoning level.

@@ -35,6 +35,10 @@ export interface PickerItem {
 export interface PickerOptions {
   placeholder?: string;
   filterChoices?: boolean;
+  /** Repeat the current group heading when the first visible row is a choice. */
+  keepGroupHeading?: boolean;
+  /** Detail text sits at the trailing edge, beside the label, or in a fixed column. */
+  detailLayout?: "trailing" | "inline" | number;
   placement?: "dialog" | "completion" | "composer";
   onFinish?: () => void;
   /** Tab cycles these choice states; "all" shows every choice. */
@@ -51,9 +55,11 @@ export class Picker<Kind extends string = PickerKind> {
   private readonly tabs: string[];
   private tab: number;
   readonly placeholder: string;
+  readonly detailLayout: NonNullable<PickerOptions["detailLayout"]>;
   readonly placement: NonNullable<PickerOptions["placement"]>;
   readonly onFinish: PickerOptions["onFinish"];
   private readonly filterChoices: boolean;
+  private readonly keepGroupHeading: boolean;
   private rows: Row[] = [];
 
   constructor(
@@ -63,9 +69,11 @@ export class Picker<Kind extends string = PickerKind> {
     options: PickerOptions = {},
   ) {
     this.placeholder = options.placeholder ?? "Search";
+    this.detailLayout = options.detailLayout ?? "trailing";
     this.placement = options.placement ?? "dialog";
     this.onFinish = options.onFinish;
     this.filterChoices = options.filterChoices ?? true;
+    this.keepGroupHeading = options.keepGroupHeading ?? false;
     this.tabs = options.tabs ?? [];
     this.tab = options.tab ?? 0;
     this.rebuild();
@@ -131,7 +139,14 @@ export class Picker<Kind extends string = PickerKind> {
 
   window(capacity: number): readonly Row[] {
     this.offset = rowOffset(this.offset, this.cursor, this.rows.length, capacity);
-    return this.rows.slice(this.offset, this.offset + capacity);
+    let start = this.offset;
+    if (this.keepGroupHeading && capacity > 1 && this.choiceAt(start)?.group) {
+      // Leave room for the heading without scrolling the selected choice out of view.
+      if (this.cursor === start + capacity - 1) start++;
+      const heading = this.choiceAt(start)?.group;
+      if (heading) return [{ heading }, ...this.rows.slice(start, start + capacity - 1)];
+    }
+    return this.rows.slice(start, start + capacity);
   }
 
   choice(value: string): PickerItem | undefined {
