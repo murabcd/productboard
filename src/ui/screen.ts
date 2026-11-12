@@ -32,6 +32,7 @@ const COMPOSER_KEYS = new Set<KeyName>([
   "pageup",
   "pagedown",
 ]);
+const CONTEXT_KEYS = new Set<KeyName>(["up", "down", "pageup", "pagedown", "enter", "tab", "escape", "ctrl-c"]);
 
 class DashboardView extends Renderable {
   private readonly image: ImageRenderable;
@@ -52,11 +53,9 @@ class DashboardView extends Renderable {
       width: "100%",
       height: "100%",
       onMouseDown: (event) => {
+        if (event.button !== 0) return;
         const target = this.canvas?.targetAt(event.x, event.y);
-        if (event.button !== 0 || !target) return;
-        dashboard.click(target);
-        this.applyContext();
-        this.requestRender();
+        if (target || dashboard.contextMenu) this.dispatch(() => dashboard.click(target));
       },
       onMouseScroll: (event) => {
         const direction = event.scroll?.direction;
@@ -69,6 +68,7 @@ class DashboardView extends Renderable {
     renderer.setBackgroundColor(this.theme.surfaces.workspace);
     this.image = new ImageRenderable(renderer, { id: "preview", position: "absolute", fit: "fit", visible: false });
     this.composer = new AgentComposer(renderer, dashboard.agent.chat, this.theme.composer, () => {
+      this.syncContext();
       this.fitComposer();
       this.requestRender();
     });
@@ -81,10 +81,23 @@ class DashboardView extends Renderable {
     const editing = this.dashboard.layer().kind === "agent";
     if (editing) {
       this.composer.sync();
-      if (event.sequence === "@" && this.composer.canMention()) {
+      this.syncContext();
+      const [key] = keys;
+      const plain = !event.ctrl && !event.shift && !event.meta && !event.super;
+      if (
+        this.dashboard.contextMenu &&
+        key &&
+        "name" in key &&
+        CONTEXT_KEYS.has(key.name) &&
+        (plain || key.name === "ctrl-c")
+      ) {
         event.preventDefault();
-        this.dashboard.openPicker("agent-context");
-        this.requestRender();
+        this.dispatch(() => this.dashboard.handleContext(key));
+        return;
+      }
+      if (!this.dashboard.contextMenu && event.sequence === "@" && this.composer.canMention()) {
+        event.preventDefault();
+        this.dispatch(() => this.dashboard.openPicker("agent-context"));
         return;
       }
     }
@@ -97,7 +110,11 @@ class DashboardView extends Renderable {
   paste(event: PasteEvent): void {
     const text = new TextDecoder().decode(event.bytes);
     if (this.dashboard.layer().kind === "agent") {
-      if (this.composer.paste(text)) event.preventDefault();
+      if (this.composer.paste(text)) {
+        event.preventDefault();
+        this.dashboard.setContextQuery(undefined);
+        this.syncContext();
+      }
       return;
     }
     event.preventDefault();
@@ -105,19 +122,30 @@ class DashboardView extends Renderable {
   }
 
   private feed(keys: Key[]): void {
-    for (const key of keys) {
-      if (!this.dashboard.handle(key)) {
-        this.quit();
-        return;
+    this.dispatch(() => {
+      for (const key of keys) {
+        if (!this.dashboard.handle(key)) {
+          this.quit();
+          break;
+        }
       }
-      this.applyContext();
-    }
+    });
+  }
+
+  private dispatch(action: () => void): void {
+    const before = this.dashboard.contextMenu;
+    action();
+    const reference = this.dashboard.contextPicker.takeReference();
+    const menu = this.dashboard.contextMenu;
+    if (reference) this.composer.attachReference(reference);
+    else if (menu && menu !== before) this.composer.startMention();
+    this.syncContext();
     this.requestRender();
   }
 
-  private applyContext(): void {
-    const reference = this.dashboard.contextPicker.takeReference();
-    if (reference) this.composer.attachReference(reference);
+  private syncContext(): void {
+    this.dashboard.setContextQuery(this.composer.mentionQuery);
+    if (!this.dashboard.contextMenu) this.composer.clearMention();
   }
 
   protected override renderSelf(buffer: OptimizedBuffer): void {
@@ -127,8 +155,12 @@ class DashboardView extends Renderable {
       this.renderer.setBackgroundColor(this.theme.surfaces.workspace);
       Object.assign(this.composer, this.theme.composer);
     }
-    if (this.composer.visible) this.fitComposer();
     this.dashboard.resize(width, height);
+    if (this.dashboard.layer().kind === "agent") {
+      this.composer.sync();
+      this.syncContext();
+      if (this.composer.visible) this.fitComposer();
+    }
     const canvas = frame(this.dashboard);
     this.canvas = canvas;
     drawCanvas(buffer, canvas, this.theme);
@@ -169,7 +201,6 @@ class DashboardView extends Renderable {
 
   private placeComposer(area: Rect | undefined, focused: boolean): void {
     const shown = this.place(this.composer, area);
-    if (shown) this.composer.sync();
     if (shown && focused) this.composer.focus();
     else this.composer.blur();
   }
@@ -210,6 +241,7 @@ export async function openScreen(open: (url: string) => Promise<void>): Promise<
     useMouse: true,
     targetFps: 30,
   });
+  renderer.setTerminalTitle("ProductBoard");
   return useRenderer(renderer, open);
 }
 

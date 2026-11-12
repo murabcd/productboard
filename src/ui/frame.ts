@@ -9,7 +9,7 @@ import { drawAgent } from "./agent";
 import { Canvas, type Style } from "./canvas";
 import { action, buttons } from "./controls";
 import type { Dashboard, Layer } from "./dashboard";
-import { pickerDialog } from "./dialog";
+import { drawContextMenu, pickerDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
 import { drawHeader, type PageHeader, pageHeader } from "./header";
 import type { Target } from "./input";
@@ -50,9 +50,7 @@ export function frame(d: Dashboard): Canvas {
   drawTopBar(canvas, d, sidebar, header);
   if (layer.kind === "picker") {
     const source = PICKERS[layer.picker.kind];
-    const { panel, left, top } = pickerDialog(canvas, layer.picker, source.empty?.(d) ?? "No matches", {
-      status: source.status?.(d),
-    });
+    const { panel, left, top } = pickerDialog(canvas, layer.picker, source.empty?.(d) ?? "No matches");
     canvas.paste(panel, left, top);
   }
 
@@ -117,7 +115,13 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
     return;
   }
   if (layer.kind === "agent" || (d.agent.tab && layer.kind === "picker")) {
-    drawAgent(canvas, d.agent, d.agentLayout, layer.kind === "agent");
+    const layout = d.agentLayout;
+    drawAgent(canvas, d.agent, layout, layer.kind === "agent");
+    if (layer.kind === "agent" && d.contextMenu) {
+      const status = d.contextPicker.status;
+      const empty = d.contextMenu.selected ? "" : (PICKERS["agent-context"].empty?.(d) ?? "No matches");
+      drawContextMenu(canvas, layout, d.contextMenu, status || empty);
+    }
     drawAgentFooter(canvas, d);
     return;
   }

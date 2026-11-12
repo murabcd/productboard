@@ -14,7 +14,8 @@ import type { Issue } from "../jira/types";
 import { Workspace } from "../state/workspace";
 import { deferred, fakeAgent, issues, rawIssue, settle, snapshot } from "../testing";
 import { Dashboard, type DashboardOptions } from "./dashboard";
-import { MIN_WIDTH } from "./layout";
+import { frame as drawFrame } from "./frame";
+import { MIN_HEIGHT, MIN_WIDTH } from "./layout";
 import { useRenderer } from "./screen";
 import { toKeys } from "./terminal-input";
 
@@ -421,10 +422,18 @@ describe("OpenTUI shell", () => {
       await clickSidebar(setup, "Agent");
       await setup.renderOnce();
       await setup.mockInput.pasteBracketedText("Compare 🧪 結果: ");
+      const composer = drawFrame(dashboard).reserved("composer");
       await setup.mockInput.typeText("@");
-      expect(dashboard.picker?.kind).toBe("agent-context");
+      expect(dashboard.layer().kind).toBe("agent");
+      expect(drawFrame(dashboard).reserved("composer")).toEqual(composer);
       await setup.mockInput.typeText("sprint 32");
-      setup.mockInput.pressEnter();
+      await setup.renderOnce();
+      const lines = setup.captureCharFrame().split("\n");
+      const aboveComposer = dashboard.agentLayout.boxTop;
+      expect(lines.slice(aboveComposer - 2, aboveComposer).join("\n")).toContain("Sprint 32");
+      expect(lines[composer?.top ?? -1]).toContain("Compare 🧪 結果: @sprint 32");
+      expect(setup.captureCharFrame()).not.toContain("Add context");
+      setup.mockInput.pressTab();
       await setup.renderOnce();
       expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Compare 🧪 結果: @Sprint 32 結果");
       setup.mockInput.pressBackspace();
@@ -512,6 +521,9 @@ describe("OpenTUI shell", () => {
     await Bun.sleep(30);
     await setup.renderOnce();
     expect(signal.aborted).toBe(true);
+    expect(dashboard.contextMenu).toBeUndefined();
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Review @reindex");
+    for (const _ of "@reindex") setup.mockInput.pressBackspace();
 
     await setup.mockInput.typeText("@incident");
     await secondRequest.promise;
@@ -534,6 +546,29 @@ describe("OpenTUI shell", () => {
     });
     expect(dashboard.workspace.query.view).toBe(View.All);
     expect(dashboard.workspace.issues.map(({ key }) => key)).toEqual(local);
+  });
+
+  test("Agent context stays above a tall composer and accepts a click in a narrow pane", async () => {
+    const { setup, dashboard } = await start(100, { agent: fakeAgent(async () => {}) });
+    await clickSidebar(setup, "Agent");
+    setup.resize(MIN_WIDTH, MIN_HEIGHT);
+    await setup.renderOnce();
+    for (let line = 0; line < 5; line++) setup.mockInput.pressKey("j", { ctrl: true });
+    await setup.mockInput.typeText("Keep  this");
+    for (let step = 0; step < 5; step++) setup.mockInput.pressArrow("left");
+    await setup.mockInput.typeText("@");
+    setup.mockInput.pressBackspace();
+    await settle();
+    expect(dashboard.contextMenu).toBeUndefined();
+    await setup.mockInput.typeText("@EX-2");
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    const row = lines.findIndex((line) => line.includes("EX-2"));
+    expect(row).toBeGreaterThan(1);
+    expect(row).toBeLessThan(dashboard.agentLayout.boxTop);
+    await setup.mockMouse.click(lines[row]?.indexOf("EX-2") ?? -1, row);
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("\n\n\n\n\nKeep @EX-2 this");
+    expect(dashboard.contextMenu).toBeUndefined();
   });
 
   test("the Agent box takes all typing, grows with lines, sends on Enter; Esc interrupts", async () => {

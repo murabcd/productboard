@@ -2,6 +2,18 @@
 
 Release notes for Productboard, newest first.
 
+## v0.1.1 — 2026-11-12
+
+### TUI
+
+#### Improvements
+
+- Show issue and sprint suggestions above the Agent composer when typing `@`. Use `Enter` or `Tab` to insert a result.
+
+#### Fixes
+
+- Set the terminal title to **ProductBoard** in setup and the dashboard.
+
 ## v0.1.0 — 2026-11-12
 
 ### Highlights

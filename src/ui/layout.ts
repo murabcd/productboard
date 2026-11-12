@@ -49,3 +49,5 @@ export function agentLayout(width: number, height: number, composerRows: number)
 }
 
 export type AgentLayout = ReturnType<typeof agentLayout>;
+
+export const contextRows = ({ boxTop }: AgentLayout): number => Math.min(10, boxTop - 3);

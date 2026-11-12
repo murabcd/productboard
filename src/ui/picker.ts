@@ -68,6 +68,12 @@ export class Picker<Kind extends string = PickerKind> {
     return this.text;
   }
 
+  setQuery(query: string): void {
+    this.text = query;
+    this.offset = 0;
+    this.rebuild();
+  }
+
   get tabName(): string | undefined {
     return this.tabs[this.tab];
   }
@@ -135,9 +141,7 @@ export class Picker<Kind extends string = PickerKind> {
   handle(key: Key, capacity: number): PickerItem | "dismiss" | undefined {
     const edited = editLine(this.text, key, 120);
     if (edited !== undefined) {
-      this.text = edited;
-      this.offset = 0;
-      this.rebuild();
+      this.setQuery(edited);
       return;
     }
     if ("text" in key) return;

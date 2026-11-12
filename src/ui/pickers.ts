@@ -26,12 +26,10 @@ interface PickerSource {
   items(d: Dashboard, query: string): PickerItem[];
   /** Start loading what the list shows, when it isn't loaded yet. */
   load?(d: Dashboard): void;
-  queryChanged?(d: Dashboard, query: string): void;
   close?(d: Dashboard): void;
   options?(d: Dashboard): PickerOptions;
   /** What the list says while empty: still loading, a failure, or no matches. */
   empty?(d: Dashboard): string;
-  status?(d: Dashboard): string;
 }
 
 const item = (label: string, detail: string, run: () => void, extra: Partial<PickerItem> = {}): PickerItem => ({
@@ -133,17 +131,15 @@ const sprintFilterPicker: PickerSource = {
 
 const agentContext: PickerSource = {
   title: "Add context",
-  options: () => ({ placeholder: "Search tasks and sprints", filterChoices: false }),
+  options: () => ({ filterChoices: false }),
   load: ({ workspace }) => {
     if (!workspace.board) workspace.loadCatalog();
     else if (!workspace.sprints.length) void workspace.loadSprints();
   },
-  queryChanged: ({ contextPicker }, query) => void contextPicker.lookup(query),
   close: ({ contextPicker }) => contextPicker.close(),
   items: ({ workspace, agent, contextPicker }, query) =>
     contextPicker.items(query, workspace.sprints, workspace.issues, agent.chat.current.draft.sprint?.sprint.id),
   empty: ({ workspace }) => catalogStatus(workspace.catalogError, workspace.sprintsPending || workspace.catalogPending),
-  status: ({ contextPicker }) => contextPicker.status,
 };
 
 function commandItems(d: Dashboard): PickerItem[] {

@@ -95,9 +95,10 @@ Backspace after a label to remove it. You can attach up to four PNG, JPEG, GIF,
 or WebP files, up to 3 MB each and 6 MB total.
 
 Type `@` in the composer to search tasks across Jira and sprints on the current
-board. Select a result to insert its reference at the cursor. Backspace removes
-the reference. A sprint scopes the next message, and task references give Agent
-the issue keys to look up.
+board. Suggestions appear above the composer as you type. Use `↑` and `↓` to
+highlight a result, `Enter` or `Tab` to insert it, or `Esc` to close the list.
+Backspace removes an inserted reference. A sprint scopes the next message, and
+task references give Agent the issue keys to look up.
 
 Agent sends your prompt and attached images to your provider when you press
 Enter. It searches Jira when the question needs issue data. Each search shares

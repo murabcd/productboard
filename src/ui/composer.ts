@@ -12,6 +12,7 @@ export class AgentComposer extends TextareaRenderable {
   private parts?: DraftParts;
   private updating = false;
   private attachmentNumber = 0;
+  private mention?: { start: number; prefix: string };
 
   constructor(
     renderer: CliRenderer,
@@ -32,8 +33,12 @@ export class AgentComposer extends TextareaRenderable {
         { name: "linefeed", action: "newline" },
       ],
       onContentChange: () => {
-        if (!this.updating) this.save();
+        if (this.updating) return;
+        this.save();
         changed();
+      },
+      onCursorChange: () => {
+        if (this.mention && !this.updating) changed();
       },
       onSubmit: () => {
         this.sync();
@@ -50,6 +55,7 @@ export class AgentComposer extends TextareaRenderable {
     const thread = this.chat.current;
     const parts = thread.draft.parts;
     if (this.thread === thread && this.parts === parts) return;
+    this.clearMention();
     const cursor = this.thread === thread ? this.cursorOffset : 0;
     const removed =
       cursor === 0
@@ -79,14 +85,45 @@ export class AgentComposer extends TextareaRenderable {
     return !before || before.trimEnd() !== before;
   }
 
+  startMention(): void {
+    this.sync();
+    this.updating = true;
+    if (this.getSelection()) this.deleteSelection();
+    const prefix = this.canMention() ? "" : " ";
+    this.mention = { start: this.cursorOffset, prefix };
+    this.insertText(`${prefix}@`);
+    this.updating = false;
+    this.save();
+  }
+
+  get mentionQuery(): string | undefined {
+    if (!this.mention) return undefined;
+    const start = this.mention.start + this.mention.prefix.length;
+    if (this.cursorOffset <= start) return undefined;
+    const token = this.getTextRange(start, this.cursorOffset);
+    const query = token.slice(1);
+    return token.startsWith("@") && !query.includes("\n") && !query.includes("@") ? query : undefined;
+  }
+
+  clearMention(): void {
+    this.mention = undefined;
+  }
+
   attachReference(reference: DraftReference): void {
     this.sync();
+    const start = this.mention?.start;
+    this.clearMention();
+    this.updating = true;
+    if (start !== undefined) {
+      this.setSelection(start, this.cursorOffset);
+      this.deleteSelection();
+      this.cursorOffset = start;
+    }
     const sprint = this.chat.current.draft.sprint;
     if (reference.kind === "sprint" && sprint) {
       const previous = this.extmarks.getAll().find(({ data }) => this.markedAttachment(data) === sprint);
       if (previous) {
         const cursor = this.cursorOffset;
-        this.updating = true;
         this.setSelection(previous.start, previous.end);
         this.deleteSelection();
         this.cursorOffset = cursor - Math.max(0, Math.min(cursor, previous.end) - previous.start);
@@ -124,6 +161,7 @@ export class AgentComposer extends TextareaRenderable {
     this.mark(attachment, end - this.editBuffer.measureText(attachment.label), end);
     this.updating = false;
     this.save();
+    this.changed();
   }
 
   private mark(attachment: DraftAttachment, start: number, end: number): void {

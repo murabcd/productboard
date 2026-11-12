@@ -37,8 +37,10 @@ results or schedule a retry.
 
 [[src/ui/dashboard.ts#Dashboard]] owns keyboard and mouse interactions, issue
 selection, and panels. [[src/ui/frame.ts#frame]] computes what to draw, and
-[[src/ui/screen.ts#useRenderer]] connects input and drawing to OpenTUI. The CLI entry
-point restores the terminal on exit.
+[[src/ui/screen.ts#useRenderer]] connects input and drawing to OpenTUI.
+
+[[src/ui/screen.ts#openScreen]] sets the terminal title to `ProductBoard`
+for interactive sessions. The CLI restores the terminal on exit.
 
 Dashboard resolves the active input layer from the open views and the pane
 size. Rendering and the OpenTUI adapter use that layer for composer focus and
@@ -81,7 +83,7 @@ sprints, filters, models, the command palette and the rest. Each item carries
 the action it runs. [[src/ui/picker.ts#Picker]] owns the grouped row window,
 highlight, search, and navigation. Catalog refreshes preserve the highlight
 by choice value. Keyboard, wheel, and clicks all use that projection, and
-the dialog only draws the visible rows.
+the frame draws only the visible rows.
 
 [[src/ui/issue-list.ts#IssueList]] owns the projection for grouping, folded
 rows, selected issue identity, and scrolling. Paging uses display rows so
@@ -92,7 +94,7 @@ selection and viewport changes together across filtering and refresh.
 Status groups are workflow stages from [[src/ui/status.ts#stage]]. Rows show
 the key, the title, then reason, assignee, sprint and priority columns. A
 column is left out when the view or headings already say the same thing.
-[[src/ui/dialog.ts#dialogPanel]] centers setup prompts and workspace pickers
+[[src/ui/dialog.ts#dialogPanel]] centers setup prompts and modal workspace pickers
 horizontally across the terminal and places them a quarter of the way down,
 moving them up when needed to fit. They share a 60-column width with a
 one-column margin on narrow panes. Pickers share search, grouped choices,
@@ -141,12 +143,14 @@ conversation. Image reads settle only while their tokens are in that draft.
 [[src/ui/composer.ts#AgentComposer]] maps those parts to OpenTUI extmarks. Pasted local image paths and long or multiline
 text appear as numbered inline tokens that can be edited as a unit. Sending
 expands pasted text and passes staged images as separate parts. Typing `@` at the
-start of a word opens a centered context picker with grouped task and sprint
-results. [[src/ui/context-picker.ts#ContextPicker]] owns lookup, result ordering
-and the selected reference. It cancels pending searches when the query changes
-or the picker closes. [[src/jira/client.ts#JiraClient]] searches across Jira
-projects and Jira matches appear before loaded tasks. Sprints come from the
-current board. The composer inserts the selected reference at the cursor. Task keys are
+start of a word opens grouped task and sprint suggestions directly above the
+focused composer. The text after `@` drives the search, and selecting a result
+replaces that text and the trigger with an inline reference. Esc closes the
+suggestions and keeps the typed text. [[src/ui/context-picker.ts#ContextPicker]]
+owns lookup, result ordering and the selected reference. It cancels pending
+searches when the query changes or the picker closes.
+[[src/jira/client.ts#JiraClient]] searches across Jira projects and Jira matches
+appear before loaded tasks. Sprints come from the current board. Task keys are
 passed in the prompt and a sprint scopes the next message.
 
 Eve's Jira search tool calls [[src/agent/jira-search.ts#openJiraSearch]]
