@@ -117,9 +117,10 @@ OpenAI is the default. Choose a provider during setup or set
 - **OpenAI** defaults to GPT-6 Luna (`gpt-6-luna`). Set `OPENAI_API_KEY` to use a key from your shell.
 - **Anthropic** defaults to Claude Sonnet 5.5 (`claude-sonnet-5-5`). Set `ANTHROPIC_API_KEY` to use a key from your shell.
 
-Click the model button on the Agent page or choose **Select Agent model** from
-the `Ctrl+K` menu. The picker lists the GPT-6 and Claude 5 models your keys can
-use, with the current model first. Choose a model, then a reasoning level
+Type `/` in an empty Agent composer and choose `/models`, or choose **Select
+Agent model** from the `Ctrl+K` menu. The picker opens above
+the composer and lists the GPT-6 and Claude 5 models your keys can use, with the
+current model first. Choose a model, then a reasoning level
 (None, Low, Medium, High, or Extra high). The default is Medium. Productboard
 remembers both settings and shows them together, for example
 "GPT-6 Luna · Medium". Replies show which model answered.

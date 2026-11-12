@@ -13,7 +13,7 @@ import { IssueDetails, type IssueRead } from "./issue-details";
 import { IssueList } from "./issue-list";
 import {
   agentLayout,
-  contextRows,
+  composerMenuRows,
   listRows,
   MIN_HEIGHT,
   MIN_WIDTH,
@@ -144,6 +144,20 @@ export class Dashboard {
     return this.picker?.kind === "agent-context" ? this.picker : undefined;
   }
 
+  get completionMenu(): Picker | undefined {
+    const menu = this.composerMenu;
+    return menu?.placement === "completion" ? menu : undefined;
+  }
+
+  get composerMenu(): Picker | undefined {
+    const picker = this.picker;
+    return this.agent.tab && picker && picker.placement !== "dialog" ? picker : undefined;
+  }
+
+  get composerMenuCapacity(): number {
+    return composerMenuRows(this.agentLayout, this.composerMenu?.composerHeaderRows ?? 0);
+  }
+
   setContextQuery(query: string | undefined): void {
     const menu = this.contextMenu;
     if (!menu || menu.query === query) return;
@@ -154,11 +168,18 @@ export class Dashboard {
     }
   }
 
-  handleContext(key: Key): void {
-    const selectionKey: Key = keyId(key) === "tab" ? { name: "enter" } : key;
-    const picked = this.contextMenu?.handle(selectionKey, contextRows(this.agentLayout));
-    if (picked === "dismiss") this.closePicker();
-    else if (picked) this.pick(picked);
+  setCommandQuery(query: string | undefined, onFinish: () => void): void {
+    if (query === undefined) {
+      if (this.picker?.kind === "agent-commands") this.closePicker();
+      return;
+    }
+    if (!this.picker) this.openPicker("agent-commands", onFinish);
+    const picker = this.picker;
+    if (picker?.kind === "agent-commands" && picker.query !== query) picker.setQuery(query);
+  }
+
+  handleCompletion(key: Key): void {
+    if (this.completionMenu) this.handlePicker(this.completionMenu, key);
   }
 
   get site(): string {
@@ -205,22 +226,28 @@ export class Dashboard {
     if (picker) picker.replace(PICKERS[picker.kind].items(this, picker.query));
   }
 
-  openPicker(kind: PickerKind): void {
-    this.closePicker();
+  openPicker(kind: PickerKind, onFinish?: () => void): void {
     const source = PICKERS[kind];
-    this.picker = new Picker(kind, source.title, source.items(this, ""), source.options?.(this));
+    if (source.placement === "composer" && !this.agent.tab) this.openAgent();
+    this.closePicker();
+    this.picker = new Picker(kind, source.title, source.items(this, ""), {
+      ...source.options?.(this),
+      placement: source.placement,
+      onFinish,
+    });
     source.load?.(this);
   }
 
-  private closePicker(): void {
+  private closePicker({ finish = false } = {}): void {
     const picker = this.picker;
     this.picker = null;
     if (picker) PICKERS[picker.kind].close?.(this);
+    if (finish) picker?.onFinish?.();
   }
 
   /** Close the picker and do what the chosen item does, which may open the next one. */
   private pick(item: PickerItem): void {
-    this.closePicker();
+    this.closePicker({ finish: true });
     item.run();
   }
 
@@ -252,8 +279,6 @@ export class Dashboard {
       case "filter":
       case "display":
       case "commands":
-      case "model":
-      case "reasoning":
         this.openPicker(action);
         return;
       case "brief": {
@@ -374,7 +399,7 @@ export class Dashboard {
   layer(): Layer {
     if (this.width < MIN_WIDTH || this.height < MIN_HEIGHT) return { kind: "too-small" };
     if (this.preview) return { kind: "preview", preview: this.preview };
-    if (this.picker && !this.contextMenu) return { kind: "picker", picker: this.picker };
+    if (this.picker && !this.completionMenu) return { kind: "picker", picker: this.picker };
     if (this.modal) return { kind: "modal", panel: this.modal };
     if (this.finding !== null) return { kind: "find", draft: this.finding };
     if (this.searching) return { kind: "filter" };
@@ -436,7 +461,7 @@ export class Dashboard {
     }
     switch (layer.kind) {
       case "agent":
-        this.setContextQuery(undefined);
+        this.closePicker();
         if (id === "agent-cited") this.openPicker("cited");
         else this.agent.key(key, this.agentLayout);
         return true;
@@ -468,8 +493,10 @@ export class Dashboard {
   }
 
   private handlePicker(picker: Picker, key: Key): void {
-    const picked = picker.handle(key, pickerRows(this.height));
-    if (picked === "dismiss") this.closePicker();
+    const inline = picker === this.composerMenu;
+    const selectionKey: Key = inline && keyId(key) === "tab" ? { name: "enter" } : key;
+    const picked = picker.handle(selectionKey, inline ? this.composerMenuCapacity : pickerRows(this.height));
+    if (picked === "dismiss") this.closePicker({ finish: true });
     else if (picked) this.pick(picked);
   }
 
@@ -499,8 +526,8 @@ export class Dashboard {
   click(target?: Target): void {
     // A dialog consumes outside clicks. The Agent menu dismisses and lets them through.
     if (this.picker && target?.kind !== "choice" && target?.kind !== "dialog") {
-      const inline = !!this.contextMenu;
-      this.closePicker();
+      const inline = !!this.composerMenu;
+      this.closePicker({ finish: target?.kind === "dismiss" });
       if (!inline) return;
     }
     if (!target) return;
@@ -581,7 +608,7 @@ export class Dashboard {
     if (over?.kind === "peek" && this.peek && layer.kind === "list") {
       this.scrollPeek(delta);
     } else if (layer.kind === "agent") {
-      if (this.contextMenu && (over?.kind === "choice" || over?.kind === "dialog")) this.contextMenu.move(delta);
+      if (this.completionMenu && (over?.kind === "choice" || over?.kind === "dialog")) this.completionMenu.move(delta);
       else this.agent.wheel(delta, this.agentLayout);
     } else if (layer.kind === "picker") {
       layer.picker.move(delta);

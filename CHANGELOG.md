@@ -15,6 +15,7 @@ Release notes for Productboard, newest first.
 #### Improvements
 
 - Show issue and sprint suggestions above the Agent composer when typing `@`. Use `Enter` or `Tab` to insert a result.
+- Type `/models` in Agent to switch models and choose a reasoning level from the composer.
 
 #### Fixes
 

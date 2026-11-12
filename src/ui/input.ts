@@ -52,8 +52,6 @@ export type Action =
   | "refresh"
   | "help"
   | "commands"
-  | "model"
-  | "reasoning"
   | "load-more";
 
 /** Something on screen the mouse can click. */

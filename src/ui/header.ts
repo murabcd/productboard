@@ -1,6 +1,5 @@
 /** Shared page title, description and toolbar controls. */
 
-import { choiceLabel } from "../agent/models";
 import { MENTION_DAYS, View } from "../jira/query";
 import type { Canvas } from "./canvas";
 import { action, buttons, buttonsRight, type Control } from "./controls";
@@ -35,8 +34,6 @@ function agentHeader(d: Dashboard): PageHeader {
     );
   }
   if (chat.current.turns.length) actions.push({ label: "+ New chat", target: { kind: "agent", action: "new" } });
-  const { current } = d.agent;
-  if (current) actions.push({ label: `${choiceLabel(current)} ▾`, target: action("model") });
   return {
     title: AGENT.name,
     description: "Search across Jira",

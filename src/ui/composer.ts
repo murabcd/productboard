@@ -6,6 +6,8 @@ import { shortSprintName } from "../jira/types";
 import { clean } from "../text";
 import type { resolveTheme } from "./theme";
 
+const COMMAND_DRAFT = /^\/([^\s/]*)$/;
+
 export class AgentComposer extends TextareaRenderable {
   private readonly attachments = new WeakMap<object, DraftAttachment>();
   private thread?: AgentChat["current"];
@@ -50,7 +52,7 @@ export class AgentComposer extends TextareaRenderable {
   }
 
   sync(): void {
-    const placeholder = this.chat.configured ? "Message Agent… (@ for context)" : "Agent is not set up";
+    const placeholder = this.chat.configured ? "Message Agent… (@ for context, / for commands)" : "Agent is not set up";
     if (this.placeholder !== placeholder) this.placeholder = placeholder;
     const thread = this.chat.current;
     const parts = thread.draft.parts;
@@ -83,6 +85,18 @@ export class AgentComposer extends TextareaRenderable {
   canMention(): boolean {
     const before = this.getTextRange(0, this.cursorOffset);
     return !before || before.trimEnd() !== before;
+  }
+
+  get commandQuery(): string | undefined {
+    return this.chat.configured ? COMMAND_DRAFT.exec(this.plainText)?.[1] : undefined;
+  }
+
+  clearCommand(): void {
+    if (this.commandQuery === undefined) return;
+    this.updating = true;
+    this.setText("");
+    this.updating = false;
+    this.save();
   }
 
   startMention(): void {

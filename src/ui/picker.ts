@@ -6,6 +6,7 @@ export type PickerKind =
   | "sprint-board"
   | "sprint"
   | "agent-context"
+  | "agent-commands"
   | "project"
   | "assignee"
   | "status"
@@ -34,6 +35,8 @@ export interface PickerItem {
 export interface PickerOptions {
   placeholder?: string;
   filterChoices?: boolean;
+  placement?: "dialog" | "completion" | "composer";
+  onFinish?: () => void;
   /** Tab cycles these choice states; "all" shows every choice. */
   tabs?: string[];
   tab?: number;
@@ -48,6 +51,8 @@ export class Picker<Kind extends string = PickerKind> {
   private readonly tabs: string[];
   private tab: number;
   readonly placeholder: string;
+  readonly placement: NonNullable<PickerOptions["placement"]>;
+  readonly onFinish: PickerOptions["onFinish"];
   private readonly filterChoices: boolean;
   private rows: Row[] = [];
 
@@ -58,6 +63,8 @@ export class Picker<Kind extends string = PickerKind> {
     options: PickerOptions = {},
   ) {
     this.placeholder = options.placeholder ?? "Search";
+    this.placement = options.placement ?? "dialog";
+    this.onFinish = options.onFinish;
     this.filterChoices = options.filterChoices ?? true;
     this.tabs = options.tabs ?? [];
     this.tab = options.tab ?? 0;
@@ -66,6 +73,10 @@ export class Picker<Kind extends string = PickerKind> {
 
   get query(): string {
     return this.text;
+  }
+
+  get composerHeaderRows(): number {
+    return this.placement === "composer" ? 1 : 0;
   }
 
   setQuery(query: string): void {

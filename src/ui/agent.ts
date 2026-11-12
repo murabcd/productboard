@@ -7,7 +7,7 @@ import type { Canvas, ScannerStyle, Style } from "./canvas";
 import type { AgentLayout } from "./layout";
 import { transcriptWindow } from "./transcript";
 
-export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLayout, editing: boolean): void {
+export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLayout, showComposer: boolean): void {
   const thread = chat.current;
   const { left, rows, status, boxBottom, boxTop, transcript } = layout;
   const { room } = transcript;
@@ -15,8 +15,8 @@ export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLay
     canvas.paint(y, left, room, "raised");
     canvas.put(y, left, "┃", thread.pending ? "muted" : "accent");
   }
-  // A dialog over Agent takes the keys, so the text box steps aside while it is open.
-  if (editing) canvas.reserve("composer", { left: left + 2, top: boxBottom - rows, width: room - 3, height: rows });
+  if (showComposer)
+    canvas.reserve("composer", { left: left + 2, top: boxBottom - rows, width: room - 3, height: rows });
 
   if (thread.turns.length) {
     const { rows } = transcriptWindow(thread.turns, transcript, thread.scroll);

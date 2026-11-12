@@ -178,7 +178,8 @@ describe("OpenTUI shell", () => {
     await setup.renderOnce();
     const composer = setup.renderer.root.getRenderable("dashboard")?.getRenderable("composer");
     expect(composer).toBeInstanceOf(TextareaRenderable);
-    if (composer instanceof TextareaRenderable) expect(composer.placeholder).toBe("Message Agent… (@ for context)");
+    if (composer instanceof TextareaRenderable)
+      expect(composer.placeholder).toBe("Message Agent… (@ for context, / for commands)");
     await dashboard.dispose();
     expect(close).toHaveBeenCalledTimes(1);
   });
@@ -569,6 +570,74 @@ describe("OpenTUI shell", () => {
     await setup.mockMouse.click(lines[row]?.indexOf("EX-2") ?? -1, row);
     expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("\n\n\n\n\nKeep @EX-2 this");
     expect(dashboard.contextMenu).toBeUndefined();
+  });
+
+  test("slash suggestions appear above the editable command and /models switches without sending a message", async () => {
+    const ask = mock<AgentBackend["ask"]>(async () => {});
+    const agent = fakeAgent(ask);
+    const { setup, dashboard } = await start(100, { agent });
+    await clickSidebar(setup, "Agent");
+    setup.resize(MIN_WIDTH, MIN_HEIGHT);
+    await setup.renderOnce();
+    const composer = drawFrame(dashboard).reserved("composer");
+
+    await setup.mockInput.typeText("/mode");
+    await setup.renderOnce();
+    const menu = () => setup.captureCharFrame().split("\n").slice(0, dashboard.agentLayout.boxTop).join("\n");
+    expect(menu().split("\n").at(-1)).toMatch(/\/models +Switch model/);
+    expect(menu()).not.toContain("/mode▏");
+    expect(setup.captureCharFrame().split("\n")[composer?.top ?? -1]).toContain("/mode");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("/mode");
+    expect(setup.renderer.currentFocusedRenderable?.id).toBe("composer");
+    setup.mockInput.pressEnter();
+    await settle();
+    await setup.renderOnce();
+    expect(menu()).toContain("Search models");
+    expect(drawFrame(dashboard).reserved("composer")).toEqual(composer);
+
+    await setup.mockInput.typeText("other");
+    setup.mockInput.pressTab();
+    await setup.renderOnce();
+    expect(menu()).toContain("Select reasoning");
+    setup.mockInput.pressArrow("down");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(agent.choice).toEqual({ provider: "anthropic", model: "other-model", reasoning: "high" });
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("");
+    expect(ask).not.toHaveBeenCalled();
+
+    await setup.mockInput.typeText("/m");
+    setup.mockInput.pressEscape();
+    await Bun.sleep(30);
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("");
+
+    await setup.mockInput.typeText("/mode");
+    await setup.renderOnce();
+    const commandRow = dashboard.agentLayout.boxTop - 1;
+    const commandColumn = setup.captureCharFrame().split("\n")[commandRow]?.indexOf("/models") ?? -1;
+    expect(commandColumn).toBeGreaterThanOrEqual(0);
+    await setup.mockMouse.click(commandColumn, commandRow);
+    await setup.renderOnce();
+    expect(menu()).toContain("Search models");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("");
+    setup.mockInput.pressEscape();
+    await Bun.sleep(30);
+    await setup.renderOnce();
+    expect(setup.renderer.currentFocusedRenderable?.id).toBe("composer");
+
+    await setup.mockInput.typeText("Keep 1/2 of this");
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("select agent model");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(menu()).toContain("Search models");
+    expect(drawFrame(dashboard).reserved("composer")).toEqual(composer);
+    setup.mockInput.pressEscape();
+    await Bun.sleep(30);
+    await setup.renderOnce();
+    expect(menu()).not.toContain("Search models");
+    await setup.mockInput.typeText(" draft");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Keep 1/2 of this draft");
   });
 
   test("the Agent box takes all typing, grows with lines, sends on Enter; Esc interrupts", async () => {

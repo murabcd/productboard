@@ -27,6 +27,7 @@ interface PickerSource {
   /** Start loading what the list shows, when it isn't loaded yet. */
   load?(d: Dashboard): void;
   close?(d: Dashboard): void;
+  placement?: PickerOptions["placement"];
   options?(d: Dashboard): PickerOptions;
   /** What the list says while empty: still loading, a failure, or no matches. */
   empty?(d: Dashboard): string;
@@ -131,6 +132,7 @@ const sprintFilterPicker: PickerSource = {
 
 const agentContext: PickerSource = {
   title: "Add context",
+  placement: "completion",
   options: () => ({ filterChoices: false }),
   load: ({ workspace }) => {
     if (!workspace.board) workspace.loadCatalog();
@@ -188,6 +190,11 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   }),
   sprint: sprintFilterPicker,
   "agent-context": agentContext,
+  "agent-commands": {
+    title: "Agent commands",
+    placement: "completion",
+    items: (d) => [item("/models", "Switch model", () => d.openPicker("model"))],
+  },
   project: {
     title: "Choose project",
     items: (d) =>
@@ -235,6 +242,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       ),
   },
   model: {
+    placement: "composer",
     options: () => ({ placeholder: "Search models" }),
     title: "Select model",
     items: modelItems,
@@ -243,6 +251,8 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   },
   reasoning: {
     title: "Select reasoning",
+    placement: "composer",
+    options: () => ({ placeholder: "Select reasoning" }),
     items: (d) =>
       REASONING_LEVELS.map((level) =>
         item(REASONING_NAMES[level], REASONING_DETAILS[level], () => d.agent.useReasoning(level), {

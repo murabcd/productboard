@@ -128,6 +128,12 @@ one viewport between drawing and scrolling. Page keys move by the visible
 rows after the composer has taken its space. Transcript layout is reused
 while the turn content and pane width stay the same.
 
+Typing `/` in an empty Agent composer offers `/models` above the text box while
+the query stays in the draft. Selecting it clears the command text and opens the
+same model picker as the command palette.
+[[src/ui/dialog.ts#drawComposerMenu]] draws it, the reasoning picker, and `@`
+suggestions at the composer's width. Model and reasoning searches receive input
+until selection or dismissal while the message draft stays in place.
 [[src/agent/models.ts#listModels]] lists GPT-6 and Claude 5 models from each
 provider with a key. Choosing one, then a reasoning level, restarts the Eve process with both
 and saves them. Each turn captures those settings before waiting for Eve. If

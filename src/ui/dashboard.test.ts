@@ -589,7 +589,7 @@ describe("concept layout", () => {
     expect(canvas.text(29)).not.toContain("message");
   });
 
-  test("the model button lists models and switches; earlier replies keep the model that wrote them", async () => {
+  test("the model picker switches models; earlier replies keep the model that wrote them", async () => {
     const ask = mock<AgentBackend["ask"]>(async ({ onText }) => onText("Done."));
     const agent = fakeAgent(ask);
     const { work } = setup();
@@ -604,8 +604,8 @@ describe("concept layout", () => {
     dashboard.agent.chat.current.draft.replace(["First?"]);
     dashboard.agent.send();
     await settle();
-    expect(draw(dashboard, 120, 30).text(4)).toContain("Test Model · Medium ▾");
-    dashboard.click({ kind: "action", action: "model" });
+    expect(draw(dashboard, 120, 30).text(4)).not.toContain("Test Model");
+    dashboard.openPicker("model");
     expect(dashboard.picker?.kind).toBe("model");
     const dialog = () => {
       const canvas = draw(dashboard, 120, 30);
@@ -613,7 +613,7 @@ describe("concept layout", () => {
     };
     expect(dialog()).toContain("Loading models…");
     await settle();
-    expect(dialog()).toMatch(/Select model +esc/);
+    expect(dialog()).toMatch(/Search models▏ +esc/);
     const lines = dialog().split("\n");
     const recent = lines.findIndex((line) => line.trim().endsWith("Recent"));
     expect(lines[recent + 1]).toMatch(/● Test Model +OpenAI/);
@@ -628,7 +628,7 @@ describe("concept layout", () => {
     await settle();
     expect(agent.choice).toEqual({ provider: "anthropic", model: "other-model", reasoning: "high" });
     const canvas = draw(dashboard, 120, 30);
-    expect(canvas.text(4)).toContain("Other Model · High ▾");
+    expect(canvas.text(4)).not.toContain("Other Model");
     expect(canvas.text(29)).toContain("Other Model · High");
     const screen = Array.from({ length: 30 }, (_, y) => canvas.text(y)).join("\n");
     expect(screen).toMatch(/Test Model · Medium · \d/); // the first reply still says which model wrote it

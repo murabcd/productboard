@@ -1,6 +1,6 @@
 import { cells } from "../text";
 import { Canvas, type Rect } from "./canvas";
-import { type AgentLayout, contextRows, pickerRows } from "./layout";
+import { type AgentLayout, pickerRows } from "./layout";
 import type { Picker } from "./picker";
 
 /** Text starts this far in; choices keep one more cell for the ● mark. */
@@ -54,13 +54,27 @@ export function pickerDialog(
   return frame;
 }
 
-export function drawContextMenu(canvas: Canvas, layout: AgentLayout, picker: Picker, message: string): void {
-  const shown = picker.window(contextRows(layout));
+export function drawComposerMenu(
+  canvas: Canvas,
+  layout: AgentLayout,
+  picker: Picker,
+  capacity: number,
+  message: string,
+): void {
+  const shown = picker.window(capacity);
   const width = layout.transcript.room;
-  const panel = new Canvas(width, shown.length + Number(!!message), "panel");
+  const commands = picker.kind === "agent-commands";
+  const { composerHeaderRows: headerRows } = picker;
+  const panel = new Canvas(width, headerRows + shown.length + Number(!!message), commands ? "raised" : "panel");
   for (let y = 0; y < panel.height; y++) panel.mark(y, 0, width, { kind: "dialog" });
-  drawPickerRows(panel, shown, picker.selected?.value, 0, 1, true);
-  if (message) panel.put(shown.length, 2, message.replaceAll("\n", " · "), "muted", width - 4);
+  if (headerRows) {
+    const text = picker.query || picker.placeholder;
+    panel.put(0, 2, `${text}▏`, picker.query ? "text" : "muted", width - 8);
+    panel.put(0, width - 5, "esc", "muted");
+    panel.mark(0, width - 5, 3, { kind: "dismiss" });
+  }
+  drawPickerRows(panel, shown, picker.selected?.value, headerRows, 1, true, commands ? 16 : undefined);
+  if (message) panel.put(headerRows + shown.length, 2, message.replaceAll("\n", " · "), "muted", width - 4);
   canvas.paste(panel, layout.left, layout.boxTop - panel.height);
 }
 
@@ -71,6 +85,7 @@ function drawPickerRows(
   top: number,
   inset: number,
   accentSelection: boolean,
+  detailColumn?: number,
 ): void {
   const { width } = canvas;
   const room = width - inset * 2;
@@ -88,9 +103,9 @@ function drawPickerRows(
     const active = choice.value === selected;
     if (active) canvas.paint(y, 1, width - 2, accentSelection ? "accent" : "selected");
     if (choice.current) canvas.put(y, inset - 1, "●", active && accentSelection ? "onAccent" : "accent");
-    const detail = Math.min(cells(choice.detail), Math.floor(room / 2));
-    canvas.put(y, inset + 1, choice.label, active ? selectedLabel : "text", room - detail - 3);
-    canvas.put(y, width - inset - detail, choice.detail, active ? selectedDetail : "muted", detail);
+    const detailLeft = detailColumn ?? width - inset - Math.min(cells(choice.detail), Math.floor(room / 2));
+    canvas.put(y, inset + 1, choice.label, active ? selectedLabel : "text", detailLeft - inset - 3);
+    canvas.put(y, detailLeft, choice.detail, active ? selectedDetail : "muted", width - inset - detailLeft);
     canvas.mark(y, 1, width - 2, { kind: "choice", value: choice.value });
   });
 }
