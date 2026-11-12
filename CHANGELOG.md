@@ -4,6 +4,12 @@ Release notes for Productboard, newest first.
 
 ## v0.1.1 — 2026-11-12
 
+### Core
+
+#### Improvements
+
+- Print the installed version with `productboard --version`.
+
 ### TUI
 
 #### Improvements

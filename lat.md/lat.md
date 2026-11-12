@@ -4,6 +4,9 @@ productboard is a local read-only terminal workspace for product management. The
 [launcher](../bin/productboard) runs [[src/main.ts]] with Bun. The entry point connects
 local credentials, the Jira client, workspace state, and the terminal UI.
 
+The `--version` flag prints the version from [package.json](../package.json)
+without opening the terminal UI or reading credentials.
+
 The [Homebrew tap](https://github.com/murabcd/homebrew-tap) installs a tagged
 release with the launcher, a private Bun runtime, and locked production
 dependencies. It installs Node.js for Agent.

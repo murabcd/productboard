@@ -1,3 +1,4 @@
+import { version } from "../package.json";
 import { EveAgent } from "./agent/eve";
 import { loadCredentials, readConfig, rememberBoard, rememberTheme } from "./auth";
 import { JiraClient } from "./jira/client";
@@ -10,18 +11,20 @@ import { DEFAULT_THEME } from "./theme";
 import { Dashboard, type Opener } from "./ui/dashboard";
 import { openScreen, type Screen } from "./ui/screen";
 
-const USAGE = `Usage: productboard [--login | --agent-login | --check | --help]
+const USAGE = `Usage: productboard [--login | --agent-login | --check | --version | --help]
 
   productboard                Open the Inbox or start setup
   productboard --login        Connect or update your Jira account
   productboard --agent-login  Connect an Agent provider
-  productboard --check        Check Jira access without opening the dashboard`;
+  productboard --check        Check Jira access without opening the dashboard
+  productboard --version      Print the Productboard version`;
 
 const COMMANDS = ["--login", "--agent-login", "--check"] as const;
 type LoginCommand = Exclude<(typeof COMMANDS)[number], "--check">;
 
 async function main(args: string[]): Promise<number> {
   if (args.includes("--help") || args.includes("-h")) return say(USAGE);
+  if (args.includes("--version")) return say(version);
   const command = COMMANDS.find((flag) => args.includes(flag));
   if (args.length && !command) return fail(`Unknown option ${args[0]}\n\n${USAGE}`);
   if (command === "--check") {
