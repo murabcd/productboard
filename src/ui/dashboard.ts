@@ -20,6 +20,7 @@ import {
   modalRows,
   PEEK_MIN_WIDTH,
   pickerRows,
+  type SearchBoxKind,
   sidebarWidth,
 } from "./layout";
 import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
@@ -41,6 +42,7 @@ export interface DashboardOptions {
 }
 
 const NOTICE_MS = 4000;
+const SEARCH_HINT_MS = 3000;
 const WHEEL_LINES = 3;
 
 /** What receives input, topmost first. Prompts belong to the list screen. */
@@ -57,7 +59,7 @@ export type Layer =
 /** The search box above the list: Jira search in the Search view, or the
  * filter over loaded issues. `editing` shows the cursor. */
 export interface SearchBox {
-  kind: "jira" | "filter";
+  kind: SearchBoxKind;
   text: string;
   editing: boolean;
 }
@@ -81,6 +83,7 @@ export class Dashboard {
   readonly contextPicker: ContextPicker;
   private selectedTheme: ThemeId;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  private searchHintTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly images: ImagePreviews;
   private readonly details: IssueDetails;
   private readonly unsubscribe: () => void;
@@ -137,7 +140,7 @@ export class Dashboard {
   }
 
   get agentLayout() {
-    return agentLayout(this.width - sidebarWidth(this.width), this.height, this.agent.composerRows);
+    return agentLayout(this.width, this.height, this.agent.composerRows);
   }
 
   get contextMenu(): Picker | undefined {
@@ -207,6 +210,7 @@ export class Dashboard {
     this.images.close();
     this.closePicker();
     clearTimeout(this.noticeTimer);
+    this.hideSearchHint();
     return this.agent.chat.dispose();
   }
 
@@ -407,7 +411,16 @@ export class Dashboard {
   }
 
   listCapacity(): number {
-    return listRows(this.height, this.searchBox() !== null);
+    return listRows(this.width, this.height, this.searchBox()?.kind);
+  }
+
+  get showSearchHint(): boolean {
+    return this.finding === "" && this.searchHintTimer !== undefined;
+  }
+
+  private hideSearchHint(): void {
+    clearTimeout(this.searchHintTimer);
+    this.searchHintTimer = undefined;
   }
 
   searchBox(): SearchBox | null {
@@ -424,16 +437,24 @@ export class Dashboard {
     this.closePicker();
     this.modal = null;
     this.finding = null;
+    this.hideSearchHint();
     this.searching = false;
   }
 
   showView(view: View): void {
+    this.closeLayers();
     this.agent.tab = false;
     this.list.unfold();
     const work = this.workspace;
     work.change(withView(work.query, view));
     this.list.filter("");
-    if (view === View.Search && !work.query.text) this.finding = "";
+    if (view === View.Search && !work.query.text) {
+      this.finding = "";
+      this.searchHintTimer = setTimeout(() => {
+        this.searchHintTimer = undefined;
+        this.redraw();
+      }, SEARCH_HINT_MS);
+    }
   }
 
   /** Esc on search results: clear them and type a new search, staying on the tab. */
@@ -513,12 +534,14 @@ export class Dashboard {
   private handleFind(draft: string, key: Key): void {
     const edited = editLine(draft, key, 200);
     if (edited !== undefined) {
+      if (edited !== draft) this.hideSearchHint();
       this.finding = edited;
     } else if (keyId(key) === "enter" && draft.trim()) {
       this.finding = null;
       this.workspace.change(scoped(this.workspace.query, { view: View.Search, text: draft.trim() }));
       this.list.filter("");
     } else if (keyId(key) === "escape" || keyId(key) === "ctrl-c") {
+      this.hideSearchHint();
       this.finding = null;
     }
   }
@@ -556,7 +579,6 @@ export class Dashboard {
         return;
       }
       case "view":
-        this.closeLayers();
         this.showView(target.view);
         return;
       case "issue": {

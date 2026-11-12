@@ -25,6 +25,25 @@ function teamFocus(issues: number) {
 }
 
 describe("issue rows", () => {
+  test.each([
+    [138, 1],
+    [80, 2],
+  ])("the toolbar has one blank row above and below it at width %i", (width, descriptionRow) => {
+    const dashboard = teamFocus(30);
+    dashboard.resize(width, 24);
+    const canvas = frame(dashboard);
+    const content = (row: number) =>
+      canvas
+        .text(row)
+        .slice(width === 138 ? 20 : 0)
+        .trim();
+    expect(content(descriptionRow)).toBe("What needs attention across active sprints");
+    expect(content(descriptionRow + 1)).toBe("");
+    expect(content(descriptionRow + 2)).toMatch(/^Filter ▾ +Display ▾$/);
+    expect(content(descriptionRow + 3)).toBe("");
+    expect(content(descriptionRow + 4)).toContain("Issue");
+  });
+
   test("columns hold still while scrolling: they are sized from the whole list", () => {
     const dashboard = teamFocus(30);
     dashboard.resize(138, 24);

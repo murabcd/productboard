@@ -4,6 +4,7 @@ import { MENTION_DAYS, View } from "../jira/query";
 import type { Canvas } from "./canvas";
 import { action, buttons, buttonsRight, type Control } from "./controls";
 import type { Dashboard } from "./dashboard";
+import type { headerRows } from "./layout";
 import { AGENT, MY_ISSUES_TABS, pageOf } from "./navigation";
 import { filterChips } from "./pickers";
 
@@ -76,16 +77,14 @@ function issuesHeader(d: Dashboard): PageHeader {
   return header;
 }
 
-const TOOLBAR = 4;
-
 export function pageHeader(d: Dashboard): PageHeader {
   return d.agent.tab ? agentHeader(d) : issuesHeader(d);
 }
 
-export function drawHeader(canvas: Canvas, header: PageHeader, descriptionRow: number): void {
+export function drawHeader(canvas: Canvas, header: PageHeader, rows: ReturnType<typeof headerRows>): void {
   const { width } = canvas;
-  canvas.put(descriptionRow, 2, header.description, "muted", width - 4);
-  const right = header.actions.length ? buttonsRight(canvas, TOOLBAR, width - 2, header.actions) - 2 : width - 2;
-  const afterTabs = buttons(canvas, TOOLBAR, 2, header.tabs, right);
-  buttons(canvas, TOOLBAR, header.tabs.length ? afterTabs + 2 : 2, header.filters, right);
+  canvas.put(rows.description, 2, header.description, "muted", width - 4);
+  const right = header.actions.length ? buttonsRight(canvas, rows.toolbar, width - 2, header.actions) - 2 : width - 2;
+  const afterTabs = buttons(canvas, rows.toolbar, 2, header.tabs, right);
+  buttons(canvas, rows.toolbar, header.tabs.length ? afterTabs + 2 : 2, header.filters, right);
 }

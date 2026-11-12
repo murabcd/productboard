@@ -69,6 +69,7 @@ Run `productboard --login` to update your Jira sign-in or
 
 The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,
 `3` for Inbox, `4` for My issues, `5` for Team focus, or `6` for All issues.
+Use a Nerd Font in your terminal to display the sidebar icons.
 
 To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel
 Light**, **Vercel Dark**, or **Default**. The choice is saved for the next

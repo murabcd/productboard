@@ -22,12 +22,13 @@ const item = (to: Destination, icon: string, name: string, short: string): NavIt
   short,
 });
 
-const SEARCH = item(View.Search, "⌕", "Search", "Find");
-const INBOX = item(View.Mentions, "◉", "Inbox", "Inbox");
-const MY_ISSUES = item(View.Mine, "◫", "My issues", "Me");
-export const AGENT = item("agent", "✦", "Agent", "Agent");
-const TEAM_FOCUS = item(View.Today, "◇", "Team focus", "Focus");
-const ALL_ISSUES = item(View.All, "≡", "All issues", "All");
+// Font Awesome glyphs provided by Nerd Fonts.
+const SEARCH = item(View.Search, "\uF002", "Search", "Find");
+const INBOX = item(View.Mentions, "\uF01C", "Inbox", "Inbox");
+const MY_ISSUES = item(View.Mine, "\uF046", "My issues", "Me");
+export const AGENT = item("agent", "\uF0D0", "Agent", "Agent");
+const TEAM_FOCUS = item(View.Today, "\uF05B", "Team focus", "Focus");
+const ALL_ISSUES = item(View.All, "\uF03A", "All issues", "All");
 
 export const NAV_GROUPS: readonly (readonly NavItem[])[] = [
   [SEARCH, AGENT],

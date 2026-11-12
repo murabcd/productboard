@@ -15,9 +15,9 @@ import { drawHeader, type PageHeader, pageHeader } from "./header";
 import type { Target } from "./input";
 import {
   BODY_TOP,
-  BOX_ROWS,
   FOOTER_ROWS,
-  LIST_TOP,
+  headerRows,
+  issueListLayout,
   MIN_HEIGHT,
   MIN_WIDTH,
   modalRows,
@@ -43,7 +43,7 @@ export function frame(d: Dashboard): Canvas {
   const sidebar = sidebarWidth(width);
   const content = new Canvas(width - sidebar, height);
   const header = pageHeader(d);
-  drawHeader(content, header, sidebar ? 1 : 2);
+  drawHeader(content, header, headerRows(width));
   drawWorkspace(content, d, layer);
   canvas.paste(content, sidebar, 0);
   if (sidebar) drawSidebar(canvas, d, sidebar);
@@ -92,12 +92,16 @@ function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number, header: PageH
 function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
   for (let y = 1; y < canvas.height; y++) canvas.put(y, width - 1, "│", "line");
   const here = currentPage(d.workspace.query.view, d.agent.tab);
+  const iconColumn = 2;
+  const iconWidth = 2;
+  const labelColumn = iconColumn + iconWidth + 1;
   let row = 2;
   for (const group of NAV_GROUPS) {
     for (const item of group) {
       const active = item === here;
       if (active) canvas.paint(row, 1, width - 3, "selected");
-      canvas.put(row, 2, `${item.icon} ${item.name}`, active ? "accentBold" : "muted", width - 4);
+      canvas.put(row, iconColumn, item.icon, active ? "accentBold" : "mutedBold", iconWidth);
+      canvas.put(row, labelColumn, item.name, active ? "accentBold" : "muted", width - labelColumn - 2);
       canvas.mark(row, 1, width - 3, navTarget(item));
       row += 1;
     }
@@ -174,17 +178,16 @@ function drawList(canvas: Canvas, d: Dashboard): void {
   const peek = d.peek;
   const width = peek ? canvas.width - peekWidth(canvas.width) : canvas.width;
   const box = d.searchBox();
+  const { input, status, top } = issueListLayout(d.width, box?.kind);
   if (box) {
-    const y = LIST_TOP - 1;
-    const prefix = `${box.kind === "jira" ? "Search Jira" : "Filter loaded"}  / `;
-    canvas.put(y, 2, prefix, "title");
+    const prefix = box.kind === "jira" ? "/ " : "Filter loaded  / ";
+    canvas.put(input, 2, prefix, box.kind === "jira" ? "muted" : "title");
     const text = `${box.text}${box.editing ? "▏" : ""}`;
-    canvas.put(y, 2 + prefix.length, text, box.editing ? "accent" : "text");
-    canvas.mark(y, 2, width - 4, { kind: "box" });
+    canvas.put(input, 2 + prefix.length, text, box.editing ? "accent" : "text");
+    canvas.mark(input, 2, width - 4, { kind: "box" });
   }
-  const top = box ? LIST_TOP + BOX_ROWS : LIST_TOP;
   const { rows: shownRows, selected, count: shown, listed } = d.list.window(d.listCapacity());
-  if (!shownRows.length) canvas.put(top, 4, emptyText(d), "mutedBold", width - 6);
+  if (!shownRows.length) canvas.put(status, 4, emptyText(d), "mutedBold", width - 6);
   const shownIssues = shownRows.flatMap((row) => ("issue" in row ? [row.issue] : []));
   // Sized from the whole list, not the rows on screen, so columns hold still while scrolling.
   const columns = rowColumns(d, listed, width);
@@ -258,9 +261,8 @@ function drawList(canvas: Canvas, d: Dashboard): void {
 
 function emptyText(d: Dashboard): string {
   const work = d.workspace;
-  if (work.query.view === View.Search && !work.query.text) {
-    return d.finding === null ? "Press f to search all of Jira" : "Type words or an issue key above, then press Enter";
-  }
+  if (work.query.view === View.Search && !work.query.text)
+    return d.showSearchHint ? "Type words or an issue key, then press Enter…" : "";
   if (!work.current && work.pending)
     return work.query.view === View.Mentions ? "Looking for mentions…" : "Loading issues…";
   if (work.error) return "Could not load issues · r retry";

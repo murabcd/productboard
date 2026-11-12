@@ -69,7 +69,7 @@ A blank row separates the body from the footer, which shows counts, sync
 status, and shortcuts.
 
 [[src/ui/navigation.ts#NAV_GROUPS]] puts one blank row between Search and Agent
-and the rest of the sidebar pages.
+and the rest of the sidebar pages. Sidebar icons use Nerd Font glyphs.
 [[src/ui/navigation.ts#NAVIGATION]] flattens that order for number keys, Tab,
 and the command palette. On narrow panes, the same order appears as tabs
 below the title bar.
@@ -77,6 +77,12 @@ below the title bar.
 [[src/ui/header.ts#pageHeader]] supplies the title for the row shared with the
 app name and command palette shortcut. [[src/ui/header.ts#drawHeader]] draws
 the description and toolbar below, including tabs, filters, and page actions.
+One blank row separates the description from the toolbar in both layouts.
+The Jira query field sits directly below the toolbar. Issue pages without
+that field leave one blank row below the toolbar.
+Opening Search with an empty query briefly shows an Enter hint in the same
+position as the loading messages. The first edit or the timeout dismisses it
+for that visit.
 
 [[src/ui/pickers.ts#PICKERS]] describes every picker in one table: boards,
 sprints, filters, models, the command palette and the rest. Each item carries

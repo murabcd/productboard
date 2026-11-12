@@ -10,7 +10,7 @@ import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key } from "./input";
 import { pickerRows } from "./layout";
-import { NAVIGATION, navKey } from "./navigation";
+import { AGENT, NAVIGATION, navKey } from "./navigation";
 import { detailBlocks } from "./panel";
 import { Picker } from "./picker";
 
@@ -85,13 +85,15 @@ describe("dashboard", () => {
     const { dashboard } = setup();
     for (const key of text("fоплата")) dashboard.handle(key);
     let canvas = draw(dashboard, 80, 24);
-    expect(canvas.text(5)).toContain("Search Jira  / оплата▏");
+    expect(canvas.text(5).trim()).toBe("/ оплата▏");
+    expect(canvas.runs(5)).toContainEqual(expect.objectContaining({ text: "/ ", style: "muted" }));
     expect(canvas.text(24 - 1)).not.toContain("Shortcuts"); // typing a search hides the key hints
+    expect(draw(dashboard, 120, 24).text(4).slice(20).trim()).toBe("/ оплата▏");
     dashboard.handle(ESC);
     dashboard.handle({ text: "/" });
     canvas = draw(dashboard, 80, 24);
-    expect(canvas.text(5)).toContain("Filter loaded  / ▏");
-    expect(canvas.text(8)).toContain("To do 2 ▾"); // the list starts below the box
+    expect(canvas.text(6)).toContain("Filter loaded  / ▏");
+    expect(canvas.text(9)).toContain("To do 2 ▾"); // the list starts below the box
     dashboard.handle(ENTER);
     expect(dashboard.searching).toBe(false);
     dashboard.click({ kind: "box" });
@@ -112,12 +114,24 @@ describe("dashboard", () => {
     dashboard.handle(ESC); // stop typing; still on the tab
     expect(dashboard.finding).toBeNull();
     expect(work.query.view).toBe(View.Search);
+    expect(frame(dashboard).text(6).slice(20).trim()).toBe("");
+    dashboard.handle({ text: "f" });
+    expect(dashboard.finding).toBe("");
   });
 
-  test("an empty Search view asks for words", () => {
+  test("Search shows a hint on entry and clears it after the first edit", () => {
     const { dashboard } = setup();
     dashboard.handle({ text: "1" });
     expect(dashboard.finding).toBe("");
+    const canvas = frame(dashboard);
+    expect(canvas.text(4).slice(20).trim()).toBe("/ ▏");
+    expect(canvas.text(5).slice(20).trim()).toBe("");
+    expect(canvas.text(6).slice(20).trim()).toBe("Type words or an issue key, then press Enter…");
+    dashboard.handle({ text: "a" });
+    expect(frame(dashboard).text(6).slice(20).trim()).toBe("");
+    dashboard.handle({ name: "backspace" });
+    expect(dashboard.finding).toBe("");
+    expect(frame(dashboard).text(6).slice(20).trim()).toBe("");
   });
 
   test("clicks select, then open; the wheel moves and scrolls", () => {
@@ -476,8 +490,8 @@ describe("concept layout", () => {
     work.query = { ...work.query, project: "WEB", status: "open" };
     const canvas = draw(dashboard, 120, 30);
     // One toolbar: filters on the left, Display on the right; no web-style × on the labels.
-    expect(canvas.text(4)).toMatch(/Filter 2 ▾ +Project: WEB +Status: Open +Display ▾/);
-    expect(canvas.text(4)).not.toContain("×");
+    expect(canvas.text(3)).toMatch(/Filter 2 ▾ +Project: WEB +Status: Open +Display ▾/);
+    expect(canvas.text(3)).not.toContain("×");
     expect(canvas.text(1)).not.toContain("Filter");
     dashboard.click({ kind: "action", action: "filter" });
     for (const key of [...text("clear"), ENTER]) dashboard.handle(key);
@@ -496,7 +510,7 @@ describe("concept layout", () => {
 
     for (const key of [...text("Fsprint"), ENTER, ...text("36"), ENTER]) dashboard.handle(key);
     expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.All, sprintFilter: 36 });
-    expect(frame(dashboard).text(4)).toContain("Filter 1 ▾");
+    expect(frame(dashboard).text(3)).toContain("Filter 1 ▾");
 
     dashboard.handle({ text: "3" });
     expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Mentions, sprintFilter: 36 });
@@ -583,7 +597,7 @@ describe("concept layout", () => {
     expect(screen).toContain("• FL-1 is blocked"); // Markdown, not "- **FL-1**"
     expect(screen).toMatch(/\n +Test Model · Medium · \d+\.\ds/); // under the reply: model, reasoning, time
     expect(screen).not.toMatch(/Agent · Test Model/);
-    expect(screen).not.toContain("✦ Agent\n");
+    expect(screen).not.toMatch(new RegExp(`${AGENT.icon} +Agent\\s*\\n`));
     // The footer, as on other pages: the conversation and model, then Agent's keys.
     expect(canvas.text(29)).toMatch(/Test Model · Medium .* ⇧↵ New line +\^N New chat/);
     expect(canvas.text(29)).not.toContain("message");
@@ -733,7 +747,7 @@ describe("frame", () => {
     const { dashboard } = setup();
     const canvas = draw(dashboard, 80, 24);
     for (let y = 0; y < 24; y++) expect(canvas.text(y).length).toBeLessThanOrEqual(80);
-    expect(canvas.text(7)).toMatch(/› EX-1/);
+    expect(canvas.text(8)).toMatch(/› EX-1/);
     expect(canvas.text(0)).toMatch(/PRODUCTBOARD +All issues +\^K/);
     expect(canvas.text(23)).toContain("2 issues");
   });
