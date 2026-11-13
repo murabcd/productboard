@@ -154,13 +154,14 @@ describe("Today", () => {
     ]);
   });
 
-  test("project and sprint filters narrow every search, including mentions", async () => {
+  test("project, sprint and assignee filters narrow every search, including mentions", async () => {
     const fake = source([]);
-    await today(fake, { ...query, project: "EX", sprintFilter: 42 }, { now: NOW });
+    await today(fake, { ...query, project: "EX", sprintFilter: 42, assignee: "dev" }, { now: NOW });
     expect(fake.searches).toHaveLength(5);
     for (const jql of fake.searches) {
       expect(jql).toContain('project = "EX"');
       expect(jql).toContain("sprint = 42");
+      expect(jql).toContain('assignee = "dev"');
     }
   });
 

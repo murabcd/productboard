@@ -12,6 +12,7 @@ import { DIALOG_INSET, type DialogFrame, dialogPanel, pickerDialog } from "./dia
 import { editLine, type Key, keyId } from "./input";
 import { pickerRows } from "./layout";
 import { Picker } from "./picker";
+import { isSearchAction, SearchInput } from "./search-input";
 import { textKeys, toKeys } from "./terminal-input";
 import { drawCanvas, resolveTheme } from "./theme";
 
@@ -48,6 +49,7 @@ export class SetupView<Result> extends Renderable {
   private readonly theme: ReturnType<typeof resolveTheme>;
   private readonly dialog: FieldEntry<Result> | Picker<"provider">;
   private readonly abort = new AbortController();
+  private readonly search: SearchInput;
   private frame?: DialogFrame;
 
   constructor(
@@ -76,6 +78,8 @@ export class SetupView<Result> extends Renderable {
       },
     });
     this.theme = resolveTheme(theme);
+    this.search = new SearchInput(renderer);
+    this.add(this.search);
     if ("field" in prompt) {
       const { field, title } = prompt;
       this.dialog = { title, field, value: field.value ?? "", status: { kind: "editing" } };
@@ -103,6 +107,12 @@ export class SetupView<Result> extends Renderable {
     }
     if (!this.fits) return;
     const dialog = this.dialog;
+    const keys = toKeys(event);
+    if (dialog instanceof Picker && !isSearchAction(keys)) {
+      this.search.key(dialog.searchEdit, event);
+      this.requestRender();
+      return;
+    }
     if (event.ctrl && event.name === "o" && "field" in dialog && dialog.field.url && dialog.status.kind === "editing") {
       void this.open(dialog.field.url).catch(() => {
         if (this.abort.signal.aborted || dialog.status.kind !== "editing") return;
@@ -111,13 +121,18 @@ export class SetupView<Result> extends Renderable {
       });
       return;
     }
-    for (const key of toKeys(event)) this.handle(key);
+    for (const key of keys) this.handle(key);
   }
 
   paste(event: PasteEvent): void {
     event.preventDefault();
     if (!this.fits) return;
     const line = new TextDecoder().decode(event.bytes).split(LINE_BREAK, 1)[0] ?? "";
+    if (this.dialog instanceof Picker) {
+      this.search.paste(this.dialog.searchEdit, line);
+      this.requestRender();
+      return;
+    }
     for (const key of textKeys(line)) this.handle(key);
   }
 
@@ -166,6 +181,7 @@ export class SetupView<Result> extends Renderable {
     buffer.fillRect(0, 0, width, height, SCRIM);
     if (!this.fits) {
       this.frame = undefined;
+      this.search.place(undefined, undefined, this.theme);
       const message = new Canvas(width, 1, "panel");
       message.put(0, 0, "Enlarge the terminal · Esc to exit", "muted");
       drawCanvas(buffer, message, this.theme);
@@ -179,6 +195,11 @@ export class SetupView<Result> extends Renderable {
         : this.fieldPanel(buffer, this.dialog);
     this.frame = frame;
     drawCanvas(buffer, frame.panel, this.theme, frame);
+    this.search.place(
+      this.dialog instanceof Picker ? this.dialog.searchEdit : undefined,
+      frame.panel.searchArea(frame),
+      this.theme,
+    );
   }
 
   private fieldPanel(viewport: Pick<OptimizedBuffer, "width" | "height">, entry: FieldEntry<Result>): DialogFrame {

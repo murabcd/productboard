@@ -26,6 +26,14 @@ export type KeyName =
 /** A named key, or one typed character. */
 export type Key = { name: KeyName; shift?: true } | { text: string };
 
+export interface SearchEdit {
+  owner: object;
+  text: string;
+  placeholder: string;
+  limit: number;
+  change(text: string): void;
+}
+
 /** One identifier per key for binding tables: the key's name or its character. */
 export const keyId = (key: Key): string => ("name" in key ? key.name : key.text);
 

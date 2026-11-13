@@ -28,11 +28,10 @@ const INBOX = item(View.Mentions, "\uF01C", "Inbox", "Inbox");
 const MY_ISSUES = item(View.Mine, "\uF046", "My issues", "Me");
 export const AGENT = item("agent", "\uF0D0", "Agent", "Agent");
 const TEAM_FOCUS = item(View.Today, "\uF05B", "Team focus", "Focus");
-const ALL_ISSUES = item(View.All, "\uF03A", "All issues", "All");
 
 export const NAV_GROUPS: readonly (readonly NavItem[])[] = [
   [SEARCH, AGENT],
-  [INBOX, MY_ISSUES, TEAM_FOCUS, ALL_ISSUES],
+  [INBOX, MY_ISSUES, TEAM_FOCUS],
 ];
 export const NAVIGATION: readonly NavItem[] = NAV_GROUPS.flat();
 
@@ -42,7 +41,6 @@ const PAGES: Record<View, NavItem> = {
   [View.Mine]: MY_ISSUES,
   [View.Created]: MY_ISSUES,
   [View.Today]: TEAM_FOCUS,
-  [View.All]: ALL_ISSUES,
   [View.Search]: SEARCH,
 };
 

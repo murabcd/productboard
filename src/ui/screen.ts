@@ -15,6 +15,7 @@ import type { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key, KeyName } from "./input";
 import { COMPOSER_MAX_ROWS } from "./layout";
+import { isSearchAction, SearchInput } from "./search-input";
 import { type SetupPrompt, SetupView } from "./setup";
 import { textKeys, toKeys } from "./terminal-input";
 import { drawCanvas, resolveTheme } from "./theme";
@@ -37,6 +38,7 @@ const COMPLETION_KEYS = new Set<KeyName>(["up", "down", "pageup", "pagedown", "e
 class DashboardView extends Renderable {
   private readonly image: ImageRenderable;
   readonly composer: AgentComposer;
+  private readonly search: SearchInput;
   private theme: ReturnType<typeof resolveTheme>;
   private animation: ReturnType<typeof setTimeout> | undefined;
   /** The last frame drawn, which knows what each click hits. */
@@ -77,11 +79,21 @@ class DashboardView extends Renderable {
     });
     this.add(this.image);
     this.add(this.composer);
+    this.search = new SearchInput(renderer);
+    this.add(this.search);
   }
 
   key(event: KeyEvent): void {
+    const layer = this.dashboard.layer();
     const keys = toKeys(event);
-    const editing = this.dashboard.layer().kind === "agent";
+    const search = this.dashboard.searchEdit(layer);
+    if (search && !isSearchAction(keys)) {
+      event.preventDefault();
+      this.search.key(search, event);
+      this.requestRender();
+      return;
+    }
+    const editing = layer.kind === "agent";
     if (editing) {
       this.composer.sync();
       this.syncContext();
@@ -107,7 +119,15 @@ class DashboardView extends Renderable {
 
   paste(event: PasteEvent): void {
     const text = new TextDecoder().decode(event.bytes);
-    if (this.dashboard.layer().kind === "agent") {
+    const layer = this.dashboard.layer();
+    const search = this.dashboard.searchEdit(layer);
+    if (search) {
+      event.preventDefault();
+      this.search.paste(search, text);
+      this.requestRender();
+      return;
+    }
+    if (layer.kind === "agent") {
       if (this.composer.paste(text)) {
         event.preventDefault();
         this.dashboard.setContextQuery(undefined);
@@ -154,7 +174,8 @@ class DashboardView extends Renderable {
       Object.assign(this.composer, this.theme.composer);
     }
     this.dashboard.resize(width, height);
-    const editing = this.dashboard.layer().kind === "agent";
+    const layer = this.dashboard.layer();
+    const editing = layer.kind === "agent";
     if (editing) {
       this.composer.sync();
       this.syncContext();
@@ -165,6 +186,7 @@ class DashboardView extends Renderable {
     drawCanvas(buffer, canvas, this.theme);
     const covered = this.hasPrompt();
     this.placeImage(covered ? undefined : canvas.reserved("image"));
+    this.search.place(covered ? undefined : this.dashboard.searchEdit(layer), canvas.searchArea(), this.theme);
     this.placeComposer(canvas.reserved("composer"), !covered && editing);
     this.animate();
   }

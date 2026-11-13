@@ -19,10 +19,8 @@ function setup() {
   };
   let now = 1_000_000;
   const work = new Workspace(source, { now: () => now });
-  const team = { ...initialQuery, view: View.All };
-  work.query = team;
-  work.snapshot = snapshot(team, ["EX-1", "EX-2"], true);
-  return { work, source, requests, team, advance: (ms: number) => (now += ms) };
+  work.snapshot = snapshot(initialQuery, ["EX-1", "EX-2"], true);
+  return { work, source, requests, advance: (ms: number) => (now += ms) };
 }
 
 describe("workspace", () => {
@@ -40,12 +38,12 @@ describe("workspace", () => {
   });
 
   test("a stale response never appears under a different view", async () => {
-    const { work, requests, team } = setup();
+    const { work, requests } = setup();
     work.refresh();
     work.change({ ...initialQuery, view: View.Created });
     expect(work.issues).toEqual([]);
     expect(requests.map(({ signal }) => signal.aborted)).toEqual([true, false]);
-    requests[0]?.reply.resolve(snapshot(team, ["EX-OLD"]));
+    requests[0]?.reply.resolve(snapshot(initialQuery, ["EX-OLD"]));
     await settle();
     expect(work.issues).toEqual([]);
     expect(requests[1]?.query.view).toBe(View.Created);
@@ -64,15 +62,15 @@ describe("workspace", () => {
   });
 
   test("empty Search stops waiting and drops an older response", async () => {
-    const { work, requests, team, advance } = setup();
+    const { work, requests, advance } = setup();
     work.refresh();
     work.change({ ...initialQuery, view: View.Search });
     expect(work.pending).toBe(false);
     advance(REFRESH_MS);
     work.tick();
     expect(requests).toHaveLength(1);
-    work.change(team);
-    requests[0]?.reply.resolve(snapshot(team, ["EX-OLD"]));
+    work.change(initialQuery);
+    requests[0]?.reply.resolve(snapshot(initialQuery, ["EX-OLD"]));
     await settle();
     expect(work.pending).toBe(true);
     expect(work.issues.map((i) => i.key)).toEqual(["EX-1", "EX-2"]);

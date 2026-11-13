@@ -14,9 +14,18 @@ import { AGENT, NAVIGATION, navKey } from "./navigation";
 import { detailBlocks } from "./panel";
 import { Picker } from "./picker";
 
-const text = (value: string): Key[] => [...value].map((ch) => ({ text: ch }));
 const ENTER: Key = { name: "enter" };
 const ESC: Key = { name: "escape" };
+
+function activeSearch(dashboard: Dashboard) {
+  return dashboard.searchEdit(dashboard.layer());
+}
+
+function edit(dashboard: Dashboard, value: string): void {
+  const field = activeSearch(dashboard);
+  if (!field) throw new Error("No search field is active");
+  field.change(value);
+}
 
 function detail(description: string, extra: Partial<Detail> = {}): Detail {
   return { facts: [], description: toDoc(description), comments: [], attachments: [], ...extra };
@@ -60,7 +69,7 @@ function setup(agent?: AgentBackend) {
     sprints: mock(() => deferred<never>().promise),
   };
   const work = new Workspace(source);
-  work.query = { ...initialQuery, view: View.All };
+  work.query = { ...initialQuery, view: View.Created };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
   const dashboard = new Dashboard(work, client, opener, () => {}, { agent });
   dashboard.resize(120, 40);
@@ -70,68 +79,60 @@ function setup(agent?: AgentBackend) {
 describe("dashboard", () => {
   test("f searches all of Jira in the Search view; Esc cancels", () => {
     const { dashboard, work } = setup();
-    for (const key of text("fq")) dashboard.handle(key);
-    expect(work.query.view).toBe(View.All); // q was typed, not quit
-    dashboard.handle({ name: "escape" });
-    expect(dashboard.finding).toBeNull();
-    for (const key of [...text("fоплата"), ENTER]) dashboard.handle(key);
-    expect(work.query).toMatchObject({ view: View.Search, text: "оплата" });
-    expect(dashboard.finding).toBeNull();
     dashboard.handle({ text: "f" });
-    expect(dashboard.finding).toBe("оплата"); // edits the last search
+    edit(dashboard, "q");
+    expect(work.query.view).toBe(View.Created); // q was typed, not quit
+    dashboard.handle({ name: "escape" });
+    expect(activeSearch(dashboard)).toBeUndefined();
+    dashboard.handle({ text: "f" });
+    edit(dashboard, "оплата");
+    dashboard.handle(ENTER);
+    expect(work.query).toMatchObject({ view: View.Search, text: "оплата" });
+    expect(activeSearch(dashboard)).toBeUndefined();
+    dashboard.handle({ text: "f" });
+    expect(activeSearch(dashboard)?.text).toBe("оплата"); // edits the last search
   });
 
   test("searches type into a box above the list, like a picker", () => {
     const { dashboard } = setup();
-    for (const key of text("fоплата")) dashboard.handle(key);
+    dashboard.handle({ text: "f" });
+    edit(dashboard, "оплата");
     let canvas = draw(dashboard, 80, 24);
-    expect(canvas.text(5).trim()).toBe("/ оплата▏");
-    expect(canvas.runs(5)).toContainEqual(expect.objectContaining({ text: "/ ", style: "muted" }));
+    expect(canvas.text(5).trim()).toBe("оплата");
     expect(canvas.text(24 - 1)).not.toContain("Shortcuts"); // typing a search hides the key hints
-    expect(draw(dashboard, 120, 24).text(4).slice(20).trim()).toBe("/ оплата▏");
+    expect(draw(dashboard, 120, 24).text(4).slice(20).trim()).toBe("оплата");
     dashboard.handle(ESC);
     dashboard.handle({ text: "/" });
     canvas = draw(dashboard, 80, 24);
-    expect(canvas.text(6)).toContain("Filter loaded  / ▏");
+    expect(canvas.text(6)).toContain("Filter loaded issues");
     expect(canvas.text(9)).toContain("To do 2 ▾"); // the list starts below the box
     dashboard.handle(ENTER);
-    expect(dashboard.searching).toBe(false);
+    expect(activeSearch(dashboard)).toBeUndefined();
     dashboard.click({ kind: "box" });
-    expect(dashboard.searching).toBe(true);
+    expect(dashboard.layer()).toMatchObject({ kind: "search", box: { kind: "filter" } });
   });
 
   test("Esc clears a search and stays on the Search tab", () => {
     const { dashboard, work } = setup();
-    for (const key of [...text("fоплата"), ENTER]) dashboard.handle(key);
+    dashboard.handle({ text: "f" });
+    edit(dashboard, "оплата");
+    dashboard.handle(ENTER);
     expect(work.query).toMatchObject({ view: View.Search, text: "оплата" });
-    for (const key of [...text("/x"), ENTER]) dashboard.handle(key);
+    dashboard.handle({ text: "/" });
+    edit(dashboard, "x");
+    dashboard.handle(ENTER);
     dashboard.handle(ESC); // clears the filter first
     expect(dashboard.list.search).toBe("");
     expect(work.query.text).toBe("оплата");
     dashboard.handle(ESC); // then the search, ready for a new one
     expect(work.query).toMatchObject({ view: View.Search, text: "" });
-    expect(dashboard.finding).toBe("");
+    expect(activeSearch(dashboard)?.text).toBe("");
     dashboard.handle(ESC); // stop typing; still on the tab
-    expect(dashboard.finding).toBeNull();
+    expect(activeSearch(dashboard)).toBeUndefined();
     expect(work.query.view).toBe(View.Search);
     expect(frame(dashboard).text(6).slice(20).trim()).toBe("");
     dashboard.handle({ text: "f" });
-    expect(dashboard.finding).toBe("");
-  });
-
-  test("Search shows a hint on entry and clears it after the first edit", () => {
-    const { dashboard } = setup();
-    dashboard.handle({ text: "1" });
-    expect(dashboard.finding).toBe("");
-    const canvas = frame(dashboard);
-    expect(canvas.text(4).slice(20).trim()).toBe("/ ▏");
-    expect(canvas.text(5).slice(20).trim()).toBe("");
-    expect(canvas.text(6).slice(20).trim()).toBe("Type words or an issue key, then press Enter…");
-    dashboard.handle({ text: "a" });
-    expect(frame(dashboard).text(6).slice(20).trim()).toBe("");
-    dashboard.handle({ name: "backspace" });
-    expect(dashboard.finding).toBe("");
-    expect(frame(dashboard).text(6).slice(20).trim()).toBe("");
+    expect(activeSearch(dashboard)?.text).toBe("");
   });
 
   test("clicks select, then open; the wheel moves and scrolls", () => {
@@ -158,14 +159,6 @@ describe("dashboard", () => {
     dashboard.click({ kind: "choice", value: "EX" });
     expect(work.query.project).toBe("EX");
     expect(dashboard.picker).toBeNull();
-  });
-
-  test("typing a search never triggers navigation", () => {
-    const { dashboard, source } = setup();
-    dashboard.handle({ text: "/" });
-    for (const key of text("q2dn")) expect(dashboard.handle(key)).toBe(true);
-    expect(dashboard.list.search).toBe("q2dn");
-    expect(source.snapshot).not.toHaveBeenCalled();
   });
 
   test("opening another issue while details load shows that issue", async () => {
@@ -353,7 +346,7 @@ describe("picker", () => {
     expect(dashboard.picker?.title).toBe("Choose board");
     dashboard.handle(ENTER);
     expect(work.board).toBe("1");
-    expect(work.query.view).toBe(View.All);
+    expect(work.query.view).toBe(View.Created);
     expect(dashboard.picker?.title).toBe("Filter by sprint");
   });
 
@@ -494,27 +487,40 @@ describe("concept layout", () => {
     expect(canvas.text(3)).not.toContain("×");
     expect(canvas.text(1)).not.toContain("Filter");
     dashboard.click({ kind: "action", action: "filter" });
-    for (const key of [...text("clear"), ENTER]) dashboard.handle(key);
+    edit(dashboard, "clear");
+    dashboard.handle(ENTER);
     expect(work.query).toMatchObject({ project: "", status: "all" });
     expect(source.snapshot).toHaveBeenCalledTimes(1);
   });
 
-  test("All issues shares its optional sprint filter with other issue lists", () => {
+  test("Team focus shares its sprint filter and opens a Sprint brief", () => {
     const { dashboard, work, source } = setup();
     work.board = "1";
     work.query = { ...work.query, view: View.Mentions };
     work.sprints = [{ id: 36, name: "Sprint 36", state: "active", start: "", end: "", goal: "" }];
-    dashboard.handle({ text: "6" });
+    dashboard.handle({ text: "5" });
     expect(dashboard.picker).toBeNull();
-    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.All, sprintFilter: null });
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Today, sprintFilter: null });
 
-    for (const key of [...text("Fsprint"), ENTER, ...text("36"), ENTER]) dashboard.handle(key);
-    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.All, sprintFilter: 36 });
+    dashboard.handle({ text: "F" });
+    edit(dashboard, "sprint");
+    dashboard.handle(ENTER);
+    edit(dashboard, "36");
+    dashboard.handle(ENTER);
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Today, sprintFilter: 36 });
     expect(frame(dashboard).text(3)).toContain("Filter 1 ▾");
+    expect(frame(dashboard).text(3)).toContain("Sprint brief");
+    dashboard.click({ kind: "action", action: "brief" });
+    expect(dashboard.modal).toMatchObject({ kind: "text", title: "Sprint 36" });
+    dashboard.handle(ESC);
 
     dashboard.handle({ text: "3" });
     expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Mentions, sprintFilter: 36 });
-    for (const key of [...text("Fsprint"), ENTER, ...text("any sprint"), ENTER]) dashboard.handle(key);
+    dashboard.handle({ text: "F" });
+    edit(dashboard, "sprint");
+    dashboard.handle(ENTER);
+    edit(dashboard, "any sprint");
+    dashboard.handle(ENTER);
     expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Mentions, sprintFilter: null });
   });
 
@@ -540,7 +546,6 @@ describe("concept layout", () => {
       ["3", View.Mentions],
       ["4", View.Mine],
       ["5", View.Today],
-      ["6", View.All],
     ];
     for (const [key, expected] of order) {
       dashboard.handle({ text: key });
@@ -558,6 +563,10 @@ describe("concept layout", () => {
     expect(view()).toBe(View.Mine);
     dashboard.handle({ name: "tab" });
     expect(view()).toBe(View.Today); // Agent is not a view; Tab skips it
+    dashboard.handle({ text: "6" });
+    expect(view()).toBe(View.Today);
+    dashboard.handle({ name: "tab" });
+    expect(view()).toBe(View.Search);
   });
 
   test("every page shares the title bar with the app name and command shortcut", () => {
@@ -620,10 +629,11 @@ describe("concept layout", () => {
     };
     expect(dialog()).toContain("Loading models…");
     await settle();
-    expect(dialog()).toMatch(/Search models▏ +esc/);
+    expect(dialog()).toMatch(/Search +esc/);
     expect(dialog()).toMatch(/● Test Model\s*$/m);
     expect(dialog()).not.toContain("Recent");
-    for (const key of [...text("other"), ENTER]) dashboard.handle(key);
+    edit(dashboard, "other");
+    dashboard.handle(ENTER);
     await settle();
     expect(agent.choice).toEqual({ provider: "anthropic", model: "other-model", reasoning: "medium" });
     expect(dashboard.picker?.kind).toBe("reasoning");
@@ -662,7 +672,7 @@ describe("concept layout", () => {
       "● Test Model",
     ]);
     expect(dashboard.picker?.window(2)).toMatchObject([{ heading: "OpenAI" }, { choice: { label: "Test Model" } }]);
-    for (const key of text("anthropic")) dashboard.handle(key);
+    edit(dashboard, "anthropic");
     expect(dashboard.picker?.window(10)).toMatchObject([
       { heading: "Anthropic" },
       { choice: { label: "Claude Fable 5.2" } },
@@ -675,9 +685,13 @@ describe("concept layout", () => {
     const { dashboard } = setup(fakeAgent(ask));
     dashboard.openPicker("model");
     await settle();
-    for (const key of [...text("other"), ENTER, ESC]) dashboard.handle(key);
+    edit(dashboard, "other");
+    dashboard.handle(ENTER);
+    dashboard.handle(ESC);
     dashboard.openPicker("model");
-    for (const key of [...text("test"), ENTER, ESC]) dashboard.handle(key);
+    edit(dashboard, "test");
+    dashboard.handle(ENTER);
+    dashboard.handle(ESC);
     dashboard.openPicker("model");
     await settle();
     expect(dashboard.picker?.window(10)).toMatchObject([
@@ -686,7 +700,7 @@ describe("concept layout", () => {
       { choice: { label: "Other Model", detail: "Anthropic", current: false } },
     ]);
 
-    for (const key of text("model")) dashboard.handle(key);
+    edit(dashboard, "model");
     expect(dashboard.picker?.window(10)).toMatchObject([
       { heading: "Anthropic" },
       { choice: { label: "Other Model" } },
@@ -754,11 +768,13 @@ describe("concept layout", () => {
     const { dashboard, work } = setup();
     dashboard.handle({ name: "commands" });
     expect(dashboard.picker?.kind).toBe("commands");
-    for (const key of [...text("inbox"), ENTER]) dashboard.handle(key);
+    edit(dashboard, "inbox");
+    dashboard.handle(ENTER);
     expect(work.query.view).toBe(View.Mentions);
     dashboard.click({ kind: "action", action: "display" });
     expect(dashboard.picker?.kind).toBe("display");
-    for (const key of [...text("assignee"), ENTER]) dashboard.handle(key);
+    edit(dashboard, "assignee");
+    dashboard.handle(ENTER);
     expect(dashboard.list.grouping).toBe("assignee");
   });
 });
@@ -769,7 +785,7 @@ describe("frame", () => {
     const canvas = draw(dashboard, 80, 24);
     for (let y = 0; y < 24; y++) expect(canvas.text(y).length).toBeLessThanOrEqual(80);
     expect(canvas.text(8)).toMatch(/› EX-1/);
-    expect(canvas.text(0)).toMatch(/PRODUCTBOARD +All issues +\^K/);
+    expect(canvas.text(0)).toMatch(/PRODUCTBOARD +My issues +\^K/);
     expect(canvas.text(23)).toContain("2 issues");
   });
 

@@ -54,4 +54,18 @@ describe("issue rows", () => {
     dashboard.handle({ name: "end" }); // scroll the long reason into view
     expect(activity()).toBe(before);
   });
+
+  test("Peek leaves one workspace column outside its paint and scroll target", () => {
+    const dashboard = teamFocus(30);
+    dashboard.resize(138, 24);
+    dashboard.handle({ text: " " });
+    const canvas = frame(dashboard);
+    const top = 6;
+    expect(canvas.text(top)).toContain("Issue peek");
+    for (let row = top; row < canvas.height - 2; row++) {
+      expect(canvas.runs(row).at(-1)).toMatchObject({ text: " ", surface: "workspace" });
+      expect(canvas.targetAt(canvas.width - 2, row)).toEqual({ kind: "peek" });
+      expect(canvas.targetAt(canvas.width - 1, row)).toBeUndefined();
+    }
+  });
 });

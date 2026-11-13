@@ -26,7 +26,7 @@ import {
   toSprint,
   withSprints,
 } from "./parse";
-import { type IssueQuery, initialQuery, jql, View } from "./query";
+import { type IssueQuery, initialQuery, jql, PAGE, RECENT_ISSUES_JQL, View } from "./query";
 import { today } from "./today";
 import type { Choice, Detail, Issue, Sprint } from "./types";
 
@@ -109,8 +109,20 @@ export class JiraClient {
   async snapshot(query: IssueQuery, signal?: AbortSignal): Promise<Snapshot> {
     if (query.view === View.Mentions) return { query, ...(await this.mentions(jql(query), query.limit, signal)) };
     if (query.view === View.Today) return { query, scanned: 0, ...(await today(this, query, { signal })) };
-    const found = await this.search(jql(query), LIST_FIELDS, query.limit + 1, { signal });
-    return { issues: found.slice(0, query.limit).map(toIssue), query, more: found.length > query.limit, scanned: 0 };
+    return { query, scanned: 0, ...(await this.issuePage(jql(query), query.limit, signal)) };
+  }
+
+  recentIssues(): Promise<Pick<Snapshot, "issues" | "more">> {
+    return this.issuePage(RECENT_ISSUES_JQL, PAGE);
+  }
+
+  private async issuePage(
+    query: string,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<Pick<Snapshot, "issues" | "more">> {
+    const found = await this.search(query, LIST_FIELDS, limit + 1, { signal });
+    return { issues: found.slice(0, limit).map(toIssue), more: found.length > limit };
   }
 
   async findIssues(text: string, signal: AbortSignal): Promise<Issue[]> {

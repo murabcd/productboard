@@ -1,6 +1,6 @@
 import { type AgentModel, modelName, PROVIDER_NAMES, REASONING_NAMES } from "../agent/models";
 import { type ModelRef, REASONING_LEVELS, type Reasoning } from "../auth";
-import { isPersonal, STATUSES, type StatusFilter, View } from "../jira/query";
+import { STATUSES, type StatusFilter, View } from "../jira/query";
 import { type Choice, describeAttachment, SPRINT_STATES, shortSprintName, sprintChoice } from "../jira/types";
 import { THEME_IDS, THEMES } from "../theme";
 import type { Dashboard } from "./dashboard";
@@ -10,13 +10,13 @@ import type { PickerItem, PickerKind, PickerOptions } from "./picker";
 const STATUS_LABELS: Record<StatusFilter, string> = { all: "All statuses", open: "Open", done: "Done" };
 
 export function filterChips(d: Dashboard): string[] {
-  const { project, assignee, status, view, sprintFilter } = d.workspace.query;
+  const { project, assignee, status, sprintFilter } = d.workspace.query;
   const chips: string[] = [];
   if (project) chips.push(`Project: ${project}`);
   if (sprintFilter !== null) {
     chips.push(shortSprintName(sprintFilterName(d)));
   }
-  if (assignee && !isPersonal(view)) chips.push(`Assignee: ${d.personLabel}`);
+  if (assignee) chips.push(`Assignee: ${d.personLabel}`);
   if (status !== "all") chips.push(`Status: ${STATUS_LABELS[status]}`);
   return chips;
 }
@@ -250,7 +250,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   },
   model: {
     placement: "composer",
-    options: () => ({ placeholder: "Search models", keepGroupHeading: true, detailLayout: "inline" }),
+    options: () => ({ keepGroupHeading: true, detailLayout: "inline" }),
     title: "Select model",
     items: modelItems,
     load: (d) => d.agent.loadModels(),
@@ -259,7 +259,6 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   reasoning: {
     title: "Select reasoning",
     placement: "composer",
-    options: () => ({ placeholder: "Select reasoning" }),
     items: (d) =>
       REASONING_LEVELS.map((level) =>
         item(REASONING_NAMES[level], REASONING_DETAILS[level], () => d.agent.useReasoning(level), {
@@ -278,7 +277,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
     title: "Filter",
     items: (d) => {
       const { query } = d.workspace;
-      const person = isPersonal(query.view) ? "You" : query.assignee ? d.personLabel : "Anyone";
+      const person = query.view === View.Mine ? "You" : query.assignee ? d.personLabel : "Anyone";
       const active = filterChips(d).length;
       const board = d.workspace.boards.find(({ value }) => value === d.workspace.board);
       return [
@@ -287,9 +286,9 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
         item("Sprint board", board?.label ?? "Choose a board", () => d.openPicker("board")),
         item("Assignee", person, () => d.openPicker("assignee")),
         item("Status", STATUS_LABELS[query.status], () => d.openPicker("status")),
-        item("Filter loaded issues", d.list.search ? `“${d.list.search}”` : "Type to narrow the list", () => {
-          d.searching = true;
-        }),
+        item("Filter loaded issues", d.list.search ? `“${d.list.search}”` : "Type to narrow the list", () =>
+          d.startFilter(),
+        ),
         item("Clear filters", active ? `${active} active` : "None active", () => d.clearFilters()),
       ];
     },

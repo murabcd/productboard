@@ -8,7 +8,7 @@ import { message, type Workspace } from "../state/workspace";
 import { DEFAULT_THEME, type ThemeId } from "../theme";
 import { AgentPanel } from "./agent-panel";
 import { ContextPicker } from "./context-picker";
-import { type Action, bindings, editLine, type Key, keyId, type Target } from "./input";
+import { type Action, bindings, type Key, keyId, type SearchEdit, type Target } from "./input";
 import { IssueDetails, type IssueRead } from "./issue-details";
 import { IssueList } from "./issue-list";
 import {
@@ -42,7 +42,6 @@ export interface DashboardOptions {
 }
 
 const NOTICE_MS = 4000;
-const SEARCH_HINT_MS = 3000;
 const WHEEL_LINES = 3;
 
 /** What receives input, topmost first. Prompts belong to the list screen. */
@@ -52,23 +51,22 @@ export type Layer =
   | { kind: "preview"; preview: Preview }
   | { kind: "picker"; picker: Picker }
   | { kind: "modal"; panel: Panel }
-  | { kind: "find"; draft: string }
-  | { kind: "filter" }
+  | { kind: "search"; box: ActiveSearchBox }
   | { kind: "list" };
 
-/** The search box above the list: Jira search in the Search view, or the
- * filter over loaded issues. `editing` shows the cursor. */
-export interface SearchBox {
+/** The search box above the list, for the Jira query or the filter over loaded issues. */
+interface SearchBox {
   kind: SearchBoxKind;
   text: string;
-  editing: boolean;
+  placeholder: string;
 }
+
+type ActiveSearchBox = SearchBox & SearchEdit & { editing: true };
+type IssueSearch = { kind: "jira"; draft: string } | { kind: "filter" };
 
 export class Dashboard {
   readonly list: IssueList;
-  searching = false;
-  /** Words typed after f, not yet sent to Jira; null when not typing. */
-  finding: string | null = null;
+  private issueSearch?: IssueSearch;
   personLabel = "All people";
   picker: Picker | null = null;
   modal: Panel | null = null;
@@ -83,7 +81,6 @@ export class Dashboard {
   readonly contextPicker: ContextPicker;
   private selectedTheme: ThemeId;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
-  private searchHintTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly images: ImagePreviews;
   private readonly details: IssueDetails;
   private readonly unsubscribe: () => void;
@@ -210,7 +207,6 @@ export class Dashboard {
     this.images.close();
     this.closePicker();
     clearTimeout(this.noticeTimer);
-    this.hideSearchHint();
     return this.agent.chat.dispose();
   }
 
@@ -324,7 +320,11 @@ export class Dashboard {
   }
 
   startFind(): void {
-    this.finding = this.workspace.query.text;
+    this.issueSearch ??= { kind: "jira", draft: this.workspace.query.text };
+  }
+
+  startFilter(): void {
+    this.issueSearch ??= { kind: "filter" };
   }
 
   /** Keep the peek panel on the selected issue, loading its details once. */
@@ -400,8 +400,8 @@ export class Dashboard {
     if (this.preview) return { kind: "preview", preview: this.preview };
     if (this.picker && !this.completionMenu) return { kind: "picker", picker: this.picker };
     if (this.modal) return { kind: "modal", panel: this.modal };
-    if (this.finding !== null) return { kind: "find", draft: this.finding };
-    if (this.searching) return { kind: "filter" };
+    const box = this.searchBox();
+    if (box?.editing) return { kind: "search", box };
     return { kind: this.agent.tab ? "agent" : "list" };
   }
 
@@ -409,21 +409,37 @@ export class Dashboard {
     return listRows(this.width, this.height, this.searchBox()?.kind);
   }
 
-  get showSearchHint(): boolean {
-    return this.finding === "" && this.searchHintTimer !== undefined;
+  searchBox(): ActiveSearchBox | (SearchBox & { editing: false }) | undefined {
+    const active = this.issueSearch;
+    if (active) {
+      const jira = active.kind === "jira";
+      return {
+        kind: active.kind,
+        text: jira ? active.draft : this.list.search,
+        placeholder: jira ? "Search" : "Filter loaded issues",
+        editing: true,
+        owner: active,
+        limit: 200,
+        change: (text) => {
+          if (jira) active.draft = text;
+          else {
+            this.list.filter(text);
+            this.syncPeek();
+          }
+        },
+      };
+    }
+    if (this.list.search) {
+      return { kind: "filter", text: this.list.search, placeholder: "Filter loaded issues", editing: false };
+    }
+    if (this.workspace.query.view === View.Search) {
+      return { kind: "jira", text: this.workspace.query.text, placeholder: "Search", editing: false };
+    }
   }
 
-  private hideSearchHint(): void {
-    clearTimeout(this.searchHintTimer);
-    this.searchHintTimer = undefined;
-  }
-
-  searchBox(): SearchBox | null {
-    if (this.finding !== null) return { kind: "jira", text: this.finding, editing: true };
-    if (this.searching || this.list.search) return { kind: "filter", text: this.list.search, editing: this.searching };
-    if (this.workspace.query.view === View.Search)
-      return { kind: "jira", text: this.workspace.query.text, editing: false };
-    return null;
+  searchEdit(layer: Layer): SearchEdit | undefined {
+    if (layer.kind === "picker") return layer.picker.searchEdit;
+    if (layer.kind === "search") return layer.box;
   }
 
   /** Back to the plain list, dropping any open picker, panel or prompt. */
@@ -431,9 +447,7 @@ export class Dashboard {
     this.images.close();
     this.closePicker();
     this.modal = null;
-    this.finding = null;
-    this.hideSearchHint();
-    this.searching = false;
+    this.issueSearch = undefined;
   }
 
   showView(view: View): void {
@@ -443,20 +457,14 @@ export class Dashboard {
     const work = this.workspace;
     work.change(withView(work.query, view));
     this.list.filter("");
-    if (view === View.Search && !work.query.text) {
-      this.finding = "";
-      this.searchHintTimer = setTimeout(() => {
-        this.searchHintTimer = undefined;
-        this.redraw();
-      }, SEARCH_HINT_MS);
-    }
+    if (view === View.Search && !work.query.text) this.startFind();
   }
 
   /** Esc on search results: clear them and type a new search, staying on the tab. */
   private clearSearch(): void {
     this.workspace.change(scoped(this.workspace.query, { text: "" }));
     this.list.filter("");
-    this.finding = "";
+    this.startFind();
   }
 
   private cycleStatus(): void {
@@ -490,11 +498,8 @@ export class Dashboard {
       case "modal":
         this.modalKeys.get(id)?.(layer.panel);
         break;
-      case "find":
-        this.handleFind(layer.draft, key);
-        break;
-      case "filter":
-        this.handleSearch(key);
+      case "search":
+        this.handleSearch(layer.box, id);
         break;
       case "list":
         if (id === "q" || id === "ctrl-c") return false;
@@ -516,28 +521,18 @@ export class Dashboard {
     else if (picked) this.pick(picked);
   }
 
-  private handleSearch(key: Key): void {
-    const edited = editLine(this.list.search, key, 200);
-    if (edited !== undefined) this.list.filter(edited);
-    else if (keyId(key) === "enter" || keyId(key) === "escape") this.searching = false;
-    else if (keyId(key) === "ctrl-c") {
-      this.searching = false;
-      this.list.filter("");
-    }
-  }
-
-  private handleFind(draft: string, key: Key): void {
-    const edited = editLine(draft, key, 200);
-    if (edited !== undefined) {
-      if (edited !== draft) this.hideSearchHint();
-      this.finding = edited;
-    } else if (keyId(key) === "enter" && draft.trim()) {
-      this.finding = null;
-      this.workspace.change(scoped(this.workspace.query, { view: View.Search, text: draft.trim() }));
-      this.list.filter("");
-    } else if (keyId(key) === "escape" || keyId(key) === "ctrl-c") {
-      this.hideSearchHint();
-      this.finding = null;
+  private handleSearch(box: ActiveSearchBox, id: string): void {
+    if (id === "escape" || id === "ctrl-c") {
+      this.issueSearch = undefined;
+      if (id === "ctrl-c" && box.kind === "filter") this.list.filter("");
+    } else if (id === "enter") {
+      const text = box.text.trim();
+      if (box.kind === "jira" && !text) return;
+      this.issueSearch = undefined;
+      if (box.kind === "jira") {
+        this.workspace.change(scoped(this.workspace.query, { view: View.Search, text }));
+        this.list.filter("");
+      }
     }
   }
 
@@ -583,8 +578,8 @@ export class Dashboard {
         return;
       }
       case "box":
-        if (this.searchBox()?.kind === "jira") this.finding ??= this.workspace.query.text;
-        else this.searching = true;
+        if (this.searchBox()?.kind === "jira") this.startFind();
+        else this.startFilter();
         return;
       case "choice": {
         const picked = this.picker?.choice(target.value);
@@ -631,7 +626,7 @@ export class Dashboard {
       layer.picker.move(delta);
     } else if (layer.kind === "modal") {
       layer.panel.scroll = Math.max(0, layer.panel.scroll + delta * WHEEL_LINES);
-    } else if (layer.kind === "list" || layer.kind === "filter" || layer.kind === "find") {
+    } else if (layer.kind === "list" || layer.kind === "search") {
       this.list.move(delta);
       this.syncPeek();
     }
@@ -692,9 +687,7 @@ export class Dashboard {
         this.clearSearch();
       else this.list.filter("");
     },
-    "/": () => {
-      this.searching = true;
-    },
+    "/": () => this.startFilter(),
     F: () => this.runAction("filter"),
     D: () => this.runAction("display"),
     z: () => this.list.foldSelected(),

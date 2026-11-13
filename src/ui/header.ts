@@ -21,7 +21,6 @@ const DESCRIPTIONS: Record<View, string> = {
   [View.Mine]: "Issues assigned to you",
   [View.Created]: "Issues you created",
   [View.Today]: "What needs attention across active sprints",
-  [View.All]: "Everyone's issues across projects",
   [View.Search]: "Issue titles, descriptions and comments",
 };
 
@@ -64,7 +63,7 @@ function issuesHeader(d: Dashboard): PageHeader {
     filters,
     actions: [{ label: "Display ▾", target: action("display") }],
   };
-  if (view === View.All && work.sprint()) {
+  if (view === View.Today && work.sprint()) {
     header.actions.unshift({ label: "Sprint brief", target: action("brief") });
   }
   if (pageOf(view).to === View.Mine) {

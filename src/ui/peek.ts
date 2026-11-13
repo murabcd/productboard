@@ -5,7 +5,7 @@ import { usDateTime } from "../dates";
 import { type DocBlock, textBlock } from "../jira/adf";
 import { type Comment, type Issue, issueProject } from "../jira/types";
 import { cells } from "../text";
-import type { Canvas } from "./canvas";
+import { Canvas } from "./canvas";
 import { type Line, layout, layoutCached } from "./document";
 import type { IssueRead } from "./issue-details";
 import { priorityMark, statusIcon, statusLabel } from "./status";
@@ -19,29 +19,27 @@ export interface Peek {
 
 type Row = (y: number) => void;
 
-/** Draw the peek into the area from (x, top) to the bottom row, exclusive.
- * The top bar stays put; everything under it scrolls with `peek.scroll`. */
-export function drawPeek(canvas: Canvas, peek: Peek, x: number, top: number, width: number, bottom: number): void {
-  for (let y = top; y < bottom; y++) {
-    canvas.paint(y, x, width, "panel");
-    canvas.put(y, x, "│", "line");
+/** The top bar stays put while the detail rows scroll. */
+export function drawPeek(peek: Peek, width: number, height: number): Canvas {
+  const canvas = new Canvas(width, height, "panel");
+  for (let y = 0; y < height; y++) {
+    canvas.put(y, 0, "│", "line");
+    canvas.mark(y, 0, width, { kind: "peek" });
   }
-  // The wheel over the panel scrolls it, not the list.
-  canvas.mark(top, x, width, { kind: "peek" });
-  for (let y = top + 1; y < bottom; y++) canvas.mark(y, x, width, { kind: "peek" });
-  const left = x + 2;
+  const left = 2;
   const room = width - 4;
-  canvas.put(top, left, "Issue peek", "muted");
+  canvas.put(0, left, "Issue peek", "muted");
 
   const rows = peekRows(canvas, peek, left, room);
-  const available = bottom - top - 2;
+  const available = height - 2;
   peek.scroll = Math.max(0, Math.min(peek.scroll, rows.length - available));
   rows.slice(peek.scroll, peek.scroll + available).forEach((row, i) => {
-    row(top + 2 + i);
+    row(2 + i);
   });
   const above = peek.scroll > 0;
   const below = peek.scroll + available < rows.length;
-  if (above || below) canvas.put(top, left + 12, above && below ? "↑↓ more" : above ? "↑ more" : "↓ more", "accent");
+  if (above || below) canvas.put(0, left + 12, above && below ? "↑↓ more" : above ? "↑ more" : "↓ more", "accent");
+  return canvas;
 }
 
 function peekRows(canvas: Canvas, peek: Peek, left: number, room: number): Row[] {
@@ -60,12 +58,13 @@ function peekRows(canvas: Canvas, peek: Peek, left: number, room: number): Row[]
   rows.push((y) => {
     const [icon, style] = statusIcon(issue);
     const status = ` ${icon} ${statusLabel(issue.status)} `;
-    canvas.put(y, left, status, style);
-    canvas.paint(y, left, cells(status), "raised");
-    if (!issue.priority) return;
+    const statusWidth = Math.min(cells(status), room);
+    canvas.put(y, left, status, style, statusWidth);
+    canvas.paint(y, left, statusWidth, "raised");
+    if (!issue.priority || statusWidth + 1 >= room) return;
     const priority = ` ${priorityMark(issue.priority)[0]} ${issue.priority} `;
-    const px = left + cells(status) + 1;
-    const fits = Math.min(cells(priority), room - cells(status) - 1);
+    const px = left + statusWidth + 1;
+    const fits = Math.min(cells(priority), room - statusWidth - 1);
     canvas.put(y, px, priority, "accent", fits);
     canvas.paint(y, px, fits, "raised");
   });

@@ -3,7 +3,7 @@
 import { localDay, usDate } from "../dates";
 import type { JiraClient } from "./client";
 import { jiraTime, LIST_FIELDS, openBlocker, type RawIssue, toIssue } from "./parse";
-import { type IssueQuery, jql, View } from "./query";
+import { type IssueQuery, jql } from "./query";
 import {
   BACKLOG_STATUS,
   BLOCKED_STATUS,
@@ -63,17 +63,16 @@ export async function today(
   query: IssueQuery,
   { now = Date.now(), signal }: { now?: number; signal?: AbortSignal } = {},
 ): Promise<{ issues: Issue[]; more: boolean }> {
-  const scope = { ...query, view: View.All, assignee: "" };
-  const open = { ...scope, status: "open" } satisfies IssueQuery;
-  const showOpen = scope.status !== "done";
+  const open = { ...query, status: "open" } satisfies IssueQuery;
+  const showOpen = query.status !== "done";
   const inSprint = "sprint in openSprints()";
   const options = { signal };
   const [sprintWork, flagged, mentioned, created, assigned] = await Promise.all([
     showOpen ? source.search(jql(open, inSprint), SPRINT_FIELDS, query.limit + 1, options) : [],
     showOpen ? source.search(jql(open, inSprint, "flagged = Impediment"), LIST_FIELDS, query.limit, options) : [],
-    source.mentions(jql(scope, "updated >= startOfDay(-1)"), query.limit, signal),
+    source.mentions(jql(query, "updated >= startOfDay(-1)"), query.limit, signal),
     source.search(
-      jql(scope, "(creator = currentUser() OR reporter = currentUser())", "updated >= startOfDay(-1)"),
+      jql(query, "(creator = currentUser() OR reporter = currentUser())", "updated >= startOfDay(-1)"),
       TIMED_FIELDS,
       query.limit,
       options,

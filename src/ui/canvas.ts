@@ -1,7 +1,7 @@
 /** A grid of terminal cells that knows how wide each character is. */
 
 import { cells, clip, splitGraphemes } from "../text";
-import type { Target } from "./input";
+import type { SearchEdit, Target } from "./input";
 
 /** The answering scanner: its head and fading trail, then its dimmed resting blocks. */
 export type ScannerStyle =
@@ -65,8 +65,10 @@ export interface Rect {
   height: number;
 }
 
-/** What OpenTUI draws in a reserved area: an image preview or the Agent text box. */
-export type Reserved = "image" | "composer";
+/** What OpenTUI draws in a reserved area. */
+export type Reserved = "image" | "composer" | "search";
+
+export type SearchArea = Rect & { surface: Surface };
 
 /** A clickable stretch of one row. */
 interface Region {
@@ -162,6 +164,24 @@ export class Canvas {
 
   reserved(name: Reserved): Rect | undefined {
     return this.reservations.get(name);
+  }
+
+  search(y: number, x: number, width: number, field: Pick<SearchEdit, "text" | "placeholder">, editing = true): void {
+    this.put(y, x, field.text || field.placeholder, field.text ? "text" : "muted", width);
+    if (editing) this.reserve("search", { left: x, top: y, width, height: 1 });
+  }
+
+  searchArea(offset?: Pick<Rect, "left" | "top">): SearchArea | undefined {
+    const area = this.reserved("search");
+    if (!area) return;
+    const cell = this.grid[area.top]?.[area.left];
+    if (!cell) return;
+    return {
+      ...area,
+      left: area.left + (offset?.left ?? 0),
+      top: area.top + (offset?.top ?? 0),
+      surface: cell.surface,
+    };
   }
 
   /** Make `width` cells of row `y` from column `x` clickable. */

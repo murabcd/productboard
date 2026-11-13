@@ -24,7 +24,11 @@ export const BODY_TOP = 8;
 export const FOOTER_ROWS = 2;
 /** The peek panel opens beside the list when the workspace is this wide. */
 export const PEEK_MIN_WIDTH = 100;
-export const peekWidth = (workspace: number): number => Math.min(56, Math.max(38, Math.floor(workspace * 0.38)));
+
+export function peekLayout(workspace: number) {
+  const columns = Math.min(56, Math.max(38, Math.floor(workspace * 0.38)));
+  return { left: workspace - columns, width: columns - 1 };
+}
 
 export const listRows = (width: number, height: number, box?: SearchBoxKind): number =>
   height - issueListLayout(width, box).top - FOOTER_ROWS;

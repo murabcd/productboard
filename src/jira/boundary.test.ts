@@ -113,9 +113,10 @@ describe("scopes", () => {
     expect(query).not.toContain("assignee");
   });
 
-  test("All issues is team-wide and the optional sprint filter narrows that scope", () => {
-    expect(jql(initialQuery)).toBe("statusCategory IS NOT EMPTY ORDER BY updated DESC");
-    expect(jql({ ...initialQuery, sprintFilter: 42 })).toBe("sprint = 42 ORDER BY updated DESC");
+  test("Team focus is team-wide and the optional sprint filter narrows that scope", () => {
+    const team = withView(initialQuery, View.Today);
+    expect(jql(team)).toBe("statusCategory IS NOT EMPTY ORDER BY updated DESC");
+    expect(jql({ ...team, sprintFilter: 42 })).toBe("sprint = 42 ORDER BY updated DESC");
     expect(jql({ ...initialQuery, view: View.Mine, sprintFilter: 42 })).toBe(
       "sprint = 42 AND assignee = currentUser() ORDER BY updated DESC",
     );
@@ -124,7 +125,7 @@ describe("scopes", () => {
   test("filters run on Jira and values are quoted", () => {
     const query = jql({
       ...initialQuery,
-      view: View.All,
+      view: View.Today,
       project: "EX",
       assignee: 'id" OR project=SECRET',
       status: "open",
@@ -132,7 +133,7 @@ describe("scopes", () => {
     expect(query).toContain('project = "EX"');
     expect(query).toContain('assignee = "id\\" OR project=SECRET"');
     expect(query).toContain("statusCategory != Done");
-    expect(jql({ ...initialQuery, view: View.All, assignee: "unassigned" })).toContain("assignee IS EMPTY");
+    expect(jql({ ...initialQuery, view: View.Today, assignee: "unassigned" })).toContain("assignee IS EMPTY");
   });
 
   test("Mentions reads recently updated issues and keeps project filters", () => {
@@ -149,11 +150,14 @@ describe("scopes", () => {
     expect(() => search("***")).toThrow("Type words");
   });
 
-  test("personal views drop the person filter; choosing a person leaves them", () => {
-    const team = { ...initialQuery, view: View.All, assignee: "someone", limit: 600 };
+  test("Assigned resets the assignee filter; choosing a person there opens Team focus", () => {
+    const team = { ...initialQuery, view: View.Today, assignee: "someone", limit: 600 };
     expect(withView(team, View.Mine)).toMatchObject({ assignee: "", limit: 200 });
     expect(withView(team, View.Created).assignee).toBe("someone");
-    expect(withAssignee({ ...initialQuery, view: View.Mine }, "other").view).toBe(View.All);
+    expect(withAssignee({ ...initialQuery, view: View.Mine }, "other")).toMatchObject({
+      view: View.Today,
+      assignee: "other",
+    });
   });
 });
 

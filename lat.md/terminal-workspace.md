@@ -69,7 +69,7 @@ A blank row separates the body from the footer, which shows counts, sync
 status, and shortcuts.
 
 [[src/ui/navigation.ts#NAV_GROUPS]] puts one blank row between Search and Agent
-and the rest of the sidebar pages. Sidebar icons use Nerd Font glyphs.
+and Inbox, My issues, and Team focus. Sidebar icons use Nerd Font glyphs.
 [[src/ui/navigation.ts#NAVIGATION]] flattens that order for number keys, Tab,
 and the command palette. On narrow panes, the same order appears as tabs
 below the title bar.
@@ -77,12 +77,16 @@ below the title bar.
 [[src/ui/header.ts#pageHeader]] supplies the title for the row shared with the
 app name and command palette shortcut. [[src/ui/header.ts#drawHeader]] draws
 the description and toolbar below, including tabs, filters, and page actions.
+Team focus offers Sprint brief when a sprint is selected.
 One blank row separates the description from the toolbar in both layouts.
 The Jira query field sits directly below the toolbar. Issue pages without
 that field leave one blank row below the toolbar.
-Opening Search with an empty query briefly shows an Enter hint in the same
-position as the loading messages. The first edit or the timeout dismisses it
-for that visit.
+Search and picker fields show a muted placeholder with a block cursor at the
+start. [[src/ui/search-input.ts#SearchInput]] handles text editing and pasting.
+The issue list has one active search field, either the Jira query or the
+filter over loaded issues.
+The active view or picker handles confirmation, dismissal, and list navigation.
+The results area is blank until a Jira query is submitted.
 
 [[src/ui/pickers.ts#PICKERS]] describes every picker in one table: boards,
 sprints, filters, models, the command palette and the rest. Each item carries
@@ -106,8 +110,9 @@ moving them up when needed to fit. They share a 60-column width with a
 one-column margin on narrow panes. Pickers share search, grouped choices,
 the current choice marker, and one-click selection.
 
-[[src/ui/peek.ts#drawPeek]] shows the selected issue beside the list. The
-dashboard loads details outside rendering. [[src/ui/issue-details.ts#IssueDetails]]
+[[src/ui/peek.ts#drawPeek]] shows the selected issue beside the list, with a
+one-column gap at the right edge of the workspace. The dashboard loads
+details outside rendering. [[src/ui/issue-details.ts#IssueDetails]]
 shares one read per issue key across Peek and full details. Both views observe
 the same result while open. A retry retains the last successful details until
 a new read settles. Completed reads are held by their open views, so the

@@ -21,7 +21,7 @@ import {
   MIN_HEIGHT,
   MIN_WIDTH,
   modalRows,
-  peekWidth,
+  peekLayout,
   sidebarWidth,
 } from "./layout";
 import { currentPage, NAV_GROUPS, NAVIGATION, type NavItem } from "./navigation";
@@ -176,14 +176,12 @@ function drawList(canvas: Canvas, d: Dashboard): void {
   const { height } = canvas;
   const work = d.workspace;
   const peek = d.peek;
-  const width = peek ? canvas.width - peekWidth(canvas.width) : canvas.width;
+  const drawer = peekLayout(canvas.width);
+  const width = peek ? drawer.left : canvas.width;
   const box = d.searchBox();
   const { input, status, top } = issueListLayout(d.width, box?.kind);
   if (box) {
-    const prefix = box.kind === "jira" ? "/ " : "Filter loaded  / ";
-    canvas.put(input, 2, prefix, box.kind === "jira" ? "muted" : "title");
-    const text = `${box.text}${box.editing ? "▏" : ""}`;
-    canvas.put(input, 2 + prefix.length, text, box.editing ? "accent" : "text");
+    canvas.search(input, 2, width - 4, box, box.editing);
     canvas.mark(input, 2, width - 4, { kind: "box" });
   }
   const { rows: shownRows, selected, count: shown, listed } = d.list.window(d.listCapacity());
@@ -245,7 +243,7 @@ function drawList(canvas: Canvas, d: Dashboard): void {
     canvas.put(y, x, mark, active ? "selection" : markStyle);
   });
 
-  if (peek) drawPeek(canvas, peek, width, top, canvas.width - width, height - FOOTER_ROWS);
+  if (peek) canvas.paste(drawPeek(peek, drawer.width, height - top - FOOTER_ROWS), drawer.left, top);
 
   const total = work.issues.length;
   let count = `${shown} ${shown === 1 ? "issue" : "issues"}`;
@@ -255,14 +253,13 @@ function drawList(canvas: Canvas, d: Dashboard): void {
   if (d.peekFits()) hints.unshift(["Space", d.peekOpen ? "Close peek" : "Peek", action("peek")]);
   if (peek) hints.unshift(["⇧↑↓", "Scroll peek"]);
   if (work.more) hints.unshift(["n", `Load ${PAGE} more`, action("load-more")]);
-  if (d.finding !== null || d.searching) hints = [];
+  if (box?.editing) hints = [];
   drawFooter(canvas, d, count, hints);
 }
 
 function emptyText(d: Dashboard): string {
   const work = d.workspace;
-  if (work.query.view === View.Search && !work.query.text)
-    return d.showSearchHint ? "Type words or an issue key, then press Enter…" : "";
+  if (work.query.view === View.Search && !work.query.text) return "";
   if (!work.current && work.pending)
     return work.query.view === View.Mentions ? "Looking for mentions…" : "Loading issues…";
   if (work.error) return "Could not load issues · r retry";

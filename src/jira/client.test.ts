@@ -241,12 +241,20 @@ describe("attachments", () => {
 });
 
 describe("search", () => {
+  test("recent issues use the workspace-independent query for the connection check", async () => {
+    const { client, requests } = fakeJira(() => json({ issues: [rawIssue("EX-1")], isLast: true }));
+    const recent = await client.recentIssues();
+    expect(recent.issues.map(({ key }) => key)).toEqual(["EX-1"]);
+    expect(recent.more).toBe(false);
+    expect(requests.map(({ body }) => body?.jql)).toEqual(["statusCategory IS NOT EMPTY ORDER BY updated DESC"]);
+  });
+
   test("follows page tokens and reports more beyond the limit", async () => {
     const { client, requests } = fakeJira((_url, body) => {
       if (!body?.nextPageToken) return json({ issues: [rawIssue("EX-1"), rawIssue("EX-2")], nextPageToken: "p2" });
       return json({ issues: [rawIssue("EX-3")], isLast: true });
     });
-    const snapshot = await client.snapshot({ ...initialQuery, view: View.All, limit: 2 });
+    const snapshot = await client.snapshot({ ...initialQuery, view: View.Mine, limit: 2 });
     expect(snapshot.issues.map((i) => i.key)).toEqual(["EX-1", "EX-2"]);
     expect(snapshot.more).toBe(true);
     expect(requests[0]?.body).toMatchObject({
@@ -382,7 +390,7 @@ describe("sprints", () => {
         isLast: true,
       }),
     );
-    const snapshot = await client.snapshot(withView(initialQuery, View.All));
+    const snapshot = await client.snapshot(withView(initialQuery, View.Mine));
     expect(snapshot.issues.map((issue) => issue.sprint)).toEqual(["Sprint 2", "Sprint 3", "Sprint 1", "", ""]);
     expect(requests[0]?.body?.fields).toContain(SPRINT_FIELD);
   });

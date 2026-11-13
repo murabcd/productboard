@@ -54,12 +54,14 @@ Run `productboard --login` to update your Jira sign-in or
 
 ## Features
 
-- Browse **All issues** and filter by project, assignee, or status.
+- Use **Team focus** to see blockers, overdue work, and issues that need an
+  owner. Filter by project, assignee, sprint, or status.
 - Use **Filter → Sprint** to narrow issue lists to one sprint, and **Any sprint**
   to clear the selection. Use **Sprint board** to switch which board supplies the
   sprint choices.
-- Find issues assigned to you or created by you, and search across Jira.
-- See blockers, overdue issues, and mentions in one place.
+- Find issues assigned to you or created by you. Open **Search**, type words or
+  an issue key, then press `Enter` to search across Jira.
+- Catch up on mentions in **Inbox**.
 - Read comments and preview image attachments in the terminal.
   Open issue peek with `Space` and scroll it with `Shift+↑` or `Shift+↓`.
 - [Eve](https://github.com/vercel/eve) powers the **Agent** tab.
@@ -68,7 +70,7 @@ Run `productboard --login` to update your Jira sign-in or
   - Stream replies from OpenAI or Anthropic in the terminal.
 
 The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,
-`3` for Inbox, `4` for My issues, `5` for Team focus, or `6` for All issues.
+`3` for Inbox, `4` for My issues, and `5` for Team focus.
 Use a Nerd Font in your terminal to display the sidebar icons.
 
 To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel

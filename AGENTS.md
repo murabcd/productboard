@@ -31,8 +31,8 @@ contract changes and run `bun run check:lat` after graph edits.
 2. Keep the last successful list visible during same-scope refreshes and
    failures. Discard late results when the user changes scope. Load boards and
    sprints in the background without delaying issue reads.
-3. Preserve the distinction between team-wide views and personal views. All
-   issues shows team work within the selected scope. Assigned uses
+3. Preserve the distinction between team-wide views and personal views. Team
+   focus surfaces work that needs attention within the selected scope. Assigned uses
    the assignee and Created uses Jira's creator field. Keep Jira-side filters
    in the query layer and the local text filter scoped to loaded rows.
 

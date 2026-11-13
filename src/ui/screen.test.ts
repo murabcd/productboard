@@ -45,7 +45,7 @@ async function start(
     catalog: mock(() => deferred<never>().promise),
     sprints: mock(() => deferred<never>().promise),
   });
-  work.query = { ...initialQuery, view: View.All };
+  work.query = { ...initialQuery, view: View.Mine };
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"]);
   const client = {
     site: "example.atlassian.net",
@@ -158,7 +158,8 @@ describe("OpenTUI shell", () => {
     expect(header).toContain("Connect an integration");
     expect(header?.indexOf("Connect an integration")).toBe(commands?.indexOf("Commands"));
     expect(header?.indexOf("esc")).toBe(commands?.indexOf("esc"));
-    expect(frame).toContain("Search▏");
+    expect(frame.split("\n").some((line) => line.trimEnd().endsWith("Search"))).toBe(true);
+    expect(setup.renderer.currentFocusedRenderable?.id).toBe("search-input");
     expect(frame).toContain("PRODUCTBOARD");
     expect(frame).toContain("Keep this draft");
     const dimmed = wordmark();
@@ -212,7 +213,7 @@ describe("OpenTUI shell", () => {
     expect(composer.visible).toBe(true);
     expect(composer.textColor.equals(RGBA.fromHex("#24292f"))).toBe(true);
     expect(composer.selectionBg?.equals(RGBA.fromHex("#dce3ec"))).toBe(true);
-    await clickSidebar(setup, "All issues");
+    await clickSidebar(setup, "My issues");
     await setup.renderOnce();
     expect(selectedBackground()?.equals(RGBA.fromHex("#dce3ec"))).toBe(true);
   });
@@ -259,8 +260,8 @@ describe("OpenTUI shell", () => {
     await setup.mockMouse.scroll(30, 8, "up");
     await setup.renderOnce();
     expect(dashboard.list.selected?.key).toBe("EX-1");
-    await clickSidebar(setup, "My issues");
-    expect(dashboard.workspace.query.view).toBe(View.Mine);
+    await clickSidebar(setup, "Team focus");
+    expect(dashboard.workspace.query.view).toBe(View.Today);
   });
 
   test("the wheel over the peek scrolls the peek, not the list", async () => {
@@ -305,11 +306,50 @@ describe("OpenTUI shell", () => {
     expect(dashboard.list.selected?.key).toBe("EX-1");
   });
 
-  test("search typing and pasting go to the search box", async () => {
+  test("Search focuses a blinking block cursor on the placeholder and edits a pasted query in place", async () => {
     const { setup, dashboard } = await start();
-    await setup.mockInput.typeText("/ex");
-    await settle();
-    expect(dashboard.list.search).toBe("ex");
+    await setup.mockInput.typeText("1");
+    await setup.renderOnce();
+    await setup.renderOnce();
+    const rows = setup.captureCharFrame().split("\n");
+    const field = rows[4] ?? "";
+    expect(field.slice(20).trim()).toBe("Search");
+    expect(rows[6]?.slice(20).trim()).toBe("");
+    expect(setup.renderer.currentFocusedRenderable?.id).toBe("search-input");
+    expect(setup.renderer.getCursorState()).toMatchObject({
+      x: field.indexOf("Search") + 1,
+      y: 5,
+      visible: true,
+      style: "block",
+      blinking: true,
+    });
+    await setup.mockInput.pasteBracketedText("EX-2");
+    setup.mockInput.pressKey("HOME");
+    setup.mockInput.pressKey("DELETE");
+    await setup.mockInput.typeText("F");
+    setup.mockInput.pressEnter();
+    expect(dashboard.workspace.query).toMatchObject({ view: View.Search, text: "FX-2" });
+    await setup.renderOnce();
+    expect(setup.renderer.currentFocusedRenderable).toBeNull();
+  });
+
+  test("local filter captures shortcut keys as text before the next render", async () => {
+    const { setup, dashboard } = await start();
+    const view = dashboard.workspace.query.view;
+    await setup.mockInput.typeText("/q2dn");
+    setup.mockInput.pressEnter();
+    expect(dashboard.workspace.query.view).toBe(view);
+    expect(dashboard.list.search).toBe("q2dn");
+    expect(dashboard.layer().kind).toBe("list");
+  });
+
+  test("reopening the local filter before a frame starts editing at the end", async () => {
+    const { setup, dashboard } = await start();
+    await setup.mockInput.typeText("/EX");
+    setup.mockInput.pressKey("HOME");
+    setup.mockInput.pressEnter();
+    await setup.mockInput.typeText("/-2");
+    expect(dashboard.list.search).toBe("EX-2");
   });
 
   test("the last tab stays visible and clickable at the minimum pane width", async () => {
@@ -317,10 +357,10 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("3");
     expect(dashboard.workspace.query.view).toBe(View.Mentions);
     await setup.renderOnce();
-    const allIssues = setup.captureCharFrame().split("\n")[1]?.indexOf(" All ") ?? -1;
-    expect(allIssues).toBeGreaterThan(0);
-    await setup.mockMouse.click(allIssues + 1, 1);
-    expect(dashboard.workspace.query.view).toBe(View.All);
+    const focus = setup.captureCharFrame().split("\n")[1]?.indexOf(" Focus ") ?? -1;
+    expect(focus).toBeGreaterThan(0);
+    await setup.mockMouse.click(focus + 1, 1);
+    expect(dashboard.workspace.query.view).toBe(View.Today);
   });
 
   test("i previews a single image directly and Escape hides it", async () => {
@@ -353,7 +393,7 @@ describe("OpenTUI shell", () => {
     const ask = mock<AgentBackend["ask"]>(async ({ onIssues, onText }) => {
       onText("Review ");
       await finish.promise;
-      onIssues(snapshot({ ...initialQuery, view: View.All }, ["EX-1"]).issues);
+      onIssues(issues("EX-1"));
       onText("EX-1 before release.");
     });
     const { setup, dashboard } = await start(100, { agent: fakeAgent(ask) });
@@ -478,7 +518,7 @@ describe("OpenTUI shell", () => {
         sprint: { id: 31, name: "Web - Sprint 31" },
         images: [{ filename, mediaType: "image/png", bytes: Buffer.from(PNG) }],
       });
-      expect(dashboard.workspace.query.view).toBe(View.All);
+      expect(dashboard.workspace.query.view).toBe(View.Mine);
       await setup.renderOnce();
       await setup.mockInput.pasteBracketedText("And across Jira?");
       setup.mockInput.pressEnter();
@@ -545,7 +585,7 @@ describe("OpenTUI shell", () => {
       prompt: expect.stringMatching(/^Review +OPS-91$/),
       sprint: undefined,
     });
-    expect(dashboard.workspace.query.view).toBe(View.All);
+    expect(dashboard.workspace.query.view).toBe(View.Mine);
     expect(dashboard.workspace.issues.map(({ key }) => key)).toEqual(local);
   });
 
@@ -592,13 +632,14 @@ describe("OpenTUI shell", () => {
     setup.mockInput.pressEnter();
     await settle();
     await setup.renderOnce();
-    expect(menu()).toContain("Search models");
+    expect(menu()).toMatch(/Search +esc/);
     expect(drawFrame(dashboard).reserved("composer")).toEqual(composer);
 
     await setup.mockInput.typeText("other");
     setup.mockInput.pressTab();
     await setup.renderOnce();
-    expect(menu()).toContain("Select reasoning");
+    expect(menu()).toMatch(/Search +esc/);
+    expect(dashboard.picker?.kind).toBe("reasoning");
     setup.mockInput.pressArrow("down");
     setup.mockInput.pressEnter();
     await setup.renderOnce();
@@ -618,7 +659,7 @@ describe("OpenTUI shell", () => {
     expect(commandColumn).toBeGreaterThanOrEqual(0);
     await setup.mockMouse.click(commandColumn, commandRow);
     await setup.renderOnce();
-    expect(menu()).toContain("Search models");
+    expect(menu()).toMatch(/Search +esc/);
     expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("");
     setup.mockInput.pressEscape();
     await Bun.sleep(30);
@@ -630,12 +671,12 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("select agent model");
     setup.mockInput.pressEnter();
     await setup.renderOnce();
-    expect(menu()).toContain("Search models");
+    expect(menu()).toMatch(/Search +esc/);
     expect(drawFrame(dashboard).reserved("composer")).toEqual(composer);
     setup.mockInput.pressEscape();
     await Bun.sleep(30);
     await setup.renderOnce();
-    expect(menu()).not.toContain("Search models");
+    expect(menu()).not.toMatch(/Search +esc/);
     await setup.mockInput.typeText(" draft");
     expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Keep 1/2 of this draft");
   });

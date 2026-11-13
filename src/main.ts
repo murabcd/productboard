@@ -3,7 +3,6 @@ import { EveAgent } from "./agent/eve";
 import { loadCredentials, readConfig, rememberBoard, rememberTheme } from "./auth";
 import { JiraClient } from "./jira/client";
 import { type Credentials, JiraHttp } from "./jira/http";
-import { initialQuery, View, withView } from "./jira/query";
 import { connectAgent, connectJira } from "./setup";
 import { Workspace } from "./state/workspace";
 import { clean } from "./text";
@@ -73,10 +72,9 @@ async function withJira(credentials: Credentials, use: (client: JiraClient) => P
 
 async function check(client: JiraClient): Promise<number> {
   const me = await client.myself();
-  const snapshot = await client.snapshot({ ...initialQuery, view: View.All });
-  const more = snapshot.more ? " · more available" : "";
+  const { issues, more } = await client.recentIssues();
   return say(
-    `Connected to ${client.site} as ${clean(me.displayName)} · ${snapshot.issues.length} issues loaded${more}`,
+    `Connected to ${client.site} as ${clean(me.displayName)} · ${issues.length} issues loaded${more ? " · more available" : ""}`,
   );
 }
 
@@ -91,7 +89,7 @@ async function dashboard(client: JiraClient, screen: Screen): Promise<number> {
   // Scheduled refreshes and retries; the screen redraws only when state changes.
   const timer = setInterval(() => workspace.tick(), 1000);
   try {
-    workspace.change(withView(workspace.query, View.Mentions));
+    workspace.refresh();
     workspace.loadCatalog();
     await screen.show(board);
   } finally {

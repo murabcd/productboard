@@ -1,4 +1,4 @@
-import { editLine, type Key } from "./input";
+import type { Key, SearchEdit } from "./input";
 import { rowOffset } from "./layout";
 
 export type PickerKind =
@@ -33,7 +33,6 @@ export interface PickerItem {
 }
 
 export interface PickerOptions {
-  placeholder?: string;
   filterChoices?: boolean;
   /** Repeat the current group heading when the first visible row is a choice. */
   keepGroupHeading?: boolean;
@@ -54,7 +53,6 @@ export class Picker<Kind extends string = PickerKind> {
   private offset = 0;
   private readonly tabs: string[];
   private tab: number;
-  readonly placeholder: string;
   readonly detailLayout: NonNullable<PickerOptions["detailLayout"]>;
   readonly placement: NonNullable<PickerOptions["placement"]>;
   readonly onFinish: PickerOptions["onFinish"];
@@ -68,7 +66,6 @@ export class Picker<Kind extends string = PickerKind> {
     private readonly choices: (query: string) => PickerItem[],
     options: PickerOptions = {},
   ) {
-    this.placeholder = options.placeholder ?? "Search";
     this.detailLayout = options.detailLayout ?? "trailing";
     this.placement = options.placement ?? "dialog";
     this.onFinish = options.onFinish;
@@ -81,6 +78,16 @@ export class Picker<Kind extends string = PickerKind> {
 
   get query(): string {
     return this.text;
+  }
+
+  get searchEdit(): SearchEdit {
+    return {
+      owner: this,
+      text: this.text,
+      placeholder: "Search",
+      limit: 120,
+      change: (text) => this.setQuery(text),
+    };
   }
 
   get composerHeaderRows(): number {
@@ -163,11 +170,6 @@ export class Picker<Kind extends string = PickerKind> {
   }
 
   handle(key: Key, capacity: number): PickerItem | "dismiss" | undefined {
-    const edited = editLine(this.text, key, 120);
-    if (edited !== undefined) {
-      this.setQuery(edited);
-      return;
-    }
     if ("text" in key) return;
     switch (key.name) {
       case "escape":

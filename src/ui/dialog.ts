@@ -40,8 +40,7 @@ export function pickerDialog(
   const { panel: canvas } = frame;
   const inset = DIALOG_INSET;
   const room = canvas.width - inset * 2;
-  const search = `${picker.query || picker.placeholder}▏`;
-  canvas.put(3, inset, search, picker.query ? "text" : "muted", room);
+  canvas.search(3, inset, room, picker.searchEdit);
   drawPickerRows(canvas, picker, shown, 5, inset, accentSelection);
 
   const footer = height - 2;
@@ -68,8 +67,7 @@ export function drawComposerMenu(
   const panel = new Canvas(width, headerRows + shown.length + Number(!!message), commands ? "raised" : "panel");
   for (let y = 0; y < panel.height; y++) panel.mark(y, 0, width, { kind: "dialog" });
   if (headerRows) {
-    const text = picker.query || picker.placeholder;
-    panel.put(0, 2, `${text}▏`, picker.query ? "text" : "muted", width - 8);
+    panel.search(0, 2, width - 8, picker.searchEdit);
     panel.put(0, width - 5, "esc", "muted");
     panel.mark(0, width - 5, 3, { kind: "dismiss" });
   }

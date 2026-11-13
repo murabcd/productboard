@@ -1,7 +1,6 @@
 /** Each view owns its server-side Jira scope. */
 
 export const View = {
-  All: 1,
   Mine: 2,
   Created: 3,
   Today: 4,
@@ -10,10 +9,10 @@ export const View = {
 } as const;
 export type View = (typeof View)[keyof typeof View];
 
-/** Views that always target the signed-in user. */
-export const isPersonal = (view: View): boolean => view === View.Mine || view === View.Today;
-
 export const PAGE = 200;
+const UPDATED_ORDER = "ORDER BY updated DESC";
+/** Jira Cloud requires a filter. Every issue has a status category. */
+export const RECENT_ISSUES_JQL = `statusCategory IS NOT EMPTY ${UPDATED_ORDER}`;
 /** Jira search cannot find @-mentions, so Mentions reads the comments of
  * issues updated within this many days. */
 export const MENTION_DAYS = 14;
@@ -34,7 +33,7 @@ export interface IssueQuery {
 }
 
 export const initialQuery: IssueQuery = {
-  view: View.All,
+  view: View.Mentions,
   sprintFilter: null,
   project: "",
   assignee: "",
@@ -51,12 +50,12 @@ export function scoped(query: IssueQuery, changes: ScopeChanges): IssueQuery {
 }
 
 export function withView(query: IssueQuery, view: View): IssueQuery {
-  return scoped(query, { view, assignee: isPersonal(view) ? "" : query.assignee });
+  return scoped(query, { view, assignee: view === View.Mine ? "" : query.assignee });
 }
 
-/** Choosing a person from a personal view moves to everyone's tasks. */
+/** Assigned is always scoped to you; use Team focus to filter by assignee. */
 export function withAssignee(query: IssueQuery, assignee: string): IssueQuery {
-  const view = assignee && isPersonal(query.view) ? View.All : query.view;
+  const view = assignee && query.view === View.Mine ? View.Today : query.view;
   return scoped(query, { view, assignee });
 }
 
@@ -80,7 +79,7 @@ export const sameQuery = (a: IssueQuery, b: IssueQuery): boolean => sameScope(a,
 export function jql(query: IssueQuery, ...extra: string[]): string {
   const terms = [...extra];
   if (query.sprintFilter !== null) terms.push(`sprint = ${query.sprintFilter}`);
-  if (isPersonal(query.view)) terms.push("assignee = currentUser()");
+  if (query.view === View.Mine) terms.push("assignee = currentUser()");
   if (query.view === View.Created) terms.push("creator = currentUser()");
   if (query.view === View.Mentions) terms.push(`updated >= -${MENTION_DAYS}d`);
   if (query.view === View.Search) terms.push(textTerm(query.text));
@@ -90,9 +89,7 @@ export function jql(query: IssueQuery, ...extra: string[]): string {
   }
   if (query.status === "open") terms.push("statusCategory != Done");
   if (query.status === "done") terms.push("statusCategory = Done");
-  // Jira Cloud rejects unbounded queries; every issue has a category.
-  if (terms.length === 0) terms.push("statusCategory IS NOT EMPTY");
-  return `${terms.join(" AND ")} ORDER BY updated DESC`;
+  return terms.length ? `${terms.join(" AND ")} ${UPDATED_ORDER}` : RECENT_ISSUES_JQL;
 }
 
 const ISSUE_KEY = /^[A-Z][A-Z0-9_]*-\d+$/i;
