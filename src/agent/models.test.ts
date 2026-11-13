@@ -29,7 +29,7 @@ describe("Agent models", () => {
         ],
       });
     });
-    const models = await listModels({ openai: "sk-o", anthropic: "sk-a" }, fetcher);
+    const models = await listModels({ keys: { openai: "sk-o", anthropic: "sk-a" } }, fetcher);
     // Only GPT-6 and Claude 5 chat models.
     expect(models.map(({ provider, model }) => `${provider}/${model}`)).toEqual([
       "openai/gpt-6.1-terra",
@@ -46,11 +46,11 @@ describe("Agent models", () => {
     const fetcher = fakeFetch(async (input: string | URL | Request) =>
       String(input).includes("openai.com") ? json({}, 401) : json({ data: [] }),
     );
-    expect(await listModels({ openai: "bad", anthropic: "sk-a" }, fetcher)).toEqual([]);
-    expect(listModels({ openai: "bad" }, fetcher)).rejects.toThrow(
+    expect(await listModels({ keys: { openai: "bad", anthropic: "sk-a" } }, fetcher)).toEqual([]);
+    await expect(listModels({ keys: { openai: "bad" } }, fetcher)).rejects.toThrow(
       "Models unavailable: could not list models (HTTP 401)",
     );
-    expect(await listModels({}, fetcher)).toEqual([]);
+    expect(await listModels({ keys: {} }, fetcher)).toEqual([]);
   });
 
   test("model IDs read as names", () => {

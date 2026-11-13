@@ -36,8 +36,8 @@ export interface PickerOptions {
   filterChoices?: boolean;
   /** Repeat the current group heading when the first visible row is a choice. */
   keepGroupHeading?: boolean;
-  /** Detail text sits at the trailing edge, beside the label, or in a fixed column. */
-  detailLayout?: "trailing" | "inline" | number;
+  /** Detail text sits at the trailing edge or in a fixed column. */
+  detailLayout?: "trailing" | number;
   placement?: "dialog" | "completion" | "composer";
   onFinish?: () => void;
   /** Tab cycles these choice states; "all" shows every choice. */

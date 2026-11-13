@@ -88,7 +88,6 @@ function drawPickerRows(
   const { detailLayout } = picker;
   const room = width - inset * 2;
   const labelColumn = inset + 1;
-  const inlineDetails = detailLayout === "inline";
   const fixedColumn = typeof detailLayout === "number" ? detailLayout : undefined;
   const selected = picker.selected?.value;
   const selectedLabel = accentSelection ? "onAccent" : "selectedBold";
@@ -98,7 +97,7 @@ function drawPickerRows(
     const y = top + i;
     if (!row) return;
     if ("heading" in row) {
-      canvas.put(y, inlineDetails ? labelColumn : inset, row.heading, "accentBold", room);
+      canvas.put(y, picker.placement === "composer" ? labelColumn : inset, row.heading, "accentBold", room);
       return;
     }
     const { choice } = row;
@@ -106,16 +105,8 @@ function drawPickerRows(
     if (active) canvas.paint(y, 1, width - 2, accentSelection ? "accent" : "selected");
     if (choice.current) canvas.put(y, inset - 1, "●", active && accentSelection ? "onAccent" : "accent");
     const trailing = width - inset - Math.min(cells(choice.detail), Math.floor(room / 2));
-    const inline = inlineDetails && choice.detail.length > 0;
-    let detailLeft = fixedColumn ?? trailing;
-    if (inline) detailLeft = Math.min(trailing, labelColumn + cells(choice.label) + 1);
-    canvas.put(
-      y,
-      labelColumn,
-      choice.label,
-      active ? selectedLabel : "text",
-      detailLeft - labelColumn - (inline ? 1 : 2),
-    );
+    const detailLeft = fixedColumn ?? trailing;
+    canvas.put(y, labelColumn, choice.label, active ? selectedLabel : "text", detailLeft - labelColumn - 2);
     canvas.put(y, detailLeft, choice.detail, active ? selectedDetail : "muted", width - inset - detailLeft);
     canvas.mark(y, 1, width - 2, { kind: "choice", value: choice.value });
   });

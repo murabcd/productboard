@@ -11,6 +11,7 @@ export interface AgentBackend {
   readonly recentModels: readonly ModelRef[];
   models(): Promise<AgentModel[]>;
   close(): Promise<void>;
+  discardThread(thread: string): void;
   /** Answer with another model or reasoning from now on. */
   use(choice: AgentChoice, change: AgentChoiceChange): Promise<void>;
   ask(request: {
@@ -120,6 +121,14 @@ export class AgentChat {
     if (this.current.turns.length === 0) return;
     this.active = conversation();
     this.threads.push(this.active);
+  }
+
+  clear(): void {
+    const thread = this.current;
+    this.stop();
+    this.backend?.discardThread(thread.id);
+    this.active = conversation();
+    this.threads[this.threads.indexOf(thread)] = this.active;
   }
 
   stop(): void {

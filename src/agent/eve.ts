@@ -9,6 +9,7 @@ import {
   type AgentChoiceChange,
   agentChoice,
   agentKeyName,
+  chatgptConnected,
   loadAgentKey,
   type ModelRef,
   recentAgentModels,
@@ -16,6 +17,7 @@ import {
 } from "../auth";
 import type { JiraClient } from "../jira/client";
 import type { AgentBackend } from "./chat";
+import { chatgptModels } from "./chatgpt";
 import { openJiraSearch } from "./jira-search";
 import { type AgentModel, listModels, PROVIDER_NAMES } from "./models";
 
@@ -34,13 +36,15 @@ interface EveProcess {
 
 interface EveConfig {
   choice: AgentChoice;
-  apiKey: string;
+  credentials: NodeJS.ProcessEnv;
 }
 
 interface EveDependencies {
   read: typeof agentChoice;
   recent: typeof recentAgentModels;
   key: typeof loadAgentKey;
+  chatgpt: typeof chatgptConnected;
+  subscriptionModels: typeof chatgptModels;
   remember: typeof rememberAgentChoice;
   start: typeof openEveProcess;
 }
@@ -49,9 +53,22 @@ const localDependencies: EveDependencies = {
   read: agentChoice,
   recent: recentAgentModels,
   key: loadAgentKey,
+  chatgpt: chatgptConnected,
+  subscriptionModels: chatgptModels,
   remember: rememberAgentChoice,
   start: openEveProcess,
 };
+
+function configFor(choice: AgentChoice, deps: EveDependencies): EveConfig | undefined {
+  const { provider } = choice;
+  if (provider === "chatgpt") return deps.chatgpt() ? { choice, credentials: {} } : undefined;
+  const key = deps.key(provider);
+  if (key) return { choice, credentials: { [agentKeyName(provider)]: key } };
+}
+
+function retireSession(session: ClientSession): void {
+  void session.reset({ signal: AbortSignal.timeout(1500) }).catch(() => {});
+}
 
 export class EveAgent implements AgentBackend {
   private active?: EveProcess;
@@ -67,9 +84,8 @@ export class EveAgent implements AgentBackend {
   }
 
   static create(jira: Pick<JiraClient, "search">, deps = localDependencies): EveAgent | undefined {
-    const choice = deps.read();
-    const key = deps.key(choice.provider);
-    return key ? new EveAgent(jira, { choice, apiKey: key }, deps) : undefined;
+    const config = configFor(deps.read(), deps);
+    return config ? new EveAgent(jira, config, deps) : undefined;
   }
 
   get current(): AgentChoice {
@@ -81,16 +97,34 @@ export class EveAgent implements AgentBackend {
   }
 
   models(): Promise<AgentModel[]> {
-    return listModels({ openai: this.deps.key("openai"), anthropic: this.deps.key("anthropic") });
+    return listModels({
+      keys: { openai: this.deps.key("openai"), anthropic: this.deps.key("anthropic") },
+      subscription: this.deps.chatgpt() ? () => this.subscriptionModels() : undefined,
+    });
+  }
+
+  private async subscriptionModels(): Promise<AgentModel[]> {
+    const entries = await this.deps.subscriptionModels();
+    const models = entries.map(({ model }) => model);
+    const { provider, model } = this.current;
+    if (provider === "chatgpt" && !models.includes(model)) models.unshift(model);
+    return models.map((model) => ({ provider: "chatgpt", model, created: 0 }));
   }
 
   /** Restart Eve with the saved model and reasoning for subsequent turns. */
   async use(choice: AgentChoice, change: AgentChoiceChange): Promise<void> {
-    const key = this.deps.key(choice.provider);
-    if (!key) throw new Error(`No ${PROVIDER_NAMES[choice.provider]} API key: run productboard --agent-login`);
+    const config = configFor(choice, this.deps);
+    if (!config) throw new Error(`Connect ${PROVIDER_NAMES[choice.provider]} with productboard --agent-login.`);
     this.recent = this.deps.remember(choice, change);
-    this.config = { choice, apiKey: key };
+    this.config = config;
     await this.close();
+  }
+
+  discardThread(thread: string): void {
+    const sessions = this.active?.sessions;
+    const session = sessions?.get(thread);
+    sessions?.delete(thread);
+    if (session) retireSession(session);
   }
 
   async ask({ thread, prompt, sprint, images, signal, history, onIssues, onText }: Ask): Promise<void> {
@@ -142,12 +176,15 @@ export class EveAgent implements AgentBackend {
     } catch (error) {
       if (session) {
         evict();
-        void session.reset({ signal: AbortSignal.timeout(1500) }).catch(() => {});
+        retireSession(session);
       }
-      throw new Error(
-        deadline.aborted ? "Agent timed out. Try again." : "Agent could not reply. Check the provider key and model.",
-        { cause: error },
-      );
+      const retry =
+        config.choice.provider === "chatgpt"
+          ? "Check your model and ChatGPT sign-in with codex login status."
+          : "Check the provider key and model.";
+      throw new Error(deadline.aborted ? "Agent timed out. Try again." : `Agent could not reply. ${retry}`, {
+        cause: error,
+      });
     } finally {
       stop.removeEventListener("abort", evict);
     }
@@ -177,7 +214,7 @@ export class EveAgent implements AgentBackend {
   }
 }
 
-function openEveProcess(jira: Pick<JiraClient, "search">, { choice, apiKey }: EveConfig): EveProcess {
+function openEveProcess(jira: Pick<JiraClient, "search">, { choice, credentials }: EveConfig): EveProcess {
   const search = openJiraSearch(jira);
   const token = randomBytes(32).toString("hex");
   const child = spawn(
@@ -189,7 +226,7 @@ function openEveProcess(jira: Pick<JiraClient, "search">, { choice, apiKey }: Ev
       env: {
         ...process.env,
         ...search.env,
-        [agentKeyName(choice.provider)]: apiKey,
+        ...credentials,
         PRODUCTBOARD_EVE_TOKEN: token,
         PRODUCTBOARD_AGENT_PROVIDER: choice.provider,
         PRODUCTBOARD_AGENT_MODEL: choice.model,

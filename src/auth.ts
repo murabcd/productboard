@@ -11,7 +11,9 @@ const KEYCHAIN_SERVICE = "productboard";
 const CONFIG_PATH = join(homedir(), ".config", "productboard", "config.json");
 export const SITE_PATTERN = /^[a-z0-9-]+\.atlassian\.net$/;
 
-export const AGENT_PROVIDERS = ["openai", "anthropic"] as const;
+export const API_KEY_PROVIDERS = ["openai", "anthropic"] as const;
+export type ApiKeyProvider = (typeof API_KEY_PROVIDERS)[number];
+export const AGENT_PROVIDERS = [...API_KEY_PROVIDERS, "chatgpt"] as const;
 export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
 
 /** How long a model thinks before answering, as Eve names the levels. */
@@ -39,6 +41,7 @@ const Config = z.object({
   /** The board chosen last, opened again on the next start. */
   board: z.string().optional(),
   agent: AgentChoice.optional(),
+  chatgptConnected: z.boolean().optional(),
   recentAgentModels: z.array(ModelRef).optional().catch(undefined),
   theme: z.enum(THEME_IDS).optional().catch(undefined),
 });
@@ -105,10 +108,14 @@ const AGENT_SERVICE = "productboard-agent";
 
 export function agentProviderOverride(): AgentProvider | undefined {
   const provider = process.env.PRODUCTBOARD_AGENT_PROVIDER;
-  if (provider) return provider === "anthropic" ? "anthropic" : "openai";
+  if (provider) return AGENT_PROVIDERS.find((candidate) => candidate === provider) ?? "openai";
 }
 
-const DEFAULT_MODELS: Record<AgentProvider, string> = { openai: "gpt-6-luna", anthropic: "claude-sonnet-5-5" };
+const DEFAULT_MODELS: Record<AgentProvider, string> = {
+  openai: "gpt-6-luna",
+  anthropic: "claude-sonnet-5-5",
+  chatgpt: "gpt-6-luna-fast",
+};
 
 /** The model Agent starts with: the environment's, else the one chosen last,
  * else the provider's default; and the reasoning chosen last, else medium. */
@@ -137,6 +144,21 @@ export function recentAgentModels(): readonly ModelRef[] {
   return readConfig()?.recentAgentModels?.slice(0, RECENT_MODEL_LIMIT) ?? [];
 }
 
+export function chatgptConnected(): boolean {
+  return agentProviderOverride() === "chatgpt" || readConfig()?.chatgptConnected === true;
+}
+
+export function rememberChatGPT(model: string): void {
+  const config = readConfig();
+  if (!config) throw new Error("Connect Jira first with productboard --login.");
+  const choice = choiceForProvider("chatgpt", config.agent);
+  writeConfig({
+    ...config,
+    agent: config.agent?.provider === "chatgpt" ? choice : { ...choice, model },
+    chatgptConnected: true,
+  });
+}
+
 export function promoteRecentModel({ provider, model }: ModelRef, recent: readonly ModelRef[]): ModelRef[] {
   return [{ provider, model }, ...recent.filter((entry) => entry.provider !== provider || entry.model !== model)].slice(
     0,
@@ -154,26 +176,27 @@ export function rememberAgentChoice(agent: AgentChoice, change: AgentChoiceChang
   return updated;
 }
 
-export function agentKeyName(provider: AgentProvider): "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" {
+export function agentKeyName(provider: ApiKeyProvider): "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" {
   return provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
 }
 
-export function loadAgentKey(provider: AgentProvider): string | undefined {
+export function loadAgentKey(provider: ApiKeyProvider): string | undefined {
   return process.env[agentKeyName(provider)]?.trim() || readToken(AGENT_SERVICE, provider);
 }
 
-/** On first run, reuse the selected provider or adopt another saved key if the provider is unpinned. */
-export function reuseAgentKey(): boolean {
+/** On first run, reuse the selected connection or adopt another saved key if the provider is unpinned. */
+export function reuseAgentConnection(): boolean {
   const { provider } = agentChoice();
+  if (provider === "chatgpt") return readConfig()?.chatgptConnected === true;
   if (loadAgentKey(provider)) return true;
   if (agentProviderOverride()) return false;
-  const alternate = AGENT_PROVIDERS.find((candidate) => candidate !== provider && loadAgentKey(candidate));
+  const alternate = API_KEY_PROVIDERS.find((candidate) => candidate !== provider && loadAgentKey(candidate));
   if (!alternate) return false;
   rememberAgentProvider(alternate);
   return true;
 }
 
-export function saveAgentKey(provider: AgentProvider, token: string): void {
+export function saveAgentKey(provider: ApiKeyProvider, token: string): void {
   if (!TOKEN_PATTERN.test(token)) throw new Error("That doesn't look like a provider API key");
   saveToken(AGENT_SERVICE, provider, `Productboard Agent (${provider})`, token);
   rememberAgentProvider(provider);

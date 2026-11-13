@@ -9,7 +9,7 @@ import { deferred, fakeAgent, rawComment, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key } from "./input";
-import { pickerRows } from "./layout";
+import { pickerRows, sidebarWidth } from "./layout";
 import { AGENT, NAVIGATION, navKey } from "./navigation";
 import { detailBlocks } from "./panel";
 import { Picker } from "./picker";
@@ -91,6 +91,21 @@ describe("dashboard", () => {
     expect(activeSearch(dashboard)).toBeUndefined();
     dashboard.handle({ text: "f" });
     expect(activeSearch(dashboard)?.text).toBe("оплата"); // edits the last search
+  });
+
+  test("global Jira search takes you from Agent to the search results", () => {
+    const { dashboard, work } = setup(fakeAgent(async () => {}));
+    dashboard.openAgent();
+    const draft = dashboard.agent.chat.current.draft;
+    draft.replace(["Keep this draft"]);
+    dashboard.handle({ name: "commands" });
+    edit(dashboard, "Search all of Jira");
+    dashboard.handle(ENTER);
+    edit(dashboard, "roadmap");
+    dashboard.handle(ENTER);
+    expect(dashboard.layer().kind).toBe("list");
+    expect(work.query).toMatchObject({ view: View.Search, text: "roadmap" });
+    expect(draft.parts).toEqual(["Keep this draft"]);
   });
 
   test("searches type into a box above the list, like a picker", () => {
@@ -678,6 +693,34 @@ describe("concept layout", () => {
       { choice: { label: "Claude Fable 5.2" } },
       { choice: { label: "Claude Haiku 5.5" } },
     ]);
+  });
+
+  test("OpenAI groups both connections and marks the subscription choice on the right", async () => {
+    const agent = fakeAgent(async () => {});
+    agent.models = async () => [
+      { provider: "openai", model: "test-model", created: 2 },
+      { provider: "chatgpt", model: "test-model", created: 0 },
+    ];
+    const { dashboard } = setup(agent);
+    dashboard.openPicker("model");
+    await settle();
+    const canvas = draw(dashboard, 120, 30);
+    const { left, transcript } = dashboard.agentLayout;
+    const start = sidebarWidth(canvas.width) + left;
+    const rows = Array.from({ length: dashboard.agentLayout.boxTop }, (_, y) =>
+      canvas.text(y).slice(start, start + transcript.room),
+    );
+    const heading = rows.findIndex((row) => row.trim() === "OpenAI");
+    expect(rows.slice(heading, heading + 3).map((row) => row.trim().replace(/ +/g, " "))).toEqual([
+      "OpenAI",
+      "● Test Model",
+      "Test Model Subscription",
+    ]);
+    expect(rows[heading + 2]?.indexOf("Subscription")).toBe(transcript.room - 1 - "Subscription".length);
+    edit(dashboard, "subscription");
+    dashboard.handle(ENTER);
+    await settle();
+    expect(agent.choice).toMatchObject({ provider: "chatgpt", model: "test-model" });
   });
 
   test("Recent lists confirmed picks without sending a message and search puts them back under providers", async () => {

@@ -30,24 +30,31 @@ interface Field<Result> {
   submit(value: string, signal: AbortSignal): Result | Promise<Result>;
 }
 
+interface Confirmation<Result> {
+  hint: string;
+  run(signal: AbortSignal): Result | Promise<Result>;
+}
+
 interface Choice<Result> {
   value: Result;
   label: string;
   detail: string;
 }
 
-export type SetupPrompt<Result> = { title: string } & ({ field: Field<Result> } | { choices: Choice<Result>[] });
+export type SetupPrompt<Result> = { title: string } & (
+  | { field: Field<Result> }
+  | { confirm: Confirmation<Result> }
+  | { choices: Choice<Result>[] }
+);
 
-interface FieldEntry<Result> {
+type Entry<Result> = {
   title: string;
-  field: Field<Result>;
-  value: string;
   status: { kind: "editing"; error?: string } | { kind: "submitting" };
-}
+} & ({ field: Field<Result>; value: string } | { confirm: Confirmation<Result> });
 
 export class SetupView<Result> extends Renderable {
   private readonly theme: ReturnType<typeof resolveTheme>;
-  private readonly dialog: FieldEntry<Result> | Picker<"provider">;
+  private readonly dialog: Entry<Result> | Picker<"provider">;
   private readonly abort = new AbortController();
   private readonly search: SearchInput;
   private frame?: DialogFrame;
@@ -83,6 +90,8 @@ export class SetupView<Result> extends Renderable {
     if ("field" in prompt) {
       const { field, title } = prompt;
       this.dialog = { title, field, value: field.value ?? "", status: { kind: "editing" } };
+    } else if ("confirm" in prompt) {
+      this.dialog = { ...prompt, status: { kind: "editing" } };
     } else {
       const items = prompt.choices.map(({ value, label, detail }, index) => ({
         value: String(index),
@@ -133,7 +142,7 @@ export class SetupView<Result> extends Renderable {
       this.requestRender();
       return;
     }
-    for (const key of textKeys(line)) this.handle(key);
+    if ("field" in this.dialog) for (const key of textKeys(line)) this.handle(key);
   }
 
   dismiss(value?: Result): void {
@@ -152,22 +161,28 @@ export class SetupView<Result> extends Renderable {
       if (picked && picked !== "dismiss") picked.run();
     } else if (dialog.status.kind === "editing") {
       if (id === "enter") void this.submit(dialog);
-      const value = editLine(dialog.value, key, 2048);
-      if (value !== undefined) {
-        dialog.value = value;
-        dialog.status = { kind: "editing" };
+      else if ("field" in dialog) {
+        const value = editLine(dialog.value, key, 2048);
+        if (value !== undefined) {
+          dialog.value = value;
+          dialog.status = { kind: "editing" };
+        }
       }
     }
     if (!this.abort.signal.aborted) this.requestRender();
   }
 
-  private async submit(entry: FieldEntry<Result>): Promise<void> {
-    const { field } = entry;
+  private async submit(entry: Entry<Result>): Promise<void> {
     entry.status = { kind: "submitting" };
-    const value = entry.value.trim();
-    if (field.secret) entry.value = "";
     try {
-      const result = await field.submit(value, this.abort.signal);
+      const { signal } = this.abort;
+      if ("confirm" in entry) {
+        this.dismiss(await entry.confirm.run(signal));
+        return;
+      }
+      const value = entry.value.trim();
+      if (entry.field.secret) entry.value = "";
+      const result = await entry.field.submit(value, signal);
       this.dismiss(result);
     } catch (error) {
       if (this.abort.signal.aborted) return;
@@ -192,7 +207,7 @@ export class SetupView<Result> extends Renderable {
         ? pickerDialog(buffer, this.dialog, "No integrations found", {
             accentSelection: true,
           })
-        : this.fieldPanel(buffer, this.dialog);
+        : this.entryPanel(buffer, this.dialog);
     this.frame = frame;
     drawCanvas(buffer, frame.panel, this.theme, frame);
     this.search.place(
@@ -202,25 +217,32 @@ export class SetupView<Result> extends Renderable {
     );
   }
 
-  private fieldPanel(viewport: Pick<OptimizedBuffer, "width" | "height">, entry: FieldEntry<Result>): DialogFrame {
-    const { field, status } = entry;
+  private entryPanel(viewport: Pick<OptimizedBuffer, "width" | "height">, entry: Entry<Result>): DialogFrame {
+    const { status } = entry;
+    const field = "field" in entry ? entry.field : undefined;
+    const hint = "confirm" in entry ? entry.confirm.hint : entry.field.hint;
     const error = status.kind === "editing" ? status.error : undefined;
     const inset = DIALOG_INSET;
-    const frame = dialogPanel(viewport, 7 + Number(!!field.hint) + Number(!!field.url) + Number(!!error), entry.title);
+    const rows = 6 + Number(!!field) + Number(!!hint) + Number(!!field?.url) + Number(!!error);
+    const frame = dialogPanel(viewport, rows, entry.title);
     const { panel } = frame;
     const room = panel.width - inset * 2;
     let row = 3;
-    if (field.hint) panel.put(row++, inset, field.hint, "muted", room);
-    if (field.url) panel.put(row++, inset, field.url, "link", room);
-    const value = field.secret ? "•".repeat(entry.value.length) : entry.value;
-    panel.put(row++, inset, value ? `${value.slice(1 - room)}▏` : `${field.label}▏`, value ? "text" : "muted", room);
+    if (hint) panel.put(row++, inset, hint, "muted", room);
+    if (field?.url) panel.put(row++, inset, field.url, "link", room);
+    if ("field" in entry) {
+      const value = entry.field.secret ? "•".repeat(entry.value.length) : entry.value;
+      const label = value ? `${value.slice(1 - room)}▏` : `${entry.field.label}▏`;
+      panel.put(row++, inset, label, value ? "text" : "muted", room);
+    }
     if (error) panel.put(row++, inset, error, "error", room);
     if (status.kind === "submitting") {
       panel.put(row + 1, inset, "Connecting…", "muted", room);
     } else {
-      panel.put(row + 1, inset, "submit", "text");
-      panel.put(row + 1, inset + 7, "enter", "muted");
-      if (field.url) {
+      const action = field ? "submit" : "connect";
+      panel.put(row + 1, inset, action, "text");
+      panel.put(row + 1, inset + action.length + 1, "enter", "muted");
+      if (field?.url) {
         panel.put(row + 1, inset + 15, "open", "text");
         panel.put(row + 1, inset + 20, "ctrl+o", "muted");
       }

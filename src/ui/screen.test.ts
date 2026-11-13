@@ -122,6 +122,23 @@ describe("OpenTUI shell", () => {
     expect(setup.renderer.root.getRenderable("setup")).toBeUndefined();
   });
 
+  test("a connection confirmation ignores pasted text and runs once on Enter", async () => {
+    setup = await createTestRenderer({ width: 100, height: 30 });
+    const screen = useRenderer(setup.renderer, async () => {});
+    const pending = deferred<string>();
+    const run = mock(() => pending.promise);
+    const result = screen.prompt({ title: "Connect ChatGPT", confirm: { hint: "Sign in first", run } }, "vercel-dark");
+    await setup.mockInput.pasteBracketedText("ignored");
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toMatch(/connect +enter/);
+    expect(setup.captureCharFrame()).not.toContain("ignored");
+    setup.mockInput.pressEnter();
+    setup.mockInput.pressEnter();
+    expect(run).toHaveBeenCalledTimes(1);
+    pending.resolve("chatgpt");
+    expect(await result).toBe("chatgpt");
+  });
+
   test("Connect Agent accepts a provider without sending setup input to the dashboard", async () => {
     const backend = fakeAgent(async () => {});
     const close = mock(backend.close);
@@ -679,6 +696,77 @@ describe("OpenTUI shell", () => {
     expect(menu()).not.toMatch(/Search +esc/);
     await setup.mockInput.typeText(" draft");
     expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Keep 1/2 of this draft");
+  });
+
+  test("/effort changes reasoning for the current model without sending a message", async () => {
+    const ask = mock<AgentBackend["ask"]>(async () => {});
+    const agent = fakeAgent(ask);
+    const { setup, dashboard } = await start(100, { agent });
+    await clickSidebar(setup, "Agent");
+    await setup.mockInput.typeText("/");
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toMatch(/\/models +Switch model/);
+    expect(setup.captureCharFrame()).toMatch(/\/effort +Change reasoning effort/);
+
+    await setup.mockInput.typeText("effort");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.picker?.kind).toBe("reasoning");
+    expect(setup.captureCharFrame()).toMatch(/● Medium +Balanced · default/);
+    await setup.mockInput.typeText("high");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(agent.choice).toEqual({ provider: "openai", model: "test-model", reasoning: "high" });
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("");
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  test("/new keeps the previous chat and /clear resets only the current one", async () => {
+    const pending = deferred<void>();
+    const ask = mock<AgentBackend["ask"]>(async ({ prompt, onText }) => {
+      if (prompt === "In progress") return pending.promise;
+      onText("A completed reply");
+    });
+    const discardThread = mock(() => {});
+    const { setup, dashboard } = await start(100, { agent: { ...fakeAgent(ask), discardThread } });
+    await clickSidebar(setup, "Agent");
+    await setup.mockInput.typeText("Keep this chat");
+    setup.mockInput.pressEnter();
+    await settle();
+    const chat = dashboard.agent.chat;
+    const first = chat.current;
+    await setup.mockInput.typeText("/new");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(chat.history).toBe("2/2");
+    expect(chat.current.turns).toEqual([]);
+    expect(draftText(chat.current.draft.parts)).toBe("");
+    await setup.mockInput.typeText("In progress");
+    setup.mockInput.pressEnter();
+    await settle();
+    const cleared = chat.current;
+
+    await setup.mockInput.typeText("/clear");
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toMatch(/\/clear +Clear session/);
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(ask.mock.calls[1]?.[0].signal.aborted).toBe(true);
+    expect(discardThread).toHaveBeenCalledWith(cleared.id);
+    expect(chat.history).toBe("2/2");
+    expect(chat.current.turns).toEqual([]);
+    expect(draftText(chat.current.draft.parts)).toBe("");
+
+    await setup.mockInput.typeText("Start again");
+    setup.mockInput.pressEnter();
+    await settle();
+    pending.resolve();
+    expect(ask).toHaveBeenCalledTimes(3);
+    expect(ask.mock.calls[2]?.[0]).toMatchObject({ thread: chat.current.id, prompt: "Start again", history: [] });
+    expect(chat.current.id).not.toBe(cleared.id);
+    setup.mockInput.pressArrow("up", { ctrl: true });
+    expect(chat.current).toBe(first);
+    expect(chat.current.turns[0]?.answer).toBe("A completed reply");
   });
 
   test("the Agent box takes all typing, grows with lines, sends on Enter; Esc interrupts", async () => {

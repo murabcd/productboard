@@ -74,6 +74,7 @@ export function fakeAgent(ask: AgentBackend["ask"]): AgentBackend & { choice: Ag
       { provider: "anthropic", model: "other-model", created: 1 },
     ],
     async close() {},
+    discardThread() {},
     async use(choice, change) {
       this.choice = choice;
       if (change === "model") recent = promoteRecentModel(choice, recent);

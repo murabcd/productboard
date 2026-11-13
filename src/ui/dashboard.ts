@@ -320,7 +320,10 @@ export class Dashboard {
   }
 
   startFind(): void {
-    this.issueSearch ??= { kind: "jira", draft: this.workspace.query.text };
+    if (this.issueSearch?.kind === "jira") return;
+    this.closeLayers();
+    this.agent.tab = false;
+    this.issueSearch = { kind: "jira", draft: this.workspace.query.text };
   }
 
   startFilter(): void {

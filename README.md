@@ -29,7 +29,7 @@ brew install murabcd/tap/productboard
 
 The formula includes Bun and installs Node.js for Agent. Update with
 `brew upgrade murabcd/tap/productboard`. Run `productboard --version` to see your
-installed version, for example `productboard v0.1.1`. See
+installed version, for example `productboard v0.1.2`. See
 [GitHub Releases](https://github.com/murabcd/productboard/releases) for version history.
 
 If you previously linked the checkout to `~/.local/bin/productboard`, remove that
@@ -46,8 +46,9 @@ account email, and an [API token without scopes](https://id.atlassian.com/manage
 Press `Ctrl+O` on the token prompt to open Atlassian's token page. Productboard
 checks your sign-in before saving the token to macOS Keychain.
 
-In **Connect an integration**, choose **OpenAI** or **Anthropic** and paste a
-provider API key, or select **Skip for now** to open Inbox with Jira only.
+In **Connect an integration**, choose an OpenAI or Anthropic API key, or choose
+**ChatGPT subscription** to use your local Codex sign-in. Select **Skip for now**
+to open Inbox with Jira only.
 
 Run `productboard --login` to update your Jira sign-in or
 `productboard --check` to verify saved access without opening the dashboard.
@@ -82,16 +83,20 @@ launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/g
 Eve runs locally and sends model requests to the provider you connect.
 
 If you skipped Agent during setup, press `Ctrl+K` and choose **Connect Agent**,
-or run `productboard --agent-login`. Choose a provider, open its key page with
-`Ctrl+O`, and paste the key into the hidden field. Productboard stores it in
-macOS Keychain.
+or run `productboard --agent-login` to connect or switch providers.
+Choose **ChatGPT subscription** to reuse your local Codex CLI login. If needed,
+install the Codex CLI and run `codex login` with your ChatGPT account in another
+terminal, then press Enter in Productboard. Codex manages your sign-in and plan usage.
+For OpenAI or Anthropic API keys, open the key page with `Ctrl+O` and paste the key
+into the hidden field. Productboard stores API keys in macOS Keychain.
 
 Open `productboard` and select **Agent** in the sidebar (or press `2`). Ask about any
 project, sprint, or issue you can access in Jira. The message box grows as you type.
 `Enter` sends and `Shift+Enter` (or `Ctrl+J`) adds a line. While Agent answers,
-`Esc` interrupts it. Use `Ctrl+N` to start a chat, `Ctrl+↑` / `Ctrl+↓` to
+`Esc` interrupts it. Use `/new` or `Ctrl+N` to start a chat, `Ctrl+↑` / `Ctrl+↓` to
 switch between chats, and `Ctrl+O` to open an issue Agent
-mentioned.
+mentioned. Type `/clear` and press Enter to clear the current chat. This also
+stops any reply in that chat.
 
 Drop an image file into the Agent composer or paste its local path. Images
 and long or multiline pastes appear inline as numbered labels. Press
@@ -115,18 +120,22 @@ to them again.
 ### Model providers
 
 OpenAI is the default. Choose a provider during setup or set
-`PRODUCTBOARD_AGENT_PROVIDER` to `openai` or `anthropic` in your shell.
+`PRODUCTBOARD_AGENT_PROVIDER` to `openai`, `anthropic`, or `chatgpt` in your shell.
 
 - **OpenAI** defaults to GPT-6 Luna (`gpt-6-luna`). Set `OPENAI_API_KEY` to use a key from your shell.
 - **Anthropic** defaults to Claude Sonnet 5.5 (`claude-sonnet-5-5`). Set `ANTHROPIC_API_KEY` to use a key from your shell.
+- **ChatGPT subscription** starts with the default model from your Codex model list after setup.
 
 Type `/` in an empty Agent composer and choose `/models`, or choose **Select
 Agent model** from the `Ctrl+K` menu. The picker opens above
-the composer and lists the GPT-6 and Claude 5 models your keys can use. **Recent**
+the composer and lists GPT-6 and Claude 5 models for connected API keys and the
+models available in your Codex model list. Subscription models appear under
+**OpenAI** with a **Subscription** tag. **Recent**
 shows your last five distinct model picks, newest first. A dot marks the active
 model. Choose a model, then a reasoning level
-(None, Low, Medium, High, or Extra high). The default is Medium. Productboard
-remembers both settings and shows them together, for example
+(None, Low, Medium, High, or Extra high). Use `/effort` to change the current
+model's reasoning level directly. The default is Medium. Productboard remembers
+both settings and shows them together, for example
 "GPT-6 Luna · Medium". Replies show which model answered.
 
 `PRODUCTBOARD_AGENT_MODEL` overrides the model at launch.

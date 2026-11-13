@@ -1,6 +1,6 @@
 import { defineAgent } from "eve";
 import { anthropic } from "eve/models/anthropic";
-import { openai } from "eve/models/openai";
+import { chatgpt, openai } from "eve/models/openai";
 
 // Productboard starts this agent and sets these; see agentChoice in src/auth.ts.
 const { PRODUCTBOARD_AGENT_PROVIDER: provider, PRODUCTBOARD_AGENT_MODEL: model } = process.env;
@@ -12,9 +12,14 @@ const levels = ["none", "low", "medium", "high", "xhigh"] as const;
 const level = levels.find((name) => name === reasoning);
 if (!level) throw new Error(`Unknown reasoning level: ${reasoning}`);
 
+const models = { openai, anthropic, chatgpt };
+if (provider !== "openai" && provider !== "anthropic" && provider !== "chatgpt") {
+  throw new Error("Start Agent from productboard, which chooses its provider.");
+}
+
 export default defineAgent({
   defaultTools: false,
   experimental: { workflow: { retention: 0 } },
-  model: provider === "anthropic" ? anthropic(model) : openai(model),
+  model: models[provider](model),
   reasoning: level,
 });

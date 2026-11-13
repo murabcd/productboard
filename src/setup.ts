@@ -1,10 +1,14 @@
+import { chatgptModels } from "./agent/chatgpt";
 import { PROVIDER_NAMES } from "./agent/models";
 import {
   AGENT_PROVIDERS,
   type AgentProvider,
+  type ApiKeyProvider,
+  agentChoice,
   agentProviderOverride,
   readConfig,
-  reuseAgentKey,
+  rememberChatGPT,
+  reuseAgentConnection,
   saveAgentKey,
   saveCredentials,
   validateJiraField,
@@ -15,7 +19,7 @@ import { DEFAULT_THEME, type ThemeId } from "./theme";
 import type { Screen } from "./ui/screen";
 
 const JIRA_TOKEN_PAGE = "https://id.atlassian.com/manage-profile/security/api-tokens";
-const AGENT_KEY_PAGES: Record<AgentProvider, string> = {
+const AGENT_KEY_PAGES: Record<ApiKeyProvider, string> = {
   openai: "https://platform.openai.com/api-keys",
   anthropic: "https://platform.claude.com/settings/keys",
 };
@@ -105,14 +109,14 @@ export async function connectAgent(
   screen: Pick<Screen, "prompt">,
   theme: ThemeId,
   mode: "first-run" | "explicit" = "explicit",
-): Promise<boolean> {
-  if (mode === "first-run" && reuseAgentKey()) return true;
+): Promise<AgentProvider | undefined> {
+  if (mode === "first-run" && reuseAgentConnection()) return agentChoice().provider;
   const override = agentProviderOverride();
   const providers = override ? [override] : AGENT_PROVIDERS;
   const choices = providers.map((provider) => ({
     value: provider,
-    label: PROVIDER_NAMES[provider],
-    detail: "",
+    label: provider === "chatgpt" ? PROVIDER_NAMES.chatgpt : `${PROVIDER_NAMES[provider]} API key`,
+    detail: provider === "chatgpt" ? "Use your Codex sign-in" : "",
   }));
   const provider =
     override && mode === "explicit"
@@ -127,22 +131,39 @@ export async function connectAgent(
           },
           theme,
         );
-  if (!provider) return false;
-  return (
-    (await screen.prompt(
+  if (!provider) return;
+  if (provider === "chatgpt") {
+    return screen.prompt(
       {
-        title: `Connect ${PROVIDER_NAMES[provider]}`,
-        field: {
-          label: "API key",
-          url: AGENT_KEY_PAGES[provider],
-          secret: true,
-          submit: (key) => {
-            saveAgentKey(provider, key);
-            return true;
+        title: "Connect ChatGPT",
+        confirm: {
+          hint: "Sign in with codex login if needed.",
+          run: async (signal) => {
+            const models = await chatgptModels(signal);
+            const model = models.find((entry) => entry.isDefault) ?? models[0];
+            if (!model) throw new Error("This account has no available models.");
+            signal.throwIfAborted();
+            rememberChatGPT(model.model);
+            return provider;
           },
         },
       },
       theme,
-    )) ?? false
+    );
+  }
+  return screen.prompt(
+    {
+      title: `Connect ${PROVIDER_NAMES[provider]}`,
+      field: {
+        label: "API key",
+        url: AGENT_KEY_PAGES[provider],
+        secret: true,
+        submit: (key) => {
+          saveAgentKey(provider, key);
+          return provider;
+        },
+      },
+    },
+    theme,
   );
 }

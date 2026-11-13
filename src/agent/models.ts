@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { AGENT_PROVIDERS, type AgentChoice, type AgentProvider, type ModelRef, type Reasoning } from "../auth";
+import {
+  type AgentChoice,
+  type AgentProvider,
+  API_KEY_PROVIDERS,
+  type ApiKeyProvider,
+  type ModelRef,
+  type Reasoning,
+} from "../auth";
 import { clean } from "../text";
 
 export interface AgentModel extends ModelRef {
@@ -35,12 +42,16 @@ export function modelName(id: string): string {
   return [...name, version].filter(Boolean).join(" ");
 }
 
-export const PROVIDER_NAMES: Record<AgentProvider, string> = { openai: "OpenAI", anthropic: "Anthropic" };
+export const PROVIDER_NAMES: Record<AgentProvider, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  chatgpt: "ChatGPT subscription",
+};
 
 const OpenAIModels = z.object({ data: z.array(z.object({ id: z.string(), created: z.number() })) });
 const AnthropicModels = z.object({ data: z.array(z.object({ id: z.string(), created_at: z.string() })) });
 
-const GENERATIONS: Record<AgentProvider, RegExp> = {
+const GENERATIONS: Record<ApiKeyProvider, RegExp> = {
   openai: /^gpt-6(\.\d+)?(-|$)/,
   anthropic: /^claude-[a-z]+-5([-.]|$)/,
 };
@@ -55,7 +66,7 @@ async function request(fetcher: typeof fetch, url: string, headers: Record<strin
   return response.json();
 }
 
-async function providerModels(provider: AgentProvider, key: string, fetcher: typeof fetch): Promise<AgentModel[]> {
+async function providerModels(provider: ApiKeyProvider, key: string, fetcher: typeof fetch): Promise<AgentModel[]> {
   if (provider === "openai") {
     const { data } = OpenAIModels.parse(
       await request(fetcher, "https://api.openai.com/v1/models", { Authorization: `Bearer ${key}` }),
@@ -75,20 +86,26 @@ async function providerModels(provider: AgentProvider, key: string, fetcher: typ
     .map(({ id, created_at }) => ({ provider, model: clean(id), created: Date.parse(created_at) }));
 }
 
-/** Models from every provider with a key, newest first. Fails only when no provider answers. */
+interface ModelSources {
+  keys: Partial<Record<ApiKeyProvider, string>>;
+  subscription?: () => Promise<AgentModel[]>;
+}
+
+/** Load connected catalogs in parallel, keeping results from providers that answer. */
 export async function listModels(
-  keys: Partial<Record<AgentProvider, string>>,
+  { keys, subscription }: ModelSources,
   fetcher: typeof fetch = fetch,
 ): Promise<AgentModel[]> {
-  const providers = AGENT_PROVIDERS.flatMap((provider) => {
+  const requests = API_KEY_PROVIDERS.flatMap((provider) => {
     const key = keys[provider];
-    return key ? [{ provider, key }] : [];
+    return key ? [providerModels(provider, key, fetcher)] : [];
   });
-  const results = await Promise.allSettled(
-    providers.map(({ provider, key }) => providerModels(provider, key, fetcher)),
-  );
+  if (subscription) requests.push(subscription());
+  const results = await Promise.allSettled(requests);
   const models = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
-  const [failed] = results.filter((result) => result.status === "rejected");
+  const subscriptionResult = subscription ? results.at(-1) : undefined;
+  if (models.length === 0 && subscriptionResult?.status === "rejected") throw subscriptionResult.reason;
+  const failed = results.find((result) => result.status === "rejected");
   if (failed && results.every((result) => result.status === "rejected")) {
     const reason = failed.reason instanceof Error ? failed.reason.message : "no answer";
     throw new Error(`Models unavailable: ${reason}`);

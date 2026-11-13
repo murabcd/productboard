@@ -5,6 +5,40 @@ import { deferred, settle } from "../testing";
 import { AgentChat } from "./chat";
 import { EveAgent } from "./eve";
 
+test("a connected ChatGPT account can start Eve and offer models without API keys", async () => {
+  const choice: AgentChoice = { provider: "chatgpt", model: "gpt-6-luna", reasoning: "medium" };
+  const ready = deferred<Client>();
+  const exited = deferred<void>();
+  const start = mock(() => ({
+    ready: ready.promise,
+    exited: exited.promise,
+    sessions: new Map(),
+    close: async () => exited.resolve(),
+  }));
+  const agent = EveAgent.create(
+    { search: async () => [] },
+    {
+      read: () => choice,
+      recent: () => [],
+      key: () => undefined,
+      chatgpt: () => true,
+      subscriptionModels: async () => [{ model: choice.model, isDefault: true }],
+      remember: () => [],
+      start,
+    },
+  );
+  if (!agent) throw new Error("Expected an Agent with subscription credentials");
+  expect(await agent.models()).toMatchObject([{ provider: "chatgpt", model: choice.model }]);
+  const chat = new AgentChat(agent, () => {});
+  chat.current.draft.replace(["Start a test turn"]);
+  const turn = chat.send();
+  await settle();
+  expect(start).toHaveBeenCalledWith(expect.anything(), { choice, credentials: {} });
+  ready.reject(new Error("End the test before sending a model request"));
+  await turn;
+  await agent.close();
+});
+
 test("a model switch while a turn waits for Eve retirement cannot change its attribution", async () => {
   const ready = deferred<Client>();
   const exited = deferred<void>();
@@ -15,7 +49,15 @@ test("a model switch while a turn waits for Eve retirement cannot change its att
   const high = { ...low, reasoning: "high" } as const;
   const agent = EveAgent.create(
     { search: async () => [] },
-    { read: () => low, recent: () => [], key: () => "fixture", remember: () => [], start },
+    {
+      read: () => low,
+      recent: () => [],
+      key: () => "fixture",
+      chatgpt: () => false,
+      subscriptionModels: async () => [],
+      remember: () => [],
+      start,
+    },
   );
   if (!agent) throw new Error("Expected a configured Agent");
   const first = new AgentChat(agent, () => {});

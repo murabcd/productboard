@@ -139,17 +139,26 @@ one viewport between drawing and scrolling. Page keys move by the visible
 rows after the composer has taken its space. Transcript layout is reused
 while the turn content and pane width stay the same.
 
-Typing `/` in an empty Agent composer offers `/models` above the text box while
-the query stays in the draft. Selecting it clears the command text and opens the
-same model picker as the command palette.
-[[src/ui/dialog.ts#drawComposerMenu]] draws it, the reasoning picker, and `@`
+Typing `/` in an empty Agent composer offers `/models`, `/effort`, `/new`, and
+`/clear` above the text box while the query stays in the draft. Selecting a
+command clears its text. `/models` and `/effort` open their corresponding
+pickers. `/new` uses the same chat action as Ctrl+N and keeps earlier chats
+available.
+`/clear` stops any reply and replaces the current chat with an empty one in
+the same position. Eve retires its session, so the next message starts fresh.
+[[src/ui/dialog.ts#drawComposerMenu]] draws these pickers and `@`
 suggestions at the composer's width. Model and reasoning searches receive input
 until selection or dismissal while the message draft stays in place.
 [[src/agent/models.ts#listModels]] lists GPT-6 and Claude 5 models from each
-provider with a key. [[src/auth.ts#rememberAgentChoice]] saves the five latest
+provider with a key. [[src/agent/chatgpt.ts#chatgptModels]] verifies a local
+ChatGPT sign-in and reads the account's model list from Codex. Setup remembers
+the selected connection and starts with the account's default model.
+[[src/auth.ts#rememberAgentChoice]] saves the five latest
 distinct model picks. The picker shows available picks under Recent, followed
 by the remaining models newest first under each provider. Search lists matches
-by provider. The dot marks the active model in any section.
+by provider. Subscription models appear under OpenAI with a right-aligned
+Subscription tag and remain separate picks from their API key counterparts.
+The dot marks the active model in any section.
 Choosing one, then a reasoning level, restarts the Eve process with both
 and saves them. Each turn captures those settings before waiting for Eve. If
 another switch overtakes a waiting turn, the question returns to the draft
@@ -179,7 +188,9 @@ over an authenticated loopback connection owned by the dashboard. The tool can
 only search Jira and returns at most 50 matches per call. It sends a projection
 of the results to the model and emits the issue records through the event stream for
 terminal citations. Jira credentials stay in the dashboard. Provider
-credentials come from the shell or macOS Keychain. The dashboard keeps
+API keys come from the shell or macOS Keychain. The ChatGPT subscription
+uses Eve's model helper, with credentials managed by Codex.
+The dashboard keeps
 conversation history in memory and cancels pending work on exit. Sessions,
 search access and streaming callbacks belong to the Eve process that created
 them.

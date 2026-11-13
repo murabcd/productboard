@@ -52,7 +52,10 @@ async function interactive(
 ): Promise<number | string> {
   if (command === "--agent-login") {
     const connected = await connectAgent(screen, readConfig()?.theme ?? DEFAULT_THEME);
-    return connected ? "Agent API key saved to Keychain." : 130;
+    if (!connected) return 130;
+    return connected === "chatgpt"
+      ? "Connected to ChatGPT using your Codex sign-in."
+      : "Agent API key saved to Keychain.";
   }
   const credentials = saved ?? (await connectJira(screen));
   if (!credentials) return 130;

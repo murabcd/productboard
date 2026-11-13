@@ -54,10 +54,14 @@ const REASONING_DETAILS: Record<Reasoning, string> = {
 
 function modelItems(d: Dashboard, query: string): PickerItem[] {
   const key = ({ provider, model }: ModelRef) => `${provider}/${model}`;
+  const providerName = ({ provider }: ModelRef) => PROVIDER_NAMES[provider === "chatgpt" ? "openai" : provider];
   const active = d.agent.current;
   const current = active && key(active);
-  const choice = (model: AgentModel, group: string, detail = ""): PickerItem =>
-    item(
+  const choice = (model: AgentModel, group = providerName(model)): PickerItem => {
+    const detail = [group === "Recent" ? providerName(model) : "", model.provider === "chatgpt" ? "Subscription" : ""]
+      .filter(Boolean)
+      .join(" · ");
+    return item(
       modelName(model.model),
       detail,
       () => {
@@ -66,6 +70,7 @@ function modelItems(d: Dashboard, query: string): PickerItem[] {
       },
       { value: key(model), group, current: key(model) === current },
     );
+  };
   const available = new Map(d.agent.models.map((model) => [key(model), model]));
   const recent: PickerItem[] = [];
   if (!query.trim()) {
@@ -73,13 +78,13 @@ function modelItems(d: Dashboard, query: string): PickerItem[] {
       const value = key(ref);
       const model = available.get(value);
       if (!model) continue;
-      recent.push(choice(model, "Recent", PROVIDER_NAMES[model.provider]));
+      recent.push(choice(model, "Recent"));
       available.delete(value);
     }
   }
   const byProvider = Array.from(available.values())
-    .sort((a, b) => PROVIDER_NAMES[a.provider].localeCompare(PROVIDER_NAMES[b.provider]))
-    .map((model) => choice(model, PROVIDER_NAMES[model.provider]));
+    .sort((a, b) => providerName(a).localeCompare(providerName(b)))
+    .map((model) => choice(model));
   return [...recent, ...byProvider];
 }
 
@@ -200,7 +205,12 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
     title: "Agent commands",
     placement: "completion",
     options: () => ({ detailLayout: 16 }),
-    items: (d) => [item("/models", "Switch model", () => d.openPicker("model"))],
+    items: (d) => [
+      item("/models", "Switch model", () => d.openPicker("model")),
+      item("/effort", "Change reasoning effort", () => d.openPicker("reasoning")),
+      item("/new", "New session", () => d.agent.chat.start()),
+      item("/clear", "Clear session", () => d.agent.chat.clear()),
+    ],
   },
   project: {
     title: "Choose project",
@@ -250,7 +260,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   },
   model: {
     placement: "composer",
-    options: () => ({ keepGroupHeading: true, detailLayout: "inline" }),
+    options: () => ({ keepGroupHeading: true }),
     title: "Select model",
     items: modelItems,
     load: (d) => d.agent.loadModels(),
