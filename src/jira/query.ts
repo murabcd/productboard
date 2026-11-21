@@ -6,8 +6,12 @@ export const View = {
   Today: 4,
   Mentions: 5,
   Search: 6,
+  Team: 7,
 } as const;
 export type View = (typeof View)[keyof typeof View];
+
+export const TEAM_MODES = ["all", "attention"] as const;
+export type TeamMode = (typeof TEAM_MODES)[number];
 
 export const PAGE = 200;
 const UPDATED_ORDER = "ORDER BY updated DESC";
@@ -53,9 +57,9 @@ export function withView(query: IssueQuery, view: View): IssueQuery {
   return scoped(query, { view, assignee: view === View.Mine ? "" : query.assignee });
 }
 
-/** Assigned is always scoped to you; use Team focus to filter by assignee. */
+/** Assigned is always scoped to you; use Team issues to filter by assignee. */
 export function withAssignee(query: IssueQuery, assignee: string): IssueQuery {
-  const view = assignee && query.view === View.Mine ? View.Today : query.view;
+  const view = assignee && query.view === View.Mine ? View.Team : query.view;
   return scoped(query, { view, assignee });
 }
 

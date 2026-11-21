@@ -72,6 +72,7 @@ export type Target =
   | { kind: "peek" }
   /** A group heading; a click folds or unfolds it. */
   | { kind: "group"; label: string }
+  | { kind: "page"; view: View }
   | { kind: "view"; view: View }
   | { kind: "issue"; key: string }
   | { kind: "choice"; value: string }

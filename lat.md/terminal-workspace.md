@@ -69,7 +69,7 @@ A blank row separates the body from the footer, which shows counts, sync
 status, and shortcuts.
 
 [[src/ui/navigation.ts#NAV_GROUPS]] puts one blank row between Search and Agent
-and Inbox, My issues, and Team focus. Sidebar icons use Nerd Font glyphs.
+and Inbox, My issues, and Team issues. Sidebar icons use Nerd Font glyphs.
 [[src/ui/navigation.ts#NAVIGATION]] flattens that order for number keys, Tab,
 and the command palette. On narrow panes, the same order appears as tabs
 below the title bar.
@@ -77,8 +77,17 @@ below the title bar.
 [[src/ui/header.ts#pageHeader]] supplies the title for the row shared with the
 app name and command palette shortcut. [[src/ui/header.ts#drawHeader]] draws
 the description and toolbar below, including tabs, filters, and page actions.
-Team focus offers Sprint brief when a sprint is selected.
-One blank row separates the description from the toolbar in both layouts.
+Team issues has All issues and Needs attention tabs. [[src/ui/navigation.ts#NavItem]]
+owns each page’s tabs; left/right and clicks switch them.
+Both team modes preserve server and local text filters. All issues is the initial
+team mode; [[src/ui/dashboard.ts#Dashboard]] tracks mode changes from workspace
+notifications, including assignee transitions. [[src/auth.ts#rememberTeamMode]]
+saves the last choice across launches.
+Sidebar, number keys, Tab, and page commands reopen that choice. Team issues
+offers Sprint brief when a sprint is selected. Filters follow the mode tabs on
+the same toolbar, matching My issues. When the tabs and Filter control cannot
+fit beside the actions, tabs wrap onto the row above. Otherwise, one blank row
+separates the description from the toolbar.
 The Jira query field sits directly below the toolbar. Issue pages without
 that field leave one blank row below the toolbar.
 Search and picker fields show a muted placeholder with a block cursor at the

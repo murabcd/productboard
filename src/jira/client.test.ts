@@ -249,6 +249,33 @@ describe("search", () => {
     expect(requests.map(({ body }) => body?.jql)).toEqual(["statusCategory IS NOT EMPTY ORDER BY updated DESC"]);
   });
 
+  test("All issues includes every status and uses only explicit scope filters", async () => {
+    const { client, requests, http } = fakeJira(() =>
+      json({
+        issues: [rawIssue("EX-1", "new"), rawIssue("EX-2", "indeterminate"), rawIssue("EX-3", "done")],
+        isLast: true,
+      }),
+    );
+    try {
+      const all = await client.snapshot({ ...initialQuery, view: View.Team });
+      expect(all.issues.map(({ category }) => category)).toEqual(["new", "indeterminate", "done"]);
+      expect(requests.map(({ body }) => body?.jql)).toEqual(["statusCategory IS NOT EMPTY ORDER BY updated DESC"]);
+      await client.snapshot({
+        ...initialQuery,
+        view: View.Team,
+        project: "EX",
+        sprintFilter: 36,
+        assignee: "other",
+        status: "done",
+      });
+      expect(requests.at(-1)?.body?.jql).toBe(
+        'sprint = 36 AND project = "EX" AND assignee = "other" AND statusCategory = Done ORDER BY updated DESC',
+      );
+    } finally {
+      http.close();
+    }
+  });
+
   test("follows page tokens and reports more beyond the limit", async () => {
     const { client, requests } = fakeJira((_url, body) => {
       if (!body?.nextPageToken) return json({ issues: [rawIssue("EX-1"), rawIssue("EX-2")], nextPageToken: "p2" });

@@ -55,8 +55,12 @@ Run `productboard --login` to update your Jira sign-in or
 
 ## Features
 
-- Use **Team focus** to see blockers, overdue work, and issues that need an
-  owner. Filter by project, assignee, sprint, or status.
+- Use **Team issues → All issues** to browse every issue in the selected scope,
+  including completed work. Switch to **Needs attention** for blockers, overdue
+  work, and issues that need an owner. Use `←` / `→` or click the tabs to switch;
+  project, assignee, sprint, status, and local text filters stay in place.
+  Team issues starts with All issues and remembers your last mode across launches.
+  Lists load 200 issues at a time; press `n` to load more.
 - Use **Filter → Sprint** to narrow issue lists to one sprint, and **Any sprint**
   to clear the selection. Use **Sprint board** to switch which board supplies the
   sprint choices.
@@ -71,7 +75,7 @@ Run `productboard --login` to update your Jira sign-in or
   - Stream replies from OpenAI or Anthropic in the terminal.
 
 The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,
-`3` for Inbox, `4` for My issues, and `5` for Team focus.
+`3` for Inbox, `4` for My issues, and `5` for Team issues.
 Use a Nerd Font in your terminal to display the sidebar icons.
 
 To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel

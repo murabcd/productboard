@@ -508,21 +508,21 @@ describe("concept layout", () => {
     expect(source.snapshot).toHaveBeenCalledTimes(1);
   });
 
-  test("Team focus shares its sprint filter and opens a Sprint brief", () => {
+  test("Team issues shares its sprint filter and opens a Sprint brief", () => {
     const { dashboard, work, source } = setup();
     work.board = "1";
     work.query = { ...work.query, view: View.Mentions };
     work.sprints = [{ id: 36, name: "Sprint 36", state: "active", start: "", end: "", goal: "" }];
     dashboard.handle({ text: "5" });
     expect(dashboard.picker).toBeNull();
-    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Today, sprintFilter: null });
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Team, sprintFilter: null });
 
     dashboard.handle({ text: "F" });
     edit(dashboard, "sprint");
     dashboard.handle(ENTER);
     edit(dashboard, "36");
     dashboard.handle(ENTER);
-    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Today, sprintFilter: 36 });
+    expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Team, sprintFilter: 36 });
     expect(frame(dashboard).text(3)).toContain("Filter 1 ▾");
     expect(frame(dashboard).text(3)).toContain("Sprint brief");
     dashboard.click({ kind: "action", action: "brief" });
@@ -537,6 +537,63 @@ describe("concept layout", () => {
     edit(dashboard, "any sprint");
     dashboard.handle(ENTER);
     expect(source.snapshot.mock.lastCall?.[0]).toMatchObject({ view: View.Mentions, sprintFilter: null });
+  });
+
+  test("team modes preserve every filter, reset pagination and reject a late response", async () => {
+    const { dashboard, work, source } = setup();
+    dashboard.showPage(View.Team);
+    work.query = { ...work.query, project: "EX", sprintFilter: 36, assignee: "other", status: "done", limit: 600 };
+    dashboard.list.filter("EX");
+    const attention = deferred<ReturnType<typeof snapshot>>();
+    source.snapshot.mockImplementationOnce(() => attention.promise);
+    dashboard.handle({ name: "right" });
+    const attentionQuery = work.query;
+    expect(attentionQuery).toMatchObject({
+      view: View.Today,
+      project: "EX",
+      sprintFilter: 36,
+      assignee: "other",
+      status: "done",
+      limit: 200,
+    });
+    expect(dashboard.list.search).toBe("EX");
+    const all = deferred<ReturnType<typeof snapshot>>();
+    source.snapshot.mockImplementationOnce(() => all.promise);
+    dashboard.click({ kind: "view", view: View.Team });
+    expect(work.query).toEqual({ ...attentionQuery, view: View.Team });
+    expect(dashboard.list.search).toBe("EX");
+    all.resolve(snapshot(work.query, ["EX-2"]));
+    await settle();
+    attention.resolve(snapshot(attentionQuery, ["EX-1"]));
+    await settle();
+    expect(work.issues.map(({ key }) => key)).toEqual(["EX-2"]);
+    await dashboard.dispose();
+  });
+
+  test("team page entries restore the saved mode, while explicit tabs save a new choice", async () => {
+    const { work, client, opener } = setup();
+    const save = mock(() => {});
+    const dashboard = new Dashboard(work, client, opener, () => {}, { teamMode: { initial: "attention", save } });
+    dashboard.handle({ text: "5" });
+    expect(work.query.view).toBe(View.Today);
+    dashboard.click({ kind: "view", view: View.Team });
+    expect(save).toHaveBeenLastCalledWith("all");
+    dashboard.click({ kind: "view", view: View.Today });
+    expect(save).toHaveBeenLastCalledWith("attention");
+    dashboard.handle({ text: "3" });
+    dashboard.click({ kind: "page", view: View.Team });
+    expect(work.query.view).toBe(View.Today);
+    dashboard.showView(View.Mine);
+    dashboard.handle({ name: "tab" });
+    expect(work.query.view).toBe(View.Today);
+    dashboard.showView(View.Mine);
+    dashboard.chooseAssignee("other", "Other person");
+    expect(work.query.view).toBe(View.Team);
+    expect(save).toHaveBeenLastCalledWith("all");
+    dashboard.showView(View.Mentions);
+    dashboard.showPage(View.Team);
+    expect(work.query.view).toBe(View.Team);
+    await dashboard.dispose();
   });
 
   test("a folded group hides its rows and the selection skips them", () => {
@@ -560,7 +617,7 @@ describe("concept layout", () => {
       ["1", View.Search],
       ["3", View.Mentions],
       ["4", View.Mine],
-      ["5", View.Today],
+      ["5", View.Team],
     ];
     for (const [key, expected] of order) {
       dashboard.handle({ text: key });
@@ -577,9 +634,9 @@ describe("concept layout", () => {
     dashboard.handle({ name: "tab" });
     expect(view()).toBe(View.Mine);
     dashboard.handle({ name: "tab" });
-    expect(view()).toBe(View.Today); // Agent is not a view; Tab skips it
+    expect(view()).toBe(View.Team); // Agent is not a view; Tab skips it
     dashboard.handle({ text: "6" });
-    expect(view()).toBe(View.Today);
+    expect(view()).toBe(View.Team);
     dashboard.handle({ name: "tab" });
     expect(view()).toBe(View.Search);
   });
@@ -832,7 +889,7 @@ describe("frame", () => {
     expect(canvas.text(23)).toContain("2 issues");
   });
 
-  test("Team focus rows show the reason, owner and sprint once", () => {
+  test("Team issues rows show the reason, owner and sprint once", () => {
     const { dashboard, work } = setup();
     work.query = { ...initialQuery, view: View.Today };
     const base = snapshot(work.query, ["EX-1", "EX-2"]);

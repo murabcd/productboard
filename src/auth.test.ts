@@ -46,3 +46,31 @@ test("model picks persist across launches, keep five distinct provider and model
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("team mode survives a new process and ignores an invalid saved mode without losing sign-in", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "productboard-team-mode-"));
+  try {
+    const config = join(directory, ".config", "productboard");
+    await mkdir(config, { recursive: true });
+    const path = join(config, "config.json");
+    const preferences = { site: "example.atlassian.net", email: "test@example.com", board: "36" };
+    await writeFile(path, JSON.stringify(preferences));
+    const run = (script: string) =>
+      Bun.spawnSync([process.execPath, "-e", script], {
+        cwd: join(import.meta.dir, ".."),
+        env: { HOME: directory },
+      });
+    const save = run('import { rememberTeamMode } from "./src/auth"; rememberTeamMode("attention");');
+    expect(save.exitCode).toBe(0);
+    const read = () => {
+      const result = run('import { readConfig } from "./src/auth"; console.log(JSON.stringify(readConfig()));');
+      expect(result.exitCode).toBe(0);
+      return JSON.parse(result.stdout.toString());
+    };
+    expect(read()).toEqual({ ...preferences, teamMode: "attention" });
+    await writeFile(path, JSON.stringify({ ...preferences, teamMode: "unknown" }));
+    expect(read()).toEqual(preferences);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

@@ -28,9 +28,14 @@ describe("issue rows", () => {
   test.each([
     [138, 1],
     [80, 2],
-  ])("the toolbar has one blank row above and below it at width %i", (width, descriptionRow) => {
+    [60, 2],
+  ])("team filters follow the tabs and wrap only when needed at width %i", (width, descriptionRow) => {
     const dashboard = teamFocus(30);
     dashboard.resize(width, 24);
+    if (width === 60) {
+      dashboard.workspace.query = { ...dashboard.workspace.query, status: "done" };
+      if (dashboard.workspace.snapshot) dashboard.workspace.snapshot.query = dashboard.workspace.query;
+    }
     const canvas = frame(dashboard);
     const content = (row: number) =>
       canvas
@@ -38,8 +43,13 @@ describe("issue rows", () => {
         .slice(width === 138 ? 20 : 0)
         .trim();
     expect(content(descriptionRow)).toBe("What needs attention across active sprints");
-    expect(content(descriptionRow + 1)).toBe("");
-    expect(content(descriptionRow + 2)).toMatch(/^Filter ▾ +Display ▾$/);
+    if (width === 60) {
+      expect(content(descriptionRow + 1)).toBe("All issues   Needs attention");
+      expect(content(descriptionRow + 2)).toMatch(/^Filter 1 ▾ +Status: Done +Display ▾$/);
+    } else {
+      expect(content(descriptionRow + 1)).toBe("");
+      expect(content(descriptionRow + 2)).toMatch(/^All issues +Needs attention +Filter ▾ +Display ▾$/);
+    }
     expect(content(descriptionRow + 3)).toBe("");
     expect(content(descriptionRow + 4)).toContain("Issue");
   });

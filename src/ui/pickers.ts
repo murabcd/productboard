@@ -161,7 +161,7 @@ function commandItems(d: Dashboard): PickerItem[] {
   const act = { group: "Actions" };
   return [
     ...NAVIGATION.map((nav) =>
-      item(`Go to ${nav.name}`, navKey(nav), () => (nav.to === "agent" ? d.openAgent() : d.showView(nav.to)), page),
+      item(`Go to ${nav.name}`, navKey(nav), () => (nav.to === "agent" ? d.openAgent() : d.showPage(nav.to)), page),
     ),
     item("Go to Created", "My issues tab", () => d.showView(View.Created), page),
     ...(d.agent.tab

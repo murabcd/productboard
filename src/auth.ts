@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { Credentials } from "./jira/http";
+import { TEAM_MODES, type TeamMode } from "./jira/query";
 import { THEME_IDS, type ThemeId } from "./theme";
 
 const KEYCHAIN_SERVICE = "productboard";
@@ -43,6 +44,7 @@ const Config = z.object({
   agent: AgentChoice.optional(),
   chatgptConnected: z.boolean().optional(),
   recentAgentModels: z.array(ModelRef).optional().catch(undefined),
+  teamMode: z.enum(TEAM_MODES).optional().catch(undefined),
   theme: z.enum(THEME_IDS).optional().catch(undefined),
 });
 type Config = z.infer<typeof Config>;
@@ -72,6 +74,12 @@ function writeConfig(config: Config): void {
 export function rememberBoard(board: string): void {
   const config = readConfig();
   if (config && config.board !== board) writeConfig({ ...config, board });
+}
+
+export function rememberTeamMode(teamMode: TeamMode): void {
+  const config = readConfig();
+  if (!config) throw new Error("Preferences are unavailable");
+  if (config.teamMode !== teamMode) writeConfig({ ...config, teamMode });
 }
 
 export function rememberTheme(theme: ThemeId): void {

@@ -2,11 +2,12 @@
 
 Release notes for Productboard, newest first.
 
-## v0.1.2 — 2026-11-14
+## v0.1.2 — 2026-11-14 (rebuilt 2026-11-21)
 
 - Connect Agent with your ChatGPT subscription using your local Codex sign-in. Subscription models are listed under OpenAI and marked **Subscription**.
 - Use `/effort` to change reasoning for the current model, `/new` to start a session, and `/clear` to reset the current session.
-- Use **Team focus** for team work and **My issues** for your assigned or created issues. The separate **All issues** view is gone.
+- Use **Team issues** with **All issues** and **Needs attention** tabs. All issues includes every status within your filters; Needs attention keeps the previous Team focus groups. Switching modes preserves filters and remembers your choice across launches.
+- Team filters sit beside the mode tabs, matching My issues, and wrap in narrow terminals.
 - Edit Search and picker queries in place with a blinking cursor. Issue peek leaves a one-column gap at the right edge.
 
 ## v0.1.1 — 2026-11-12

@@ -2,7 +2,7 @@
 
 import type { AgentBackend } from "../agent/chat";
 import type { JiraClient } from "../jira/client";
-import { type IssueQuery, STATUSES, scoped, View, withAssignee, withView } from "../jira/query";
+import { type IssueQuery, STATUSES, scoped, type TeamMode, View, withAssignee, withView } from "../jira/query";
 import { type Attachment, type Issue, isImage } from "../jira/types";
 import { message, type Workspace } from "../state/workspace";
 import { DEFAULT_THEME, type ThemeId } from "../theme";
@@ -23,7 +23,7 @@ import {
   type SearchBoxKind,
   sidebarWidth,
 } from "./layout";
-import { MY_ISSUES_TABS, NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
+import { NAV_VIEWS, NAVIGATION, navKey, pageOf } from "./navigation";
 import { helpPanel, type Panel, sprintPanel } from "./panel";
 import type { Peek } from "./peek";
 import { Picker, type PickerItem, type PickerKind } from "./picker";
@@ -38,6 +38,7 @@ export interface Opener {
 export interface DashboardOptions {
   agent?: AgentBackend;
   connectAgent?(theme: ThemeId): Promise<AgentBackend | undefined>;
+  teamMode?: { initial?: TeamMode; save(mode: TeamMode): void };
   appearance?: { initial?: ThemeId; save(theme: ThemeId): void };
 }
 
@@ -80,6 +81,7 @@ export class Dashboard {
   readonly agent: AgentPanel;
   readonly contextPicker: ContextPicker;
   private selectedTheme: ThemeId;
+  private teamMode: TeamMode;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly images: ImagePreviews;
   private readonly details: IssueDetails;
@@ -92,6 +94,7 @@ export class Dashboard {
     private readonly redraw: () => void,
     private readonly options: DashboardOptions = {},
   ) {
+    this.teamMode = options.teamMode?.initial ?? "all";
     this.selectedTheme = options.appearance?.initial ?? DEFAULT_THEME;
     this.list = new IssueList(workspace);
     this.images = new ImagePreviews((id) => client.attachment(id), redraw);
@@ -216,9 +219,24 @@ export class Dashboard {
   }
 
   private update(): void {
+    this.syncTeamMode();
     this.picker?.refresh();
     this.syncPeek();
     this.redraw();
+  }
+
+  /** Track the actual scope, including transitions caused by assignee filters. */
+  private syncTeamMode(): void {
+    const { view } = this.workspace.query;
+    if (pageOf(view).to !== View.Team) return;
+    const mode = view === View.Today ? "attention" : "all";
+    if (mode === this.teamMode) return;
+    this.teamMode = mode;
+    try {
+      this.options.teamMode?.save(mode);
+    } catch (error) {
+      this.notify(`Could not save team mode: ${message(error)}`);
+    }
   }
 
   openPicker(kind: PickerKind, onFinish?: () => void): void {
@@ -453,13 +471,19 @@ export class Dashboard {
     this.issueSearch = undefined;
   }
 
+  /** Sidebar, number keys and page commands reopen the last chosen team mode. */
+  showPage(view: View): void {
+    this.showView(view === View.Team && this.teamMode === "attention" ? View.Today : view);
+  }
+
   showView(view: View): void {
     this.closeLayers();
     this.agent.tab = false;
     this.list.unfold();
     const work = this.workspace;
+    const switchingTeamMode = pageOf(view).to === View.Team && pageOf(work.query.view).to === View.Team;
     work.change(withView(work.query, view));
-    this.list.filter("");
+    if (!switchingTeamMode) this.list.filter("");
     if (view === View.Search && !work.query.text) this.startFind();
   }
 
@@ -571,6 +595,9 @@ export class Dashboard {
         this.openDetail(issue);
         return;
       }
+      case "page":
+        this.showPage(target.view);
+        return;
       case "view":
         this.showView(target.view);
         return;
@@ -696,7 +723,7 @@ export class Dashboard {
     z: () => this.list.foldSelected(),
     Z: () => this.list.unfold(),
     "left right": () => {
-      const tabs = MY_ISSUES_TABS.map(([view]) => view);
+      const tabs = pageOf(this.workspace.query.view).tabs.map(([view]) => view);
       const at = tabs.indexOf(this.workspace.query.view);
       if (at >= 0) this.showView(tabs[(at + 1) % tabs.length] ?? View.Mine);
     },
@@ -704,13 +731,13 @@ export class Dashboard {
     K: () => this.scrollPeek(-1),
     f: () => this.startFind(),
     tab: () => {
-      // Created is a tab of My issues, so Tab moves on from the page, not the tab.
+      // Move between pages, keeping each page’s mode out of the navigation order.
       const here = pageOf(this.workspace.query.view);
       const next = NAV_VIEWS[(NAV_VIEWS.findIndex((view) => pageOf(view) === here) + 1) % NAV_VIEWS.length];
-      if (next !== undefined) this.showView(next);
+      if (next !== undefined) this.showPage(next);
     },
     ...Object.fromEntries(
-      NAVIGATION.map((page) => [navKey(page), () => (page.to === "agent" ? this.openAgent() : this.showView(page.to))]),
+      NAVIGATION.map((page) => [navKey(page), () => (page.to === "agent" ? this.openAgent() : this.showPage(page.to))]),
     ),
     "j down": () => this.list.move(1),
     "k up": () => this.list.move(-1),

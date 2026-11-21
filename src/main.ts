@@ -1,6 +1,6 @@
 import { version } from "../package.json";
 import { EveAgent } from "./agent/eve";
-import { loadCredentials, readConfig, rememberBoard, rememberTheme } from "./auth";
+import { loadCredentials, readConfig, rememberBoard, rememberTeamMode, rememberTheme } from "./auth";
 import { JiraClient } from "./jira/client";
 import { type Credentials, JiraHttp } from "./jira/http";
 import { connectAgent, connectJira } from "./setup";
@@ -87,6 +87,7 @@ async function dashboard(client: JiraClient, screen: Screen): Promise<number> {
   const board = new Dashboard(workspace, client, macOpener, screen.redraw, {
     agent: EveAgent.create(client),
     connectAgent: async (theme) => ((await connectAgent(screen, theme)) ? EveAgent.create(client) : undefined),
+    teamMode: { initial: config?.teamMode, save: rememberTeamMode },
     appearance: { initial: config?.theme, save: rememberTheme },
   });
   // Scheduled refreshes and retries; the screen redraws only when state changes.

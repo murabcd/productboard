@@ -9,7 +9,7 @@ export const HELP = [
   section("Pages", [
     ...NAVIGATION.map((page): [string, string] => [navKey(page), page.name]),
     ["Tab", "Next page"],
-    ["← →", "My issues: Assigned / Created"],
+    ["← →", "Switch My issues / Team issues tabs"],
     ["Ctrl-K", "Commands"],
   ]),
   section("Issues", [

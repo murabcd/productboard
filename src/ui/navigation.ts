@@ -13,44 +13,47 @@ export interface NavItem {
   icon: string;
   /** The narrow top bar's tab label. */
   short: string;
+  tabs: readonly (readonly [View, string])[];
 }
 
-const item = (to: Destination, icon: string, name: string, short: string): NavItem => ({
+const item = (to: Destination, icon: string, name: string, short: string, tabs: NavItem["tabs"] = []): NavItem => ({
   to,
   icon,
   name,
   short,
+  tabs,
 });
 
 // Font Awesome glyphs provided by Nerd Fonts.
 const SEARCH = item(View.Search, "\uF002", "Search", "Find");
 const INBOX = item(View.Mentions, "\uF01C", "Inbox", "Inbox");
-const MY_ISSUES = item(View.Mine, "\uF046", "My issues", "Me");
+const MY_ISSUES = item(View.Mine, "\uF046", "My issues", "Me", [
+  [View.Mine, "Assigned"],
+  [View.Created, "Created"],
+]);
 export const AGENT = item("agent", "\uF0D0", "Agent", "Agent");
-const TEAM_FOCUS = item(View.Today, "\uF05B", "Team focus", "Focus");
+const TEAM_ISSUES = item(View.Team, "\uF05B", "Team issues", "Team", [
+  [View.Team, "All issues"],
+  [View.Today, "Needs attention"],
+]);
 
 export const NAV_GROUPS: readonly (readonly NavItem[])[] = [
   [SEARCH, AGENT],
-  [INBOX, MY_ISSUES, TEAM_FOCUS],
+  [INBOX, MY_ISSUES, TEAM_ISSUES],
 ];
 export const NAVIGATION: readonly NavItem[] = NAV_GROUPS.flat();
 
-/** The page each view belongs to; Created is a tab of My issues. */
+/** The page each view belongs to; personal and team modes share their page. */
 const PAGES: Record<View, NavItem> = {
   [View.Mentions]: INBOX,
   [View.Mine]: MY_ISSUES,
   [View.Created]: MY_ISSUES,
-  [View.Today]: TEAM_FOCUS,
+  [View.Today]: TEAM_ISSUES,
+  [View.Team]: TEAM_ISSUES,
   [View.Search]: SEARCH,
 };
 
 export const pageOf = (view: View): NavItem => PAGES[view];
-
-/** My issues' tabs. */
-export const MY_ISSUES_TABS: readonly [View, string][] = [
-  [View.Mine, "Assigned"],
-  [View.Created, "Created"],
-];
 
 /** The number key for an item in sidebar order. */
 export const navKey = (nav: NavItem): string => String(NAVIGATION.indexOf(nav) + 1);

@@ -17,6 +17,10 @@ export const action = (name: Action): Target => ({ kind: "action", action: name 
 
 const width = ({ label }: Control): number => cells(label) + 2;
 
+/** Total cell width, including the single-cell gaps between controls. */
+export const controlsWidth = (controls: readonly Control[]): number =>
+  controls.reduce((sum, control) => sum + width(control), 0) + Math.max(0, controls.length - 1);
+
 /** Draw a button or tab at (y, x); returns its width. */
 export function button(canvas: Canvas, y: number, x: number, control: Control): number {
   const text = ` ${control.label} `;
@@ -42,7 +46,7 @@ export function buttons(canvas: Canvas, y: number, x: number, controls: Control[
 
 /** Controls right to left, ending at `right`; returns where the first starts. */
 export function buttonsRight(canvas: Canvas, y: number, right: number, controls: Control[]): number {
-  const start = right - controls.reduce((sum, control) => sum + width(control) + 1, -1);
+  const start = right - controlsWidth(controls);
   buttons(canvas, y, start, controls);
   return start;
 }

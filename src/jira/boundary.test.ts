@@ -150,12 +150,12 @@ describe("scopes", () => {
     expect(() => search("***")).toThrow("Type words");
   });
 
-  test("Assigned resets the assignee filter; choosing a person there opens Team focus", () => {
+  test("Assigned resets the assignee filter; choosing a person there opens Team issues", () => {
     const team = { ...initialQuery, view: View.Today, assignee: "someone", limit: 600 };
     expect(withView(team, View.Mine)).toMatchObject({ assignee: "", limit: 200 });
     expect(withView(team, View.Created).assignee).toBe("someone");
     expect(withAssignee({ ...initialQuery, view: View.Mine }, "other")).toMatchObject({
-      view: View.Today,
+      view: View.Team,
       assignee: "other",
     });
   });

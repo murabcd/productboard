@@ -277,8 +277,8 @@ describe("OpenTUI shell", () => {
     await setup.mockMouse.scroll(30, 8, "up");
     await setup.renderOnce();
     expect(dashboard.list.selected?.key).toBe("EX-1");
-    await clickSidebar(setup, "Team focus");
-    expect(dashboard.workspace.query.view).toBe(View.Today);
+    await clickSidebar(setup, "Team issues");
+    expect(dashboard.workspace.query.view).toBe(View.Team);
   });
 
   test("the wheel over the peek scrolls the peek, not the list", async () => {
@@ -374,10 +374,39 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("3");
     expect(dashboard.workspace.query.view).toBe(View.Mentions);
     await setup.renderOnce();
-    const focus = setup.captureCharFrame().split("\n")[1]?.indexOf(" Focus ") ?? -1;
+    const focus = setup.captureCharFrame().split("\n")[1]?.indexOf(" Team ") ?? -1;
     expect(focus).toBeGreaterThan(0);
     await setup.mockMouse.click(focus + 1, 1);
+    expect(dashboard.workspace.query.view).toBe(View.Team);
+  });
+
+  test("team tabs and filters stay clickable at minimum width and page navigation restores the mode", async () => {
+    const { setup, dashboard } = await start(MIN_WIDTH);
+    dashboard.workspace.query = { ...dashboard.workspace.query, status: "done" };
+    await setup.mockInput.typeText("5");
+    await setup.renderOnce();
+    let rows = setup.captureCharFrame().split("\n");
+    expect(rows[3]).toContain("All issues");
+    const attention = rows[3]?.indexOf("Needs attention") ?? -1;
+    expect(attention).toBeGreaterThan(0);
+    await setup.mockMouse.click(attention + 1, 3);
     expect(dashboard.workspace.query.view).toBe(View.Today);
+    await setup.renderOnce();
+    rows = setup.captureCharFrame().split("\n");
+    const filter = rows[4]?.indexOf("Filter") ?? -1;
+    expect(filter).toBeGreaterThan(0);
+    await setup.mockMouse.click(filter + 1, 4);
+    expect(dashboard.picker?.kind).toBe("filter");
+    setup.mockInput.pressEscape();
+    await Bun.sleep(50); // A standalone Escape waits for the terminal sequence timeout.
+    await setup.renderOnce();
+    expect(dashboard.picker).toBeNull();
+    await setup.mockInput.typeText("3");
+    expect(dashboard.workspace.query.view).toBe(View.Mentions);
+    await setup.mockInput.typeText("5");
+    expect(dashboard.workspace.query.view).toBe(View.Today);
+    await setup.mockInput.pressArrow("left");
+    expect(dashboard.workspace.query.view).toBe(View.Team);
   });
 
   test("i previews a single image directly and Escape hides it", async () => {

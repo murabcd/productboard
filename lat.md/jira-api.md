@@ -26,15 +26,18 @@ comment reads. Closing the transport cancels all reads.
 
 ## Issue queries
 
-[[src/jira/query.ts#jql]] owns Jira-side filtering. Team focus retains team-wide
-scope. Assigned and Created match the current user against the issue's
-assignee and creator fields, respectively. The local filter searches loaded rows.
+[[src/jira/query.ts#jql]] owns Jira-side filtering. Team issues retains team-wide
+scope in both All issues and Needs attention. The local filter searches loaded rows.
+
+All issues uses the standard paginated search with no attention, personal, sprint,
+or status restriction unless selected in the filters. Assigned and Created match
+the current user against the issue’s assignee and creator fields, respectively.
 
 `--check` uses [[src/jira/client.ts#JiraClient]] to load the first page of
 recently updated issues without applying a workspace view.
 
 The optional sprint filter adds a Jira sprint ID to the current view's query.
-Team focus applies the project, sprint, assignee, and status filters to its searches.
+Needs attention applies the project, sprint, assignee, and status filters to its searches.
 With the Done filter, only recent mentions and changes to your issues are
 queried because the other sections show open work.
 

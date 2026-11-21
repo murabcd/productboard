@@ -58,7 +58,7 @@ export function frame(d: Dashboard): Canvas {
 }
 
 const navTarget = (item: NavItem): Target =>
-  item.to === "agent" ? { kind: "agent", action: "tab" } : { kind: "view", view: item.to };
+  item.to === "agent" ? { kind: "agent", action: "tab" } : { kind: "page", view: item.to };
 
 function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number, header: PageHeader): void {
   const { width } = canvas;
