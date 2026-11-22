@@ -2,6 +2,18 @@ import type { PickerSource } from "./pickers";
 
 /** Conversation actions use the shared keyboard and search picker. */
 export const CHAT_PICKERS = {
+  "agent-retry": {
+    title: "Retry a failed or interrupted reply",
+    items: ({ agent }) =>
+      agent.chat.current.turns
+        .filter((turn) => turn.state.kind === "failed" || turn.state.kind === "interrupted")
+        .map((turn, index) => ({
+          value: turn.id,
+          label: `${index + 1}. ${turn.displayPrompt}`,
+          detail: turn.state.kind === "failed" ? turn.state.error : "Interrupted",
+          run: () => void agent.chat.retry(turn.id),
+        })),
+  },
   "agent-answers": {
     title: "Copy an answer",
     items: (d) =>
@@ -91,6 +103,6 @@ export const CHAT_PICKERS = {
     ],
   },
 } satisfies Record<
-  "chats" | "chat-rename" | "chat-delete" | "agent-tools" | "agent-answers" | "agent-fork",
+  "chats" | "chat-rename" | "chat-delete" | "agent-tools" | "agent-answers" | "agent-fork" | "agent-retry",
   PickerSource
 >;

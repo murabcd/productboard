@@ -104,7 +104,7 @@ test("a replacement Eve session receives full history, evidence and earlier imag
         onIssues: () => {},
         onTools: () => {},
       }),
-    ).rejects.toThrow("could not finish");
+    ).rejects.toThrow("rejected this request");
     const serialized = JSON.stringify(payload);
     expect(payload).toMatchObject({
       message: [

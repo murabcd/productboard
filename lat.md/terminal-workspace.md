@@ -253,3 +253,14 @@ subsequent full turns and images. The full record remains available for reading,
 recall, and saved chats, including older image bytes. Failed or cancelled
 compaction preserves the earlier checkpoint. Summarization sessions are retired
 after every segment and never become visible conversation turns.
+
+[[src/agent/failure.ts]] classifies transport and Eve turn failures into controlled
+messages, keeping provider response bodies out of the saved record. Context,
+authentication, billing, model and request errors are not automatically retried.
+[[src/agent/reply.ts#runReply]] owns callbacks and attempt settlement. Transient
+failures before text receive at most one additional attempt, with visible backoff,
+bounded Retry-After handling, and cancellation. Failed attempts cannot publish
+late callbacks. Partial replies wait for explicit Retry and remain in the record;
+the new attempt receives the original prompt and attachments without replacing
+an edited draft. Retrying an older turn forks through that turn first. `/retry`
+and reply buttons expose the same action; context failures also offer Compact.

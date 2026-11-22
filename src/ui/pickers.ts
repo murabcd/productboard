@@ -228,6 +228,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("/tools", "Inspect Jira searches", () => d.openPicker("agent-tools")),
       item("/answers", "Copy a specific answer", () => d.openPicker("agent-answers")),
       item("/fork", "Branch from an earlier reply", () => d.openPicker("agent-fork")),
+      item("/retry", "Retry a failed reply", () => d.openPicker("agent-retry")),
       item("/copy", "Copy last answer", () => d.copyAgentAnswer()),
     ],
   },

@@ -19,6 +19,7 @@ import type { AgentBackend } from "./chat";
 import { chatgptModels } from "./chatgpt";
 import { contextText, contextTurns, summarizeContext } from "./context";
 import { EveStream } from "./eve-stream";
+import { AgentFailure, agentFailure, classifyFailure } from "./failure";
 import { openJiraSearch } from "./jira-search";
 import { type AgentModel, listModels, PROVIDER_NAMES } from "./models";
 
@@ -157,11 +158,11 @@ export class EveAgent implements AgentBackend {
     const config = this.config;
     await this.closing;
     signal.throwIfAborted();
-    if (this.config !== config) throw new Error("Agent restarted. Send the question again.");
+    if (this.config !== config) throw new AgentFailure("restarted");
     const run = this.connect(config);
     const client = await run.ready;
     signal.throwIfAborted();
-    if (this.active !== run) throw new Error("Agent restarted. Send the question again.");
+    if (this.active !== run) throw new AgentFailure("restarted");
 
     const deadline = AbortSignal.timeout(REQUEST_TIMEOUT);
     const stop = AbortSignal.any([signal, deadline]);
@@ -173,7 +174,7 @@ export class EveAgent implements AgentBackend {
     try {
       session ??= (await client.sessions.create({ signal: stop })).session;
       stop.throwIfAborted();
-      if (this.active !== run) throw new Error("Agent restarted. Send the question again.");
+      if (this.active !== run) throw new AgentFailure("restarted");
       run.sessions.set(thread, session);
       stop.addEventListener("abort", evict, { once: true });
       const prior = existing ? "" : contextText(history, checkpoint);
@@ -192,7 +193,11 @@ export class EveAgent implements AgentBackend {
       const stream = new EveStream(callbacks);
       for await (const event of response) {
         stream.accept(event);
-        if (isTurnFailureEvent(event)) throw new Error(event.data.message);
+        if (isTurnFailureEvent(event)) {
+          const details = event.data.details;
+          const status = details && typeof details.statusCode === "number" ? details.statusCode : 0;
+          throw classifyFailure(`${event.data.code} ${event.data.message}`, status);
+        }
       }
       stop.throwIfAborted();
     } catch (error) {
@@ -200,14 +205,7 @@ export class EveAgent implements AgentBackend {
         evict();
         retireSession(session);
       }
-      throw new Error(
-        deadline.aborted
-          ? "Agent timed out. Try again."
-          : "Agent could not finish the reply. Send again to retry; use /models if the problem continues.",
-        {
-          cause: error,
-        },
-      );
+      throw deadline.aborted ? new AgentFailure("timeout") : agentFailure(error);
     } finally {
       stop.removeEventListener("abort", evict);
     }
@@ -263,7 +261,7 @@ function openEveProcess(jira: Pick<JiraClient, "search">, { choice, credentials 
   const { promise: exited, resolve: exit } = Promise.withResolvers<void>();
   const sessions = new Map<string, ClientSession>();
   const deadline = AbortSignal.timeout(REQUEST_TIMEOUT);
-  const fail = () => reject(new Error("Could not start Eve. Install Node.js 24 and run bun install."));
+  const fail = () => reject(new AgentFailure("startup"));
   const run: EveProcess = {
     ready,
     exited,

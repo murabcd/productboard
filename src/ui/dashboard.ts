@@ -609,6 +609,8 @@ export class Dashboard {
         return;
       case "agent-message":
         if (target.action === "copy") this.copyAgentAnswer(target.turn);
+        else if (target.action === "retry") void this.agent.chat.retry(target.turn);
+        else if (target.action === "compact") void this.agent.chat.compact();
         else this.agent.chat.fork(target.turn);
         return;
       case "agent-cite": {

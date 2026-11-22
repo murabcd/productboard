@@ -90,6 +90,17 @@ function turnRows(turn: Turn, room: number): TranscriptRow[] {
             ]
           : []),
         { label: "Fork chat", target: { kind: "agent-message", turn: turn.id, action: "fork" } },
+        ...(state.kind === "failed" || state.kind === "interrupted"
+          ? [{ label: "Retry", target: { kind: "agent-message", turn: turn.id, action: "retry" } } satisfies Control]
+          : []),
+        ...(state.kind === "failed" && state.reason === "context"
+          ? [
+              {
+                label: "Compact",
+                target: { kind: "agent-message", turn: turn.id, action: "compact" },
+              } satisfies Control,
+            ]
+          : []),
       ],
     });
   }

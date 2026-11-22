@@ -128,6 +128,11 @@ are available. Click a search row or use `/tools` to inspect its full query,
 returned issue summaries, partial-result hint, or failure reason.
 Interrupted and failed replies keep their status in the chat.
 If a reply fails, its question returns to the empty composer so you can retry.
+Transient failures before any answer text receive one automatic retry, with a
+visible countdown that `Esc` stops. Partial replies stay intact. Click **Retry**
+or use `/retry` to send another attempt; retrying an older reply creates a fork.
+Context-limit errors offer **Compact**, and authentication, quota, unavailable
+model, rejected-request, and connection failures show their own recovery steps.
 
 Drop an image file into the Agent composer or paste its local path. Images
 and long or multiline pastes appear inline as numbered labels. Press

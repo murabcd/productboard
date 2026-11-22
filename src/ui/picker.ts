@@ -13,6 +13,7 @@ export type PickerKind =
   | "agent-tools"
   | "agent-answers"
   | "agent-fork"
+  | "agent-retry"
   | "project"
   | "assignee"
   | "status"

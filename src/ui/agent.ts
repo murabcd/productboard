@@ -55,6 +55,18 @@ export function drawAgent(
       thread.operation.kind === "compaction" ? "compacting context" : "interrupt",
       "muted",
     );
+    const state = thread.turns.at(-1)?.state;
+    if (thread.operation.kind === "reply" && state?.kind === "running" && state.progress.kind === "retrying") {
+      const seconds = Math.max(0, Math.ceil((state.progress.nextAt - Date.now()) / 1000));
+      canvas.paint(status, left, room, "workspace");
+      canvas.put(
+        status,
+        left + 1,
+        `Retry ${state.progress.attempt}/2 in ${seconds}s · ${state.progress.reason} · Esc stops`,
+        "warning",
+        room - 1,
+      );
+    }
   } else if (thread.draft.error) {
     canvas.put(status, left + 1, thread.draft.error, "error", room - 1);
   } else if (thread.draft.loading) {

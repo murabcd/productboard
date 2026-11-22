@@ -3,6 +3,7 @@ import { JiraSearchResult } from "../../agent/lib/jira-search";
 import { AgentChoice } from "../auth";
 import { ContextCheckpoint } from "./context";
 import { AgentDraft, DraftParts, DraftSnapshot, SprintContext } from "./draft";
+import { FailureKind } from "./failure";
 import { AgentImage } from "./images";
 
 export const AgentTool = z.object({
@@ -18,10 +19,23 @@ export const AgentTool = z.object({
 export type AgentTool = z.infer<typeof AgentTool>;
 
 export const TurnState = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("running") }),
+  z.object({
+    kind: z.literal("running"),
+    progress: z
+      .discriminatedUnion("kind", [
+        z.object({ kind: z.literal("answering"), attempt: z.number().int() }),
+        z.object({ kind: z.literal("retrying"), attempt: z.number().int(), nextAt: z.number(), reason: z.string() }),
+      ])
+      .default({ kind: "answering", attempt: 1 }),
+  }),
   z.object({ kind: z.literal("complete"), finished: z.number() }),
   z.object({ kind: z.literal("interrupted"), finished: z.number() }),
-  z.object({ kind: z.literal("failed"), finished: z.number(), error: z.string() }),
+  z.object({
+    kind: z.literal("failed"),
+    finished: z.number(),
+    error: z.string(),
+    reason: FailureKind.default("unknown"),
+  }),
 ]);
 export const Turn = z.object({
   id: z.string().uuid(),

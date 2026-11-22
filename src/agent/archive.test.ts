@@ -31,7 +31,7 @@ test("saved chats round-trip attachment bytes, drafts and interrupted replies pr
     answer: "Partial",
     choice: { provider: "openai", model: "fixture", reasoning: "medium" },
     started: 0,
-    state: { kind: "running" },
+    state: { kind: "running", progress: { kind: "answering", attempt: 1 } },
     parts: ["Question"],
     images: [],
     issues: [],

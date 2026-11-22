@@ -5,7 +5,7 @@ import { TranscriptViewport } from "./transcript";
 function turn(): Turn {
   return {
     id: crypto.randomUUID(),
-    state: { kind: "running" },
+    state: { kind: "running", progress: { kind: "answering", attempt: 1 } },
     parts: ["Show issues"],
     prompt: "Show issues",
     displayPrompt: "Show issues",

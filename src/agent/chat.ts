@@ -1,12 +1,14 @@
+import { isDeepStrictEqual } from "node:util";
 import type { AgentChoice, AgentChoiceChange, ModelRef } from "../auth";
 import type { Issue } from "../jira/types";
 import { clean } from "../text";
 import type { ChatArchive } from "./archive";
 import type { ContextCheckpoint } from "./context";
 import { type AgentTool, type Conversation, conversation, conversationData, type Turn } from "./conversation";
-import type { SprintContext } from "./draft";
+import { AgentDraft, type SprintContext } from "./draft";
 import type { AgentImage } from "./images";
 import type { AgentModel } from "./models";
+import { runReply, untilStopped } from "./reply";
 
 export type { AgentTool, Turn } from "./conversation";
 
@@ -259,17 +261,31 @@ export class AgentChat {
     );
   }
 
-  async send(): Promise<void> {
-    const thread = this.current;
+  send(): Promise<void> {
+    return this.submit(this.current, this.current.draft);
+  }
+
+  retry(turnId: string): Promise<void> {
+    const turn = this.current.turns.find((turn) => turn.id === turnId);
+    if (this.current.operation || !turn || (turn.state.kind !== "failed" && turn.state.kind !== "interrupted"))
+      return Promise.resolve();
+    if (turn !== this.current.turns.at(-1)) this.fork(turn.id);
+    if (isDeepStrictEqual(this.current.draft.snapshot(), { parts: turn.parts, images: turn.images }))
+      this.current.draft.replace([]);
+    const draft = new AgentDraft();
+    draft.restore(turn);
+    return this.submit(this.current, draft);
+  }
+
+  private async submit(thread: Conversation, draft: AgentDraft): Promise<void> {
     if (thread.operation) return;
-    const { draft } = thread;
     const message = draft.prepare();
     if (!message) return;
     const parts = draft.parts;
     const { displayPrompt, ...request } = message;
     const backend = this.backend;
     if (!backend) {
-      draft.error = "Connect Agent from the command palette (Ctrl+K).";
+      thread.draft.error = "Connect Agent from the command palette (Ctrl+K).";
       this.redraw();
       return;
     }
@@ -281,7 +297,7 @@ export class AgentChat {
       answer: "",
       choice: backend.current,
       started: Date.now(),
-      state: { kind: "running" },
+      state: { kind: "running", progress: { kind: "answering", attempt: 1 } },
       sprint: request.sprint,
       images: request.images,
       parts,
@@ -290,83 +306,19 @@ export class AgentChat {
     };
     thread.operation = { kind: "reply", controller: pending };
     draft.replace([]);
-    draft.error = "";
+    thread.draft.error = "";
     thread.recall = undefined;
     if (!thread.turns.length && thread.name === "New chat") thread.name = clean(displayPrompt).slice(0, 80);
     thread.updated = Date.now();
-    const history = thread.turns.slice();
     thread.turns.push(turn);
     this.changed(thread);
-    let failure = "";
-    let accepting = true;
-    try {
-      const reply = backend.ask({
-        thread: thread.id,
-        ...request,
-        signal: pending.signal,
-        history,
-        checkpoint: thread.checkpoint,
-        onIssues: (issues) => {
-          if (!accepting || pending.signal.aborted) return;
-          turn.issues.push(...issues);
-          for (const issue of issues) thread.issues.set(issue.key, issue);
-        },
-        onText: (text, replace = false) => {
-          if (!accepting || pending.signal.aborted) return;
-          turn.answer = (replace ? "" : turn.answer) + clean(text, true);
-          this.changed(thread);
-        },
-        onTools: (tools) => {
-          if (!accepting || pending.signal.aborted) return;
-          turn.tools = tools.map((tool) => ({
-            ...tool,
-            name: clean(tool.name),
-            query: clean(tool.query),
-            detail: clean(tool.detail),
-          }));
-          this.changed(thread);
-        },
-      });
-      await untilStopped(reply, pending.signal);
-      if (!turn.answer.trim()) throw new Error("Agent returned an empty reply.");
-    } catch (error) {
-      if (!pending.signal.aborted) failure = error instanceof Error ? clean(error.message) : "Agent request failed.";
-    } finally {
-      accepting = false;
-      const finished = Date.now();
-      turn.state = pending.signal.aborted
-        ? { kind: "interrupted", finished }
-        : failure
-          ? { kind: "failed", finished, error: failure }
-          : { kind: "complete", finished };
-      turn.tools = turn.tools.map((tool) =>
-        tool.state === "running"
-          ? {
-              ...tool,
-              state: pending.signal.aborted ? "interrupted" : "failed",
-              detail: pending.signal.aborted ? "Stopped" : "Did not finish",
-            }
-          : tool,
-      );
-      const answered = turn.answer.trim() !== "";
-      if (pending.signal.aborted || failure) {
-        if ((!answered || failure) && draft.parts.length === 0) draft.replace(parts);
-        draft.error = pending.signal.aborted ? "Stopped." : failure;
-      }
-      thread.operation = undefined;
-      this.changed(thread);
+    await runReply(backend, thread, turn, pending.signal, () => this.changed(thread));
+    if (turn.state.kind === "failed" || turn.state.kind === "interrupted") {
+      if ((!turn.answer.trim() || turn.state.kind === "failed") && thread.draft.parts.length === 0)
+        thread.draft.restore(turn);
+      thread.draft.error = turn.state.kind === "failed" ? turn.state.error : "Stopped.";
     }
-  }
-}
-
-async function untilStopped<T>(reply: Promise<T>, signal: AbortSignal): Promise<T> {
-  signal.throwIfAborted();
-  const { promise, reject } = Promise.withResolvers<never>();
-  const stop = () => reject(signal.reason);
-  signal.addEventListener("abort", stop, { once: true });
-  try {
-    return await Promise.race([reply, promise]);
-  } finally {
-    signal.removeEventListener("abort", stop);
+    thread.operation = undefined;
+    this.changed(thread);
   }
 }

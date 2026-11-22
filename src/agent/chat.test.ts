@@ -49,7 +49,7 @@ test("failed partial replies retain their error and cannot receive late callback
   const turn = chat.current.turns[0];
   expect(turn).toMatchObject({
     answer: "Partial reply",
-    state: { kind: "failed", error: "Connection lost" },
+    state: { kind: "failed", reason: "network" },
     tools: [{ state: "failed" }],
   });
   expect(chat.current.draft.parts).toEqual(["Question"]);
@@ -57,7 +57,7 @@ test("failed partial replies retain their error and cannot receive late callback
   expect(turn?.answer).toBe("Partial reply");
   chat.current.draft.replace(["Next question"]);
   await chat.send();
-  expect(turn?.state).toMatchObject({ kind: "failed", error: "Connection lost" });
+  expect(turn?.state).toMatchObject({ kind: "failed", reason: "network" });
 });
 
 test("interrupting preserves partial output and a new draft while ignoring late tool results", async () => {
