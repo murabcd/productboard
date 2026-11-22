@@ -219,50 +219,62 @@ export class Workspace {
     if (!candidates.length || this.sprintRequest) return;
     const request = new AbortController();
     this.sprintRequest = request;
-    void Promise.all(
-      candidates.map((board) =>
-        this.source.sprints(board.value, request.signal).then(
-          (sprints) => ({ board: board.value, sprints }),
-          () => ({ board: board.value, sprints: [] }),
-        ),
-      ),
+    this.sprintCatalogError = "";
+    this.sprintsRetryAt = Number.POSITIVE_INFINITY;
+    this.changed();
+    void Promise.allSettled(
+      candidates.map(async ({ value: board }) => {
+        const cached = this.sprintLists.get(board);
+        if (cached && this.now() < cached.updated + REFRESH_MS) return { board, sprints: cached.value };
+        const sprints = await this.source.sprints(board, request.signal);
+        if (this.sprintRequest === request) this.sprintLists.set(board, sprints, this.now());
+        return { board, sprints };
+      }),
     ).then((found) => {
       if (this.sprintRequest !== request) return;
       this.sprintRequest = undefined;
       const active = (sprints: Sprint[]) => sprints.filter((s) => s.state === "active").length;
-      const best = found.reduce<(typeof found)[number] | undefined>(
+      const successful = found.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const best = successful.reduce<(typeof successful)[number] | undefined>(
         (top, next) => (!top || active(next.sprints) > active(top.sprints) ? next : top),
         undefined,
       );
-      if (best) this.openBoard(best.board, best.sprints);
+      const failure = found.find((result) => result.status === "rejected");
+      if (best) this.openBoard(best.board);
+      else if (failure) {
+        this.sprintCatalogError = message(failure.reason);
+        this.sprintsRetryAt = this.now() + REFRESH_MS;
+        this.changed();
+      }
     });
   }
 
   /** Restore a saved board and query as one scope transition. */
   openScope(query: IssueQuery, board: string): void {
-    if (board && board !== this.board) this.openBoard(board, undefined, query);
+    if (board && board !== this.board) this.openBoard(board, query);
     else this.change(query);
   }
 
   private openBoard(
     board: string,
-    sprints?: Sprint[],
     query = this.query.sprintFilter === null ? this.query : scoped(this.query, { sprintFilter: null }),
   ): void {
     this.board = board;
     this.sprintRequest?.abort();
     this.sprintRequest = undefined;
-    this.sprints = sprints ?? [];
-    if (sprints) this.sprintLists.set(board, sprints, this.now());
+    this.sprints = [];
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
     this.change(query);
-    if (sprints) this.changed();
-    else void this.loadSprints();
+    void this.loadSprints();
   }
 
   async loadSprints(force = false): Promise<void> {
-    if (!this.board || this.sprintRequest) return;
+    if (this.sprintRequest) return;
+    if (!this.board) {
+      this.openDefaultBoard();
+      return;
+    }
     const board = this.board;
     const cached = this.sprintLists.get(board);
     if (cached) this.sprints = cached.value;

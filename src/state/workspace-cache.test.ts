@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Snapshot } from "../jira/client";
 import { type IssueQuery, initialQuery, View } from "../jira/query";
-import type { Sprint } from "../jira/types";
+import type { Choice, Sprint } from "../jira/types";
 import { deferred, settle, snapshot } from "../testing";
 import { REFRESH_MS, type Source, Workspace } from "./workspace";
 
@@ -32,8 +32,11 @@ function setup() {
     request.reply.resolve(snapshot(request.query, keys, more));
     await settle();
   }
-  return { work, requests, sprints, a, b, answer, advance: (ms: number) => (now += ms) };
+  return { work, source, requests, sprints, a, b, answer, advance: (ms: number) => (now += ms) };
 }
+
+const boards: Choice[] = ["A", "B"].map((value) => ({ value, label: value, detail: "", state: "" }));
+const active: Sprint[] = [{ id: 1, name: "Active", state: "active", start: "", end: "", goal: "" }];
 
 test("A → B → A restores rows, warnings and original age without another request", async () => {
   const { work, requests, a, b, answer, advance } = setup();
@@ -146,4 +149,70 @@ test("board switches and empty sprint pickers reuse recent catalogs, then refres
   advance(REFRESH_MS);
   work.tick();
   expect(sprints).toHaveLength(4);
+});
+
+test("discovery retains every successful catalog without renewing its completion time", async () => {
+  const { work, source, sprints, advance } = setup();
+  source.boards = async () => boards;
+  work.loadCatalog();
+  await settle();
+  sprints[1]?.reply.resolve(active);
+  await settle();
+  advance(10_000);
+  sprints[0]?.reply.resolve([]);
+  await settle();
+  expect(work.board).toBe("B");
+  expect(work.sprints).toEqual(active);
+  work.chooseBoard("A");
+  expect(work.sprints).toEqual([]);
+  work.chooseBoard("B");
+  expect(sprints).toHaveLength(2);
+  advance(REFRESH_MS - 10_000);
+  void work.loadSprints();
+  expect(sprints).toHaveLength(3);
+  sprints[2]?.reply.resolve(active);
+  await settle();
+});
+
+test("failed discovery reports its error and retries; failures never become fresh empty catalogs", async () => {
+  const { work, source, sprints, advance } = setup();
+  source.boards = async () => boards;
+  work.loadCatalog();
+  await settle();
+  sprints[0]?.reply.reject(new Error("A unavailable"));
+  sprints[1]?.reply.reject(new Error("B unavailable"));
+  await settle();
+  expect(work.board).toBe("");
+  expect(work.sprintCatalogError).toBe("A unavailable");
+  expect(work.sprintsPending).toBe(false);
+  advance(REFRESH_MS - 1);
+  work.tick();
+  expect(sprints).toHaveLength(2);
+  advance(1);
+  work.tick();
+  work.tick();
+  expect(sprints).toHaveLength(4);
+  sprints[2]?.reply.reject(new Error("Still unavailable"));
+  sprints[3]?.reply.resolve([]);
+  await settle();
+  expect(work.board).toBe("B");
+  expect(work.sprintCatalogError).toBe("");
+  work.chooseBoard("A");
+  expect(sprints.map(({ board }) => board)).toEqual(["A", "B", "A", "B", "A"]);
+});
+
+test("abandoned board discovery cannot publish or cache late results", async () => {
+  const { work, source, sprints } = setup();
+  source.boards = async () => boards;
+  work.loadCatalog();
+  await settle();
+  work.chooseBoard("C");
+  sprints[0]?.reply.resolve(active);
+  sprints[1]?.reply.resolve([]);
+  sprints[2]?.reply.resolve([]);
+  await settle();
+  expect(work.board).toBe("C");
+  expect(work.sprints).toEqual([]);
+  work.chooseBoard("A");
+  expect(sprints.map(({ board }) => board)).toEqual(["A", "B", "C", "A"]);
 });

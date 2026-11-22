@@ -30,6 +30,9 @@ show their cached rows while one read refreshes them. Only the active issue list
 refreshes on a timer, due 60 seconds after its last read. Manual `r` bypasses list
 and detail freshness; failures keep successful data and never renew its age.
 Least recently used entries are evicted when each cache reaches its limit.
+Default-board discovery retains every successful sprint read in the same cache
+used by board navigation. Failed candidates cannot become cached empty catalogs;
+if every candidate fails, discovery reports the failure and retries on schedule.
 
 Startup opens Inbox and loads mentions alongside the board catalog.
 A scope starts loading as soon as it is ready. Clearing server filters applies
