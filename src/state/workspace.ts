@@ -1,5 +1,6 @@
 /** Async view state: keep successful results and reject responses for old scopes. */
 
+import { READ_CACHE_MS, RecentCache } from "../cache";
 import type { Snapshot } from "../jira/client";
 import { type IssueQuery, initialQuery, isReady, PAGE, sameQuery, sameScope, scoped } from "../jira/query";
 import type { Choice, Issue, Sprint } from "../jira/types";
@@ -12,7 +13,7 @@ export interface Source {
   sprints(board: string, signal: AbortSignal): Promise<Sprint[]>;
 }
 
-export const REFRESH_MS = 60_000;
+export const REFRESH_MS = READ_CACHE_MS;
 /** Boards checked for active sprints when no board is remembered. */
 const DEFAULT_BOARD_CANDIDATES = 20;
 
@@ -34,6 +35,8 @@ export class Workspace {
   };
 
   private request: AbortController | undefined;
+  private readonly snapshots = new RecentCache<IssueQuery, Snapshot>(20, sameQuery);
+  private readonly sprintLists = new RecentCache<string, Sprint[]>(20);
   private sprintRequest: AbortController | undefined;
   private nextRefresh = Number.POSITIVE_INFINITY;
   private sprintsRetryAt = Number.POSITIVE_INFINITY;
@@ -112,8 +115,14 @@ export class Workspace {
     this.request?.abort();
     this.request = undefined;
     this.error = "";
-    this.nextRefresh = Number.POSITIVE_INFINITY;
-    this.refresh();
+    const cached = this.snapshots.get(query);
+    if (cached) {
+      this.snapshot = cached.value;
+      this.updated = new Date(cached.updated);
+    }
+    this.nextRefresh = cached ? cached.updated + REFRESH_MS : Number.POSITIVE_INFINITY;
+    if (!cached || this.now() >= this.nextRefresh) this.refresh();
+    else this.changed();
   }
 
   refresh(): void {
@@ -132,6 +141,7 @@ export class Workspace {
       if (this.request === request && sameQuery(snapshot.query, query)) {
         this.snapshot = snapshot;
         this.updated = new Date(this.now());
+        this.snapshots.set(query, snapshot, this.updated.getTime());
       }
     } catch (error) {
       request.abort();
@@ -243,6 +253,7 @@ export class Workspace {
     this.sprintRequest?.abort();
     this.sprintRequest = undefined;
     this.sprints = sprints ?? [];
+    if (sprints) this.sprintLists.set(board, sprints, this.now());
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
     this.change(query);
@@ -250,9 +261,15 @@ export class Workspace {
     else void this.loadSprints();
   }
 
-  async loadSprints(): Promise<void> {
+  async loadSprints(force = false): Promise<void> {
     if (!this.board || this.sprintRequest) return;
     const board = this.board;
+    const cached = this.sprintLists.get(board);
+    if (cached) this.sprints = cached.value;
+    if (!force && cached && this.now() < cached.updated + REFRESH_MS) {
+      this.changed();
+      return;
+    }
     const request = new AbortController();
     this.sprintRequest = request;
     this.sprintCatalogError = "";
@@ -260,7 +277,10 @@ export class Workspace {
     this.changed();
     try {
       const sprints = await this.source.sprints(board, request.signal);
-      if (this.sprintRequest === request) this.sprints = sprints;
+      if (this.sprintRequest === request) {
+        this.sprints = sprints;
+        this.sprintLists.set(board, sprints, this.now());
+      }
     } catch (error) {
       if (this.sprintRequest === request) {
         this.sprintCatalogError = message(error);
@@ -279,7 +299,7 @@ export class Workspace {
     for (const kind of ["boards", "projects"] as const) {
       if (this.catalogs[kind].error || this[kind].length === 0) this.loadChoices(kind);
     }
-    if (this.sprintCatalogError || this.sprints.length === 0) void this.loadSprints();
+    if (this.sprintCatalogError || this.sprints.length === 0) void this.loadSprints(true);
   }
 
   sprint(): Sprint | undefined {

@@ -25,9 +25,6 @@ export class JiraError extends Error {
 export const RETRY_DELAYS = [1, 3, 6];
 /** Requests normally answer in under a second; a stalled one is retried. */
 const TIMEOUT_MS = 8_000;
-/** Some VPNs silently drop a share of new connections, which then hang for
- * seconds. A read with no answer by now is sent again; the first answer wins. */
-const HEDGE_MS = 2_000;
 /** Longest Retry-After the app will honor before giving up on a request. */
 const MAX_WAIT_SECONDS = 30;
 const MAX_PARALLEL = 8;
@@ -127,7 +124,7 @@ export class JiraHttp {
       try {
         response = await this.slot(priority, stop, () => {
           const signal = AbortSignal.any([stop, AbortSignal.timeout(TIMEOUT_MS)]);
-          return this.hedged(url, init, signal);
+          return this.fetcher(url, { ...init, signal });
         });
       } catch (error) {
         stop.throwIfAborted();
@@ -148,24 +145,6 @@ export class JiraHttp {
       const wait = retryAfter > 0 ? retryAfter : (RETRY_DELAYS[attempt] ?? 0);
       if (wait > MAX_WAIT_SECONDS) throw new JiraError(message, response.status);
       await this.sleep(wait * 1000, stop);
-    }
-  }
-
-  /** Fetch, and fetch again if the first attempt has not answered in
-   * HEDGE_MS. Every request is a read, so a duplicate is harmless. */
-  private async hedged(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
-    const own = [new AbortController(), new AbortController()];
-    const attempts = own.map(async (mine, n) => {
-      const stop = AbortSignal.any([signal, mine.signal]);
-      if (n > 0) await pause(n * HEDGE_MS, stop);
-      return { response: await this.fetcher(url, { ...init, signal: stop }), mine };
-    });
-    try {
-      const { response, mine } = await Promise.any(attempts);
-      for (const other of own) if (other !== mine) other.abort();
-      return response;
-    } catch (error) {
-      throw error instanceof AggregateError ? error.errors[0] : error;
     }
   }
 

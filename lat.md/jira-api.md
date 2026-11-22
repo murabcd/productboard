@@ -19,7 +19,9 @@ and follows attachment redirects without forwarding it. Search uses POST as a
 read operation.
 
 Transport owns timeouts, retries, rate limit handling, request priority, and
-the 20 MiB attachment preview limit. It stops reading an oversized stream
+the 20 MiB attachment preview limit. Each attempt sends one request; slow
+requests are not duplicated speculatively. Failed connections and timeouts retain
+the normal retry policy. It stops reading an oversized stream
 even when Jira omits its size.
 Catalog pagination and Agent searches run at background priority, leaving
 slots for interactive reads. The timeout starts when a read receives a slot.

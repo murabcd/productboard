@@ -82,6 +82,10 @@ sprints are optional; project filters and issue lists remain usable without them
   - Attach issues, sprints, and screenshots to give Agent context.
   - Stream replies from OpenAI or Anthropic in the terminal.
 
+Recently visited lists, sprint choices, and issue previews reuse results for 60 seconds.
+Expired results stay visible while refreshing. Press `r` to fetch immediately; the
+active list also refreshes every minute. This cache stays in memory for this launch.
+
 The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,
 `3` for Inbox, `4` for My issues, and `5` for Team issues.
 Use a Nerd Font in your terminal to display the sidebar icons.

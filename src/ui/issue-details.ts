@@ -1,3 +1,4 @@
+import { READ_CACHE_MS, RecentCache } from "../cache";
 import type { JiraClient } from "../jira/client";
 import type { Detail } from "../jira/types";
 import { message } from "../state/workspace";
@@ -12,17 +13,23 @@ export interface IssueRead {
 
 export class IssueDetails {
   private readonly pending = new Map<string, IssueRead>();
+  private readonly cache = new RecentCache<string, Detail>(50);
 
   constructor(
     private readonly fetch: JiraClient["detail"],
     private readonly changed: (read: IssueRead) => void,
+    private readonly now = Date.now,
   ) {}
 
   open(key: string): IssueRead {
     const pending = this.pending.get(key);
     if (pending) return pending;
-    const read: IssueRead = { key, state: { kind: "loading", data: null } };
-    void this.reload(read);
+    const cached = this.cache.get(key);
+    const read: IssueRead = {
+      key,
+      state: cached ? { kind: "ready", data: cached.value } : { kind: "loading", data: null },
+    };
+    if (!cached || this.now() >= cached.updated + READ_CACHE_MS) void this.reload(read);
     return read;
   }
 
@@ -41,10 +48,12 @@ export class IssueDetails {
     if (this.pending.get(key) !== read) return;
     this.pending.delete(key);
     read.state = result;
+    if (result.kind === "ready") this.cache.set(key, result.data, this.now());
     this.changed(read);
   }
 
   dispose(): void {
     this.pending.clear();
+    this.cache.clear();
   }
 }

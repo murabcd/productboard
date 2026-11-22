@@ -442,7 +442,7 @@ describe("concept layout", () => {
     dashboard.handle({ name: "down" });
     expect(dashboard.peek?.issue.key).toBe("EX-2");
     dashboard.handle({ name: "up" });
-    expect(client.detail).toHaveBeenCalledTimes(3); // each move shows the newly selected issue
+    expect(client.detail).toHaveBeenCalledTimes(2); // returning to a fresh preview reuses its details
     dashboard.handle(ESC);
     expect(dashboard.peek).toBeNull();
     dashboard.resize(80, 30); // too narrow for a side panel: Space opens details

@@ -22,6 +22,15 @@ until the form fits again.
 The current list stays visible during refresh and on refresh failure. A scope
 change cancels the previous read and rejects any late result.
 
+[[src/cache.ts#RecentCache]] retains up to 20 exact issue queries (including page
+limit), 20 board sprint lists, and 50 issue details in memory per launch. Entries
+are fresh for 60 seconds from successful completion; revisiting does not extend
+freshness. Fresh scopes restore immediately without Jira reads. Expired scopes
+show their cached rows while one read refreshes them. Only the active issue list
+refreshes on a timer, due 60 seconds after its last read. Manual `r` bypasses list
+and detail freshness; failures keep successful data and never renew its age.
+Least recently used entries are evicted when each cache reaches its limit.
+
 Startup opens Inbox and loads mentions alongside the board catalog.
 A scope starts loading as soon as it is ready. Clearing server filters applies
 one scope change. Board discovery, project discovery, and the selected board's
@@ -130,8 +139,8 @@ one-column gap at the right edge of the workspace. The dashboard loads
 details outside rendering. [[src/ui/issue-details.ts#IssueDetails]]
 shares one read per issue key across Peek and full details. Both views observe
 the same result while open. A retry retains the last successful details until
-a new read settles. Completed reads are held by their open views, so the
-dashboard does not keep a session-wide cache of issue details.
+a new read settles. Reopening fresh details uses the bounded cache; expired
+details remain visible while reloading. In-flight reads are shared by issue key.
 
 [[src/jira/adf.ts]] converts Jira documents to typed blocks, and
 [[src/ui/document.ts]] lays those blocks out for the available terminal width.

@@ -83,38 +83,27 @@ describe("HTTP", () => {
     for (const release of held.splice(0)) release();
   });
 
-  test("a stalled connection is raced by a second attempt", async () => {
+  test("a slow successful read is not duplicated", async () => {
     let calls = 0;
-    const fetcher = fakeFetch(async (_input: string | URL | Request, init?: RequestInit) => {
+    const fetcher = fakeFetch(async () => {
       calls++;
-      if (calls === 1) {
-        // The first connection hangs until it is abandoned.
-        return new Promise<Response>((_, reject) =>
-          init?.signal?.addEventListener("abort", () => reject(new Error("aborted"))),
-        );
-      }
+      await Bun.sleep(2100);
       return json({ accountId: "me-id", displayName: "Avery" });
     });
-    const started = performance.now();
+    const me = await new JiraClient(new JiraHttp(credentials, fetcher, async () => {})).myself();
+    expect(me.accountId).toBe("me-id");
+    expect(calls).toBe(1);
+  });
+
+  test("a failed connection retries sequentially", async () => {
+    let calls = 0;
+    const fetcher = fakeFetch(async () => {
+      if (++calls === 1) throw new Error("Connection lost");
+      return json({ accountId: "me-id", displayName: "Avery" });
+    });
     const me = await new JiraClient(new JiraHttp(credentials, fetcher, async () => {})).myself();
     expect(me.accountId).toBe("me-id");
     expect(calls).toBe(2);
-    expect(performance.now() - started).toBeLessThan(3000);
-  });
-
-  test("when both hedged attempts answer together only the losing connection is aborted", async () => {
-    const signals: AbortSignal[] = [];
-    const bothStarted = deferred<void>();
-    const fetcher = fakeFetch(async (_input: string | URL | Request, init?: RequestInit) => {
-      if (!init?.signal) throw new Error("Missing request signal");
-      signals.push(init.signal);
-      if (signals.length === 2) bothStarted.resolve();
-      await bothStarted.promise;
-      return json({ accountId: "me-id", displayName: "Avery" });
-    });
-    const client = new JiraClient(new JiraHttp(credentials, fetcher, async () => {}));
-    expect((await client.myself()).accountId).toBe("me-id");
-    expect(signals.map(({ aborted }) => aborted)).toEqual([false, true]);
   });
 
   test("closing rejects queued catalog reads without waiting for active reads", async () => {
