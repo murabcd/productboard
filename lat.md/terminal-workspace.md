@@ -323,7 +323,21 @@ workflow stage, assignee account ID, or open issue age. Missing or future creati
 dates belong to Unknown age. Assignee and age omit completed issues. Counts and
 drilldowns share these members. [[src/ui/issue-list.ts#IssueList]] applies the local
 subset before its normal grouping, filtering and selection, including after refresh.
-The existing preview drawer and detail reads are reused unchanged.
+The full issue list retains its existing issue preview and detail reads.
+
+[[src/ui/view-peek.ts#drawViewPeek]] previews the selected bar's exact loaded
+members and share, owner counts by account ID, wrapped issue titles and any
+available attention reason. Assignee previews omit the redundant owner summary.
+No detail or Jira reads are started by opening, scrolling or moving the preview.
+[[src/ui/peek-panel.ts#drawPeekPanel]] shares the existing issue drawer's surface,
+pinned heading, scroll window and wheel targets. Space toggles the chart drawer;
+arrow keys move the selected bar and reset its scroll. Shift+arrows, J/K and the
+wheel over the drawer scroll only that preview. Escape closes it first; Enter or
+a bar click closes it and opens the full list. Scope and breakdown changes close
+it. Resizing hides it when it cannot fit; Space then opens the full list.
+Refresh updates the same loaded members and clamps the scroll to available rows.
+Refresh failures and partial-result warnings take footer space before optional
+shortcut hints.
 
 [[src/ui/view-chart.ts#drawViewChart]] uses the existing square glyph and theme palette,
 on consecutive terminal rows. Nonzero buckets retain at least one square;

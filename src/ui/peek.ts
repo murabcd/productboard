@@ -8,6 +8,7 @@ import { cells } from "../text";
 import { Canvas } from "./canvas";
 import { type Line, layout, layoutCached } from "./document";
 import type { IssueRead } from "./issue-details";
+import { drawPeekLine, drawPeekPanel, type PeekRow } from "./peek-panel";
 import { priorityMark, statusIcon, statusLabel } from "./status";
 
 export interface Peek {
@@ -17,36 +18,18 @@ export interface Peek {
   scroll: number;
 }
 
-type Row = (y: number) => void;
-
 /** The top bar stays put while the detail rows scroll. */
 export function drawPeek(peek: Peek, width: number, height: number): Canvas {
   const canvas = new Canvas(width, height, "panel");
-  for (let y = 0; y < height; y++) {
-    canvas.put(y, 0, "│", "line");
-    canvas.mark(y, 0, width, { kind: "peek" });
-  }
-  const left = 2;
-  const room = width - 4;
-  canvas.put(0, left, "Issue peek", "muted");
-
-  const rows = peekRows(canvas, peek, left, room);
-  const available = height - 2;
-  peek.scroll = Math.max(0, Math.min(peek.scroll, rows.length - available));
-  rows.slice(peek.scroll, peek.scroll + available).forEach((row, i) => {
-    row(2 + i);
-  });
-  const above = peek.scroll > 0;
-  const below = peek.scroll + available < rows.length;
-  if (above || below) canvas.put(0, left + 12, above && below ? "↑↓ more" : above ? "↑ more" : "↓ more", "accent");
+  drawPeekPanel(canvas, "Issue peek", peek, peekRows(canvas, peek, 2, width - 4));
   return canvas;
 }
 
-function peekRows(canvas: Canvas, peek: Peek, left: number, room: number): Row[] {
-  const rows: Row[] = [];
-  const blank: Row = () => {};
+function peekRows(canvas: Canvas, peek: Peek, left: number, room: number): PeekRow[] {
+  const rows: PeekRow[] = [];
+  const blank: PeekRow = () => {};
   const lines = (list: Line[]) => {
-    for (const line of list) rows.push((y) => drawLine(canvas, y, left, line));
+    for (const line of list) rows.push((y) => drawPeekLine(canvas, y, left, line));
   };
   const { issue } = peek;
   const { state } = peek.read;
@@ -112,12 +95,4 @@ function commentBlock(comment: Comment, width: number): Line[] {
   const byline = `${comment.author} · ${usDateTime(comment.created)}`;
   const text = comment.text.split(WHITESPACE).join(" ") || "(empty comment)";
   return layout([textBlock(byline, "muted"), textBlock(text, "muted")], width).filter((line) => line.length);
-}
-
-function drawLine(canvas: Canvas, y: number, x: number, line: Line): void {
-  let column = x;
-  for (const run of line) {
-    canvas.put(y, column, run.text, run.style);
-    column += cells(run.text);
-  }
 }

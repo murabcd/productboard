@@ -103,8 +103,12 @@ fields, **Enter** opens a picker, **Ctrl+Enter** creates the view, and **Esc**
 cancels. Draft choices leave the current page unchanged.
 
 Saved views offer **Status**, **Assignee**, and **Open issue age** breakdowns.
-Use **↑ / ↓** or **j / k** to select a bar and **Enter** to open its issues.
-The normal list shortcuts work there: **Space** previews an issue and **Esc**
+Use **↑ / ↓** or **j / k** to select a bar. **Space** previews its loaded issues
+and owner counts in the existing drawer; the preview follows the selected bar.
+**Shift+↑ / ↓**, **J / K**, or the wheel over the drawer scrolls it; **Esc** closes
+it. **Enter** opens the full list. On narrow panes, **Space** opens that list too.
+Opening or navigating the chart preview makes no Jira requests.
+The normal list shortcuts work in the full list: **Space** previews an issue and **Esc**
 closes the preview, then returns to the chart. **[ / ]** switches breakdowns.
 Assignee and age charts include open issues only; missing creation dates appear
 under **Unknown age**. Charts summarize **loaded issues**, with **n** to load

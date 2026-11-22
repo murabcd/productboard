@@ -328,6 +328,10 @@ export class Dashboard {
         return;
       }
       case "peek": {
+        if (this.views.chart) {
+          this.views.togglePeek();
+          return;
+        }
         const issue = this.list.selected;
         if (!issue) return;
         if (this.peekFits()) this.peekOpen = !this.peekOpen;
@@ -588,11 +592,13 @@ export class Dashboard {
         break;
       case "list":
         if (id === "q" || id === "ctrl-c") return false;
+        if ((this.peek || this.views.peek) && "name" in key && key.shift && (id === "up" || id === "down")) {
+          this.scrollPeek(id === "down" ? 1 : -1);
+          break;
+        }
         // Space can't sit in a space-separated binding table.
         if (this.views.key(key)) break;
         if (id === " ") this.runAction("peek");
-        else if (this.peek && "name" in key && key.shift && (id === "up" || id === "down"))
-          this.scrollPeek(id === "down" ? 1 : -1);
         else if (id === "agent-new") this.views.create();
         else this.listKeys.get(id)?.();
     }
@@ -737,14 +743,15 @@ export class Dashboard {
   }
 
   private scrollPeek(delta: number): void {
-    if (this.peek) this.peek.scroll = Math.max(0, this.peek.scroll + delta * WHEEL_LINES);
+    const peek = this.views.peek ?? this.peek;
+    if (peek) peek.scroll = Math.max(0, peek.scroll + delta * WHEEL_LINES);
   }
 
   /** The mouse wheel: `delta` is +1 per notch down, -1 per notch up.
    * `over` is what the pointer is on, so the peek scrolls itself. */
   wheel(delta: -1 | 1, over?: Target): void {
     const layer = this.layer();
-    if (over?.kind === "peek" && this.peek && layer.kind === "list") {
+    if (over?.kind === "peek" && (this.peek || this.views.peek) && layer.kind === "list") {
       this.scrollPeek(delta);
     } else if (layer.kind === "agent") {
       if (this.completionMenu && (over?.kind === "choice" || over?.kind === "dialog")) this.completionMenu.move(delta);

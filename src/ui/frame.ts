@@ -32,6 +32,7 @@ import type { Preview } from "./preview";
 import { priorityMark, statusIcon } from "./status";
 import { drawViewChart } from "./view-chart";
 import { viewFormDialog } from "./view-form";
+import { drawViewPeek } from "./view-peek";
 
 export function frame(d: Dashboard): Canvas {
   const { width, height } = d;
@@ -163,14 +164,31 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
   }
   if (d.views.chart) {
     const top = issueListLayout(d.width).top;
-    drawViewChart(canvas, top, d.views.buckets, d.views.active?.breakdown ?? "status", d.views.cursor);
+    const buckets = d.views.buckets;
+    const kind = d.views.active?.breakdown ?? "status";
+    const peek = d.views.peek;
+    const bucket = buckets[d.views.cursor];
+    const drawer = peekLayout(canvas.width);
+    const chart = new Canvas(peek && bucket ? drawer.left : canvas.width, canvas.height - top);
+    drawViewChart(chart, 0, buckets, kind, d.views.cursor);
+    canvas.paste(chart, 0, top);
+    if (peek && bucket) {
+      const total = buckets.reduce((sum, item) => sum + item.issues.length, 0);
+      canvas.paste(
+        drawViewPeek(bucket, kind, total, peek, drawer.width, canvas.height - top - FOOTER_ROWS),
+        drawer.left,
+        top,
+      );
+    }
     const work = d.workspace;
     const count = `${work.issues.length} loaded${work.more ? " · more available" : ""}`;
     const hints: Hint[] = [
-      ["↵", "Open issues"],
       ["[ ]", "Breakdown"],
       ["?", "Shortcuts", action("help")],
     ];
+    if (d.peekFits()) hints.push(["Space", peek ? "Close peek" : "Peek", action("peek")]);
+    hints.push(["↵", "Open issues"]);
+    if (peek) hints.unshift(["⇧↑↓", "Scroll peek"]);
     if (work.more) hints.unshift(["n", `Load ${PAGE} more`, action("load-more")]);
     drawFooter(canvas, d, count, hints);
     return;
@@ -206,9 +224,11 @@ function drawFooter(
   const y = height - 1;
   const size = (list: Hint[]) =>
     list.reduce((sum, [key, label]) => sum + cells(key) + (label ? cells(label) + 1 : 0) + 3, -3);
+  // Errors and partial-result warnings take room before optional shortcuts.
+  const notice = style === "error" || style === "warning" ? Math.min(cells(status) + 3, width - 4 - cells(count)) : 0;
   // Drop hints from the left of the list when the pane is too narrow.
   let shown = hints;
-  while (shown.length && size(shown) > width - 4 - cells(count) - 3) shown = shown.slice(1);
+  while (shown.length && size(shown) > width - 4 - cells(count) - 3 - notice) shown = shown.slice(1);
   const room = width - 4 - (shown.length ? size(shown) + 3 : 0);
   canvas.put(y, 2, count, "muted", room);
   if (status && cells(count) + 5 < room) canvas.put(y, 2 + cells(count) + 3, status, style, room - cells(count) - 3);

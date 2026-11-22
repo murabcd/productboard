@@ -18,6 +18,7 @@ import { type ViewField, ViewForm } from "./view-form";
 export class ViewPanel {
   readonly saved: SavedViews;
   form: ViewForm | null = null;
+  private chartPeek: { scroll: number } | null = null;
 
   constructor(
     private readonly dashboard: Dashboard,
@@ -35,6 +36,9 @@ export class ViewPanel {
   get chart(): boolean {
     return !!this.active && this.active.bucket === null;
   }
+  get peek(): { scroll: number } | null {
+    return this.chart && this.dashboard.peekFits() ? this.chartPeek : null;
+  }
   get buckets(): Bucket[] {
     return this.active ? breakdown(this.dashboard.workspace.issues, this.active.breakdown) : [];
   }
@@ -48,6 +52,7 @@ export class ViewPanel {
   }
 
   leave(): void {
+    this.chartPeek = null;
     this.saved.active = undefined;
     this.form = null;
     this.dashboard.list.narrowTo();
@@ -137,6 +142,7 @@ export class ViewPanel {
   }
 
   back(): void {
+    this.chartPeek = null;
     if (this.active) {
       this.active.bucket = null;
       this.active.cursor = 0;
@@ -149,6 +155,8 @@ export class ViewPanel {
   drill(id: string): void {
     const active = this.active;
     if (!active) return;
+    this.chartPeek = null;
+    this.dashboard.peekOpen = false;
     active.bucket = id;
     const kind = active.breakdown;
     this.dashboard.list.unfold();
@@ -161,7 +169,8 @@ export class ViewPanel {
     const id = keyId(key);
     if (id === "escape" && !this.chart && (this.dashboard.peekOpen || this.dashboard.list.search)) return false;
     if (id === "escape") {
-      this.back();
+      if (this.chartPeek) this.chartPeek = null;
+      else this.back();
       return true;
     }
     if (id === "[" || id === "]") {
@@ -181,6 +190,7 @@ export class ViewPanel {
         0,
         Math.min(count - 1, id === "home" ? 0 : id === "end" ? count - 1 : active.cursor + delta),
       );
+      if (this.chartPeek) this.chartPeek.scroll = 0;
       return true;
     }
     if (id === "enter") {
@@ -188,8 +198,19 @@ export class ViewPanel {
       if (bucket) this.drill(bucket.id);
       return true;
     }
+    if (id === " ") {
+      this.togglePeek();
+      return true;
+    }
     // List-only shortcuts cannot select invisible issues beneath a chart.
-    return [" ", "v", "o", "y", "z", "Z", "g", "/", "left", "right"].includes(id);
+    return ["v", "o", "y", "z", "Z", "g", "/", "left", "right"].includes(id);
+  }
+
+  togglePeek(): void {
+    const bucket = this.buckets[this.cursor];
+    if (!bucket) return;
+    if (!this.dashboard.peekFits()) this.drill(bucket.id);
+    else this.chartPeek = this.chartPeek ? null : { scroll: 0 };
   }
 
   changedScope(): void {
