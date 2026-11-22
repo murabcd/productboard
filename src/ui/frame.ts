@@ -15,6 +15,7 @@ import { drawHeader, type PageHeader, pageHeader } from "./header";
 import type { Target } from "./input";
 import {
   BODY_TOP,
+  chartTop,
   FOOTER_ROWS,
   headerRows,
   issueListLayout,
@@ -163,7 +164,7 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
     return;
   }
   if (d.views.chart) {
-    const top = issueListLayout(d.width).top;
+    const top = chartTop(d.width);
     const buckets = d.views.buckets;
     const kind = d.views.active?.breakdown ?? "status";
     const peek = d.views.peek;

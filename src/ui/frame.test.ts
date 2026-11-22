@@ -75,6 +75,47 @@ describe("issue rows", () => {
     expect(activity()).toBe(before);
   });
 
+  test.each([
+    [138, 1],
+    [80, 2],
+    [60, 2],
+  ])("saved views share page descriptions and single blank row gaps at width %i", async (width, descriptionRow) => {
+    const dashboard = teamFocus(3);
+    const work = dashboard.workspace;
+    work.query = { ...initialQuery, view: View.Team };
+    if (work.snapshot) work.snapshot.query = work.query;
+    const view = dashboard.views.saved.save({
+      name: "Delivery",
+      board: "",
+      personLabel: "All people",
+      breakdown: "status",
+      scope: { view: View.Team, project: "", sprintFilter: null, assignee: "", status: "all" },
+    });
+    dashboard.resize(width, 24);
+    dashboard.views.open(view.id);
+    const content = (row: number) =>
+      frame(dashboard)
+        .text(row)
+        .slice(width === 138 ? 20 : 0)
+        .trim();
+    expect(content(descriptionRow)).toBe("Loaded issues grouped by status");
+    expect(content(descriptionRow + 1)).toBe("");
+    expect(content(descriptionRow + 2)).toContain("Filter ▾");
+    expect(content(descriptionRow + 3)).toBe("");
+    expect(content(descriptionRow + 4)).toBe("Open 3   Done 0");
+    expect(content(descriptionRow + 5)).toBe("");
+    expect(content(descriptionRow + 6)).toBe("Work by status");
+    expect(content(descriptionRow + 7)).toBe("");
+    expect(content(descriptionRow + 8)).toContain("Blocked");
+    dashboard.views.chooseBreakdown("assignee");
+    expect(content(descriptionRow)).toBe("Open issues grouped by assignee");
+    dashboard.views.chooseBreakdown("age");
+    expect(content(descriptionRow)).toBe("Open issues grouped by time since creation");
+    dashboard.views.drill("unknown");
+    expect(content(descriptionRow)).toBe("Loaded issues in the selected group");
+    await dashboard.dispose();
+  });
+
   test("Peek leaves one workspace column outside its paint and scroll target", () => {
     const dashboard = teamFocus(30);
     dashboard.resize(138, 24);

@@ -8,7 +8,7 @@ import { cells } from "../text";
 import { THEME_IDS } from "../theme";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
-import { FOOTER_ROWS, issueListLayout, peekLayout, sidebarWidth } from "./layout";
+import { chartTop, FOOTER_ROWS, peekLayout, sidebarWidth } from "./layout";
 import { useRenderer } from "./screen";
 import { drawViewPeek } from "./view-peek";
 
@@ -65,7 +65,7 @@ test("Space previews exact loaded bar members without reads; selection updates t
   expect(shown.split("Same display name").length).toBeGreaterThan(2);
   const canvas = frame(d);
   const left = sidebarWidth(d.width) + peekLayout(d.width - sidebarWidth(d.width)).left;
-  expect(canvas.targetAt(left + 2, issueListLayout(d.width).top + 3)).toEqual({ kind: "peek" });
+  expect(canvas.targetAt(left + 2, chartTop(d.width) + 3)).toEqual({ kind: "peek" });
   d.handle({ name: "down", shift: true });
   expect(d.views.cursor).toBe(0);
   expect(d.views.peek?.scroll).toBe(3);
@@ -179,7 +179,7 @@ test.each(THEME_IDS)("native OpenTUI opens and scrolls the chart drawer in %s", 
     expect(d.views.peek?.scroll).toBeGreaterThan(0);
     const canvas = frame(d);
     expect(canvas.text(d.height - 1)).toContain("Close peek");
-    const top = issueListLayout(d.width).top;
+    const top = chartTop(d.width);
     const drawer = peekLayout(d.width - sidebarWidth(d.width));
     expect(canvas.targetAt(sidebarWidth(d.width) + drawer.left, d.height - FOOTER_ROWS - 1)).toEqual({ kind: "peek" });
     expect(canvas.targetAt(sidebarWidth(d.width) + drawer.left, top - 1)?.kind).not.toBe("peek");

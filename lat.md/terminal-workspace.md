@@ -339,6 +339,12 @@ Refresh updates the same loaded members and clamps the scroll to available rows.
 Refresh failures and partial-result warnings take footer space before optional
 shortcut hints.
 
+Saved views use [[src/ui/header.ts#pageHeader]] for the same description row as
+other pages. The description follows the active breakdown and changes for its
+full issue list. [[src/ui/layout.ts#chartTop]] leaves one blank row after the
+toolbar; chart counts, heading and bars also have one blank row between blocks.
+Charts do not reserve the issue list's column-heading row.
+
 [[src/ui/view-chart.ts#drawViewChart]] uses the existing square glyph and theme palette,
 on consecutive terminal rows. Nonzero buckets retain at least one square;
 zero buckets stay empty. Selection and mouse targets follow the compact rows, and

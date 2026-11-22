@@ -1,7 +1,7 @@
 /** Shared page title, description and toolbar controls. */
 
 import { MENTION_DAYS, View } from "../jira/query";
-import { BREAKDOWN_NAMES } from "../state/views";
+import { BREAKDOWN_NAMES, type Breakdown } from "../state/views";
 import type { Canvas } from "./canvas";
 import { action, buttons, buttonsRight, type Control, controlsWidth } from "./controls";
 import type { Dashboard } from "./dashboard";
@@ -24,6 +24,12 @@ const DESCRIPTIONS: Record<View, string> = {
   [View.Team]: "Browse all issues in the selected scope",
   [View.Today]: "What needs attention in the selected scope",
   [View.Search]: "Issue titles, descriptions and comments",
+};
+
+const CHART_DESCRIPTIONS: Record<Breakdown, string> = {
+  status: "Loaded issues grouped by status",
+  assignee: "Open issues grouped by assignee",
+  age: "Open issues grouped by time since creation",
 };
 
 function agentHeader(d: Dashboard): PageHeader {
@@ -61,12 +67,15 @@ function issuesHeader(d: Dashboard): PageHeader {
   const saved = d.views.current;
   const header: PageHeader = {
     title: saved ? `${saved.name}${d.views.bucket ? ` · ${d.views.bucket.label}` : ""}` : pageOf(view).name,
-    description: saved ? "" : DESCRIPTIONS[view],
+    description: DESCRIPTIONS[view],
     tabs: [],
     filters,
     actions: [{ label: "Display ▾", target: action("display") }],
   };
   if (saved && d.views.active) {
+    header.description = d.views.chart
+      ? CHART_DESCRIPTIONS[d.views.active.breakdown]
+      : "Loaded issues in the selected group";
     header.actions = d.views.saved.modified(work.query, work.board)
       ? [{ label: "Save changes", target: action("view-save") }]
       : [];

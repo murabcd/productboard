@@ -12,6 +12,9 @@ export function headerRows(width: number) {
 }
 export type SearchBoxKind = "jira" | "filter";
 
+/** Charts have no list column heading: leave one blank row after the toolbar. */
+export const chartTop = (width: number): number => headerRows(width).toolbar + 2;
+
 export function issueListLayout(width: number, box?: SearchBoxKind) {
   const { toolbar } = headerRows(width);
   const status = toolbar + 3;
