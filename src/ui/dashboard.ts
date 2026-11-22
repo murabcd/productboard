@@ -8,6 +8,7 @@ import { type Attachment, type Issue, isImage } from "../jira/types";
 import { message, type Workspace } from "../state/workspace";
 import { DEFAULT_THEME, type ThemeId } from "../theme";
 import { AgentPanel } from "./agent-panel";
+import { toolPanel } from "./agent-tool";
 import { ContextPicker } from "./context-picker";
 import { type Action, bindings, type Key, keyId, type SearchEdit, type Target } from "./input";
 import { IssueDetails, type IssueRead } from "./issue-details";
@@ -402,6 +403,13 @@ export class Dashboard {
     if (answer) this.report(this.opener.copy(answer), "Answer copied");
   }
 
+  openAgentTool(turnId: string, callId: string): void {
+    const tool = this.agent.chat.current.turns
+      .find((turn) => turn.id === turnId)
+      ?.tools.find((tool) => tool.id === callId);
+    if (tool) this.modal = toolPanel(tool);
+  }
+
   private openUrl(url: string, notice: string): void {
     this.report(this.opener.open(url), notice);
   }
@@ -593,6 +601,9 @@ export class Dashboard {
         return;
       case "agent":
         this.agentClick(target.action);
+        return;
+      case "agent-tool":
+        this.openAgentTool(target.turn, target.call);
         return;
       case "agent-cite": {
         const issue = this.agent.chat.current.issues.get(target.key);

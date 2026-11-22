@@ -10,6 +10,7 @@ export type PickerKind =
   | "chats"
   | "chat-rename"
   | "chat-delete"
+  | "agent-tools"
   | "project"
   | "assignee"
   | "status"

@@ -121,7 +121,9 @@ older images stay in the saved chat rather than being sent again. `Esc` cancels
 compaction and keeps the previous context.
 
 Jira searches show their JQL, progress, result count, and whether more matches
-are available. Interrupted and failed replies keep their status in the chat.
+are available. Click a search row or use `/tools` to inspect its full query,
+returned issue summaries, partial-result hint, or failure reason.
+Interrupted and failed replies keep their status in the chat.
 If a reply fails, its question returns to the empty composer so you can retry.
 
 Drop an image file into the Agent composer or paste its local path. Images

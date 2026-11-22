@@ -1,5 +1,6 @@
 import { expect, mock, test } from "bun:test";
 import { JiraSearchResult } from "../../agent/lib/jira-search";
+import { JiraError } from "../jira/http";
 import { LIST_FIELDS } from "../jira/parse";
 import { rawIssue } from "../testing";
 import { openJiraSearch } from "./jira-search";
@@ -33,3 +34,28 @@ test("Eve can search across Jira through the authenticated bridge with bounded r
     await bridge.close();
   }
 });
+
+test.each([400, 401, 403, 429, 500])(
+  "Jira search preserves actionable status %i without returning credentials or server bodies",
+  async (status) => {
+    const bridge = openJiraSearch({
+      search: async () => {
+        throw new JiraError("private upstream body", status);
+      },
+    });
+    try {
+      const response = await fetch(bridge.env.PRODUCTBOARD_JIRA_SEARCH_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${bridge.env.PRODUCTBOARD_JIRA_SEARCH_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ jql: "project = EX" }),
+      });
+      expect(response.status).toBe(status === 500 ? 502 : status);
+      expect(await response.text()).toBe("");
+    } finally {
+      await bridge.close();
+    }
+  },
+);

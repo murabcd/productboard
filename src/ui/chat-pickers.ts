@@ -2,6 +2,18 @@ import type { PickerSource } from "./pickers";
 
 /** Conversation actions use the shared keyboard and search picker. */
 export const CHAT_PICKERS = {
+  "agent-tools": {
+    title: "Jira tool activity",
+    items: (d) =>
+      d.agent.chat.current.turns.flatMap((turn, index) =>
+        turn.tools.map((tool) => ({
+          value: `${turn.id}/${tool.id}`,
+          label: `${index + 1}. ${tool.name} · ${tool.query}`,
+          detail: tool.error || tool.detail,
+          run: () => d.openAgentTool(turn.id, tool.id),
+        })),
+      ),
+  },
   chats: {
     title: "Saved chats",
     options: () => ({ filterChoices: false }),
@@ -54,4 +66,4 @@ export const CHAT_PICKERS = {
       },
     ],
   },
-} satisfies Record<"chats" | "chat-rename" | "chat-delete", PickerSource>;
+} satisfies Record<"chats" | "chat-rename" | "chat-delete" | "agent-tools", PickerSource>;

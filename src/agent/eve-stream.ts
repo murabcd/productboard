@@ -1,5 +1,5 @@
 import { defaultMessageReducer, type EveDynamicToolPart, type MessageStreamEvent } from "eve/client";
-import { JiraSearchInput, JiraSearchResult } from "../../agent/lib/jira-search";
+import { JIRA_SEARCH_ERRORS, JiraSearchInput, JiraSearchResult } from "../../agent/lib/jira-search";
 import type { AgentBackend, AgentTool } from "./chat";
 
 type Callbacks = Pick<Parameters<AgentBackend["ask"]>[0], "onText" | "onTools" | "onIssues">;
@@ -42,10 +42,20 @@ function toolProgress(part: EveDynamicToolPart): AgentTool {
   const result = JiraSearchResult.safeParse(part.output);
   const failed = part.state === "output-error" || part.state === "output-denied";
   const completed = part.state === "output-available" && !part.partial;
+  const error =
+    part.state === "output-error"
+      ? (Object.values(JIRA_SEARCH_ERRORS).find((message) => part.errorText.includes(message)) ??
+        "Jira search failed. Check the JQL and your Jira connection.")
+      : part.state === "output-denied"
+        ? "Jira search was not allowed."
+        : undefined;
   return {
     id: part.toolCallId,
     name: part.toolName === "search_jira" ? "Search Jira" : part.toolName,
     query: input.success ? input.data.jql : "",
+    limit: input.success ? input.data.limit : undefined,
+    result: result.success ? result.data : undefined,
+    error,
     state: failed ? "failed" : completed ? "completed" : "running",
     detail: failed
       ? "Search failed"

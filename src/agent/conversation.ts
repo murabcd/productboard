@@ -11,6 +11,9 @@ export const AgentTool = z.object({
   query: z.string(),
   state: z.enum(["running", "completed", "failed", "interrupted"]),
   detail: z.string(),
+  limit: z.number().int().optional(),
+  result: JiraSearchResult.optional(),
+  error: z.string().optional(),
 });
 export type AgentTool = z.infer<typeof AgentTool>;
 

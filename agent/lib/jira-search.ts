@@ -22,3 +22,11 @@ export const JiraSearchResult = z.object({
   ),
 });
 export type JiraSearchResult = z.infer<typeof JiraSearchResult>;
+
+export const JIRA_SEARCH_ERRORS = {
+  400: "Jira rejected the query. Check the JQL and try again.",
+  401: "Jira rejected your API token. Run productboard --login to reconnect.",
+  403: "You do not have permission to search these Jira issues.",
+  429: "Jira is rate-limiting searches. Wait a minute and retry.",
+  502: "Could not search Jira. Check your connection and try again.",
+} as const;

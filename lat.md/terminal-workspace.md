@@ -227,7 +227,12 @@ them.
 [[src/agent/eve-stream.ts#EveStream]] uses Eve's installed message reducer to
 reconcile text deltas with authoritative completions and project tool calls by
 call ID. The terminal shows JQL, running or failed searches, result counts, and
-partial-result hints. [[src/agent/chat.ts#AgentChat]] preserves failed and
+partial-result hints. `/tools` and clickable tool rows open
+[[src/ui/agent-tool.ts#toolPanel]], with the full query, requested limit, result
+summaries and a partial-result hint. The bridge preserves actionable Jira HTTP
+statuses without forwarding response bodies. Tool errors use controlled reasons
+for invalid JQL, credentials, permission, throttling and connection failures.
+[[src/agent/chat.ts#AgentChat]] preserves failed and
 interrupted turns, marks unfinished tools, restores a failed question only into
 an empty draft, and rejects callbacks after a turn settles. A replacement Eve
 session receives all earlier turns without a fixed turn or character cutoff,

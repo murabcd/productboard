@@ -48,7 +48,14 @@ test("Jira tools report their query, progress, count and errors through Eve's ca
     },
   });
   expect(onTools).toHaveBeenLastCalledWith([
-    { id: "search", name: "Search Jira", query: "project = EX", state: "running", detail: "Searching…" },
+    expect.objectContaining({
+      id: "search",
+      name: "Search Jira",
+      query: "project = EX",
+      state: "running",
+      detail: "Searching…",
+      limit: 25,
+    }),
   ]);
   const result = JiraSearchResult.parse({ kind: "jira-search", more: true, issues: issues("EX-1", "EX-2") });
   stream.accept({

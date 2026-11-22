@@ -33,7 +33,10 @@ export function openJiraSearch(jira: Pick<JiraClient, "search">) {
         };
         return Response.json(result);
       } catch (error) {
-        return new Response(null, { status: error instanceof JiraError && error.status === 400 ? 400 : 502 });
+        const status = error instanceof JiraError ? error.status : 0;
+        return new Response(null, {
+          status: status === 400 || status === 401 || status === 403 || status === 429 ? status : 502,
+        });
       }
     },
   });

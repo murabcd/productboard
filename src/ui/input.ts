@@ -80,4 +80,5 @@ export type Target =
   /** The search box above the list. */
   | { kind: "box" }
   | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "latest" | "chats" }
-  | { kind: "agent-cite"; key: string };
+  | { kind: "agent-cite"; key: string }
+  | { kind: "agent-tool"; turn: string; call: string };

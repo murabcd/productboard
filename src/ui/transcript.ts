@@ -1,13 +1,19 @@
 import type { Turn } from "../agent/chat";
 import { choiceLabel } from "../agent/models";
 import { type Line, layout, wrapSpans } from "./document";
+import type { Target } from "./input";
 import type { AgentLayout } from "./layout";
 import { markdownBlocks } from "./markdown";
 
-type TranscriptRow = { kind: "prompt" | "answer" | "plain"; line: Line; section: string; row: number };
+type TranscriptRow = { kind: "prompt" | "answer" | "plain"; line: Line; section: string; row: number; target?: Target };
 
-function sectionRows(kind: TranscriptRow["kind"], section: string, lines: readonly Line[]): TranscriptRow[] {
-  return lines.map((line, row) => ({ kind, line, section, row }));
+function sectionRows(
+  kind: TranscriptRow["kind"],
+  section: string,
+  lines: readonly Line[],
+  target?: Target,
+): TranscriptRow[] {
+  return lines.map((line, row) => ({ kind, line, section, row, target }));
 }
 
 const cache = new WeakMap<
@@ -45,12 +51,13 @@ function turnRows(turn: Turn, room: number): TranscriptRow[] {
         wrapSpans(
           [
             {
-              text: `${tool.state === "running" ? "◦" : tool.state === "completed" ? "✓" : "!"} ${tool.name}${tool.query ? ` · ${tool.query}` : ""} · ${tool.detail}`,
+              text: `${tool.state === "running" ? "◦" : tool.state === "completed" ? "✓" : "!"} ${tool.name}${tool.query ? ` · ${tool.query}` : ""} · ${tool.detail} ›`,
               style: tool.state === "failed" ? "error" : "muted",
             },
           ],
           room - 3,
         ),
+        { kind: "agent-tool", turn: turn.id, call: tool.id },
       ),
     ),
     ...sectionRows("plain", "tools-gap", tools.length ? [[]] : []),

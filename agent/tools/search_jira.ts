@@ -1,5 +1,5 @@
 import { defineTool } from "eve/tools";
-import { JiraSearchInput, JiraSearchResult } from "../lib/jira-search";
+import { JIRA_SEARCH_ERRORS, JiraSearchInput, JiraSearchResult } from "../lib/jira-search";
 
 export default defineTool({
   description:
@@ -17,8 +17,12 @@ export default defineTool({
       redirect: "error",
       signal: abortSignal,
     });
-    if (response.status === 400) throw new Error("Jira rejected the query. Check the JQL and try again.");
-    if (!response.ok) throw new Error("Could not search Jira. Check your Jira connection and permissions.");
+    if (!response.ok) {
+      const status = response.status;
+      throw new Error(
+        JIRA_SEARCH_ERRORS[status === 400 || status === 401 || status === 403 || status === 429 ? status : 502],
+      );
+    }
     return JiraSearchResult.parse(await response.json());
   },
   toModelOutput({ issues, more }) {
