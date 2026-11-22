@@ -87,6 +87,16 @@ export class AgentComposer extends TextareaRenderable {
     return !before || before.trimEnd() !== before;
   }
 
+  recall(direction: -1 | 1): boolean {
+    const end = this.editBuffer.measureText(this.plainText);
+    if (this.cursorOffset !== (direction === -1 ? 0 : end)) return false;
+    if (!this.chat.recall(direction)) return false;
+    this.sync();
+    this.cursorOffset = direction === -1 ? 0 : this.editBuffer.measureText(this.plainText);
+    this.changed();
+    return true;
+  }
+
   get commandQuery(): string | undefined {
     return this.chat.configured ? COMMAND_DRAFT.exec(this.plainText)?.[1] : undefined;
   }

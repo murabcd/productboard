@@ -102,6 +102,17 @@ switch between chats, and `Ctrl+O` to open an issue Agent
 mentioned. Type `/clear` and press Enter to clear the current chat. This also
 stops any reply in that chat.
 
+Replies scroll as they stream. Scroll up with the wheel or `PageUp` to keep
+your place; scrolling back to the bottom resumes following. Click **Jump to
+latest ↓** or press `Ctrl+End` to return immediately. Sending a question also
+returns to the latest reply. At the start of the composer, `↑` recalls sent
+prompts; at the end, `↓` moves forward and restores your unsent draft.
+Use `/copy` to copy the latest answer.
+
+Jira searches show their JQL, progress, result count, and whether more matches
+are available. Interrupted and failed replies keep their status in the chat.
+If a reply fails, its question returns to the empty composer so you can retry.
+
 Drop an image file into the Agent composer or paste its local path. Images
 and long or multiline pastes appear inline as numbered labels. Press
 Backspace after a label to remove it. You can attach up to four PNG, JPEG, GIF,
@@ -118,8 +129,9 @@ Enter. It searches Jira when the question needs issue data. Each search shares
 up to 50 matching issue summaries with
 current fields such as status, assignee, and priority. Its answers can link back
 to Jira issues in the terminal. Productboard keeps chat history for the current
-run. Reattach images if you switch models or reasoning levels and want to refer
-to them again.
+run. After a model or reasoning change, or a failed or interrupted request,
+the next request restores earlier prompts, replies, Jira results, sprint references,
+and image attachments to the new Eve session.
 
 ### Model providers
 

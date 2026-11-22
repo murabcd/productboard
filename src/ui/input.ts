@@ -21,6 +21,7 @@ export type KeyName =
   | "agent-stop"
   | "agent-previous"
   | "agent-next"
+  | "agent-latest"
   | "agent-cited";
 
 /** A named key, or one typed character. */
@@ -78,5 +79,5 @@ export type Target =
   | { kind: "choice"; value: string }
   /** The search box above the list. */
   | { kind: "box" }
-  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" }
+  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "latest" }
   | { kind: "agent-cite"; key: string };

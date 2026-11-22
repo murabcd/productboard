@@ -4,10 +4,11 @@ import { type Line, layout, wrapSpans } from "./document";
 import type { AgentLayout } from "./layout";
 import { markdownBlocks } from "./markdown";
 
-type TranscriptRow = { kind: "prompt" | "answer" | "plain"; line: Line };
+type TranscriptRow = { kind: "prompt" | "answer" | "plain"; line: Line; section: string; row: number };
 
-const GAP: TranscriptRow = { kind: "plain", line: [] };
-const PROMPT_EDGE: TranscriptRow = { kind: "prompt", line: [] };
+function sectionRows(kind: TranscriptRow["kind"], section: string, lines: readonly Line[]): TranscriptRow[] {
+  return lines.map((line, row) => ({ kind, line, section, row }));
+}
 
 const cache = new WeakMap<
   Turn,
@@ -16,38 +17,58 @@ const cache = new WeakMap<
     answer: string;
     finished: Turn["finished"];
     interrupted: Turn["interrupted"];
+    error: Turn["error"];
+    tools: Turn["tools"];
     rows: TranscriptRow[];
   }
 >();
 
 function turnRows(turn: Turn, room: number): TranscriptRow[] {
-  const { answer, finished, interrupted } = turn;
+  const { answer, finished, interrupted, error, tools } = turn;
   const previous = cache.get(turn);
   if (
     previous &&
     previous.room === room &&
     previous.answer === answer &&
     previous.finished === finished &&
-    previous.interrupted === interrupted
+    previous.interrupted === interrupted &&
+    previous.error === error &&
+    previous.tools === tools
   ) {
     return previous.rows;
   }
   const rows: TranscriptRow[] = [
-    PROMPT_EDGE,
-    ...wrapSpans([{ text: turn.displayPrompt, style: "plain" }], room - 5).map(
-      (line): TranscriptRow => ({ kind: "prompt", line }),
+    ...sectionRows("prompt", "prompt-top", [[]]),
+    ...sectionRows("prompt", "prompt", wrapSpans([{ text: turn.displayPrompt, style: "plain" }], room - 5)),
+    ...sectionRows("prompt", "prompt-bottom", [[]]),
+    ...sectionRows("plain", "prompt-gap", [[]]),
+    ...tools.flatMap((tool) =>
+      sectionRows(
+        "plain",
+        `tool:${tool.id}`,
+        wrapSpans(
+          [
+            {
+              text: `${tool.state === "running" ? "◦" : tool.state === "completed" ? "✓" : "!"} ${tool.name}${tool.query ? ` · ${tool.query}` : ""} · ${tool.detail}`,
+              style: tool.state === "failed" ? "error" : "muted",
+            },
+          ],
+          room - 3,
+        ),
+      ),
     ),
-    PROMPT_EDGE,
-    GAP,
-    ...layout(markdownBlocks(answer), room - 3).map((line): TranscriptRow => ({ kind: "answer", line })),
+    ...sectionRows("plain", "tools-gap", tools.length ? [[]] : []),
+    ...sectionRows("answer", "answer", layout(markdownBlocks(answer), room - 3)),
   ];
   if (finished !== undefined) {
     const details = [choiceLabel(turn.choice), duration(finished - turn.started)];
     if (interrupted) details.push("interrupted");
-    rows.push(GAP, { kind: "plain", line: [{ text: details.join(" · "), style: "muted" }] });
+    if (error) details.push("failed");
+    rows.push(...sectionRows("plain", "footer", [[], [{ text: details.join(" · "), style: "muted" }]]));
   }
-  rows.push(GAP);
-  cache.set(turn, { room, answer, finished, interrupted, rows });
+  if (error) rows.push(...sectionRows("plain", "error", wrapSpans([{ text: error, style: "error" }], room - 3)));
+  rows.push(...sectionRows("plain", "end", [[]]));
+  cache.set(turn, { room, answer, finished, interrupted, error, tools, rows });
   return rows;
 }
 
@@ -56,15 +77,49 @@ function duration(ms: number): string {
   return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
-export function transcriptWindow(
-  turns: readonly Turn[],
-  { room, capacity }: AgentLayout["transcript"],
-  fromBottom: number,
-  delta = 0,
-) {
-  const lines = turns.flatMap((turn) => turnRows(turn, room));
-  const maximum = Math.max(0, lines.length - capacity);
-  const scroll = Math.max(0, Math.min(maximum, Math.min(fromBottom, maximum) + delta));
-  const end = lines.length - scroll;
-  return { rows: lines.slice(Math.max(0, end - capacity), end), scroll };
+/** Follow the tail until the reader scrolls away, then retain a row in its turn. */
+export class TranscriptViewport {
+  private anchor?: { turn: Turn; section: string; row: number };
+  private latest?: Turn;
+
+  follow(): void {
+    this.anchor = undefined;
+  }
+
+  window(turns: readonly Turn[], { room, capacity }: AgentLayout["transcript"], delta = 0) {
+    if (turns.at(-1) !== this.latest) {
+      this.follow();
+      this.latest = turns.at(-1);
+    }
+    const groups = turns.map((turn) => ({ turn, rows: turnRows(turn, room) }));
+    const lines = groups.flatMap(({ rows }) => rows);
+    const maximum = Math.max(0, lines.length - capacity);
+    let top = maximum;
+    if (this.anchor) {
+      let offset = 0;
+      for (const { turn, rows } of groups) {
+        if (turn === this.anchor.turn) {
+          const section = rows.filter((row) => row.section === this.anchor?.section);
+          const row = section[Math.min(this.anchor.row, section.length - 1)];
+          top = Math.min(maximum, offset + (row ? rows.indexOf(row) : 0));
+          break;
+        }
+        offset += rows.length;
+      }
+    }
+    top = Math.max(0, Math.min(maximum, top - delta));
+    this.follow();
+    if (top < maximum) {
+      let offset = 0;
+      for (const { turn, rows } of groups) {
+        if (top < offset + rows.length) {
+          const row = rows[top - offset];
+          if (row) this.anchor = { turn, section: row.section, row: row.row };
+          break;
+        }
+        offset += rows.length;
+      }
+    }
+    return { rows: lines.slice(top, top + capacity), following: !this.anchor };
+  }
 }

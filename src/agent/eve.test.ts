@@ -1,7 +1,7 @@
 import { expect, mock, test } from "bun:test";
-import type { Client } from "eve/client";
+import { Client, type ClientSession } from "eve/client";
 import type { AgentChoice } from "../auth";
-import { deferred, settle } from "../testing";
+import { deferred, fakeAgent, issues, settle } from "../testing";
 import { AgentChat } from "./chat";
 import { EveAgent } from "./eve";
 
@@ -37,6 +37,89 @@ test("a connected ChatGPT account can start Eve and offer models without API key
   ready.reject(new Error("End the test before sending a model request"));
   await turn;
   await agent.close();
+});
+
+test("a replacement Eve session receives full history, evidence and earlier images over HTTP", async () => {
+  let payload: unknown;
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/eve/v1/session") return Response.json({ sessionId: "replacement" });
+      if (path.endsWith("/reset")) return Response.json({ status: "reset", sessionId: "replacement" });
+      payload = await request.json();
+      return new Response("Stop before model inference", { status: 400 });
+    },
+  });
+  const exited = deferred<void>();
+  const choice: AgentChoice = { provider: "openai", model: "fixture", reasoning: "medium" };
+  const agent = EveAgent.create(
+    { search: async () => [] },
+    {
+      read: () => choice,
+      recent: () => [],
+      key: () => "fixture",
+      chatgpt: () => false,
+      subscriptionModels: async () => [],
+      remember: () => [],
+      start: () => ({
+        ready: Promise.resolve(new Client({ host: server.url.href })),
+        exited: exited.promise,
+        sessions: new Map<string, ClientSession>(),
+        close: async () => exited.resolve(),
+      }),
+    },
+  );
+  if (!agent) throw new Error("Expected a configured Agent");
+  try {
+    const chat = new AgentChat(
+      fakeAgent(async ({ onText, onIssues }) => {
+        onText(`Full answer ${"x".repeat(2000)} END`);
+        onIssues(issues("EX-1"));
+      }),
+      () => {},
+    );
+    for (let i = 0; i < 8; i++) {
+      chat.current.draft.replace([
+        `Question ${i}`,
+        { kind: "sprint", label: "Sprint 31", sprint: { id: 31, name: "Web sprint" } },
+      ]);
+      await chat.send();
+    }
+    const first = chat.current.turns[0];
+    if (!first) throw new Error("Expected a prior turn");
+    const history = [
+      { ...first, images: [{ filename: "old.png", mediaType: "image/png", bytes: new Uint8Array([1, 2, 3]) }] },
+      ...chat.current.turns.slice(1),
+    ];
+    await expect(
+      agent.ask({
+        thread: "chat",
+        prompt: "Continue",
+        images: [],
+        signal: AbortSignal.timeout(2000),
+        history,
+        onText: () => {},
+        onIssues: () => {},
+        onTools: () => {},
+      }),
+    ).rejects.toThrow("could not finish");
+    const serialized = JSON.stringify(payload);
+    expect(payload).toMatchObject({
+      message: [
+        { type: "text", text: expect.stringContaining(`Full answer ${"x".repeat(2000)} END`) },
+        { type: "file", filename: "old.png", mediaType: "image/png", data: "data:image/png;base64,AQID" },
+      ],
+    });
+    expect(serialized).toContain("Question 0");
+    expect(serialized).toContain("Question 7");
+    expect(serialized).toContain("EX-1");
+    expect(serialized).toContain("Web sprint");
+  } finally {
+    await agent.close();
+    server.stop(true);
+  }
 });
 
 test("a model switch while a turn waits for Eve retirement cannot change its attribution", async () => {
@@ -79,7 +162,7 @@ test("a model switch while a turn waits for Eve retirement cannot change its att
     await Promise.all([changing, changedAgain, firstTurn, waiting]);
     expect(agent.current).toEqual(high);
     expect(start).toHaveBeenCalledTimes(1);
-    expect(second.current.turns).toEqual([]);
+    expect(second.current.turns).toMatchObject([{ error: "Agent restarted. Send the question again.", answer: "" }]);
     expect(second.current.draft.parts).toEqual(["Turn admitted under Medium"]);
     expect(second.current.draft.error).toBe("Agent restarted. Send the question again.");
   } finally {

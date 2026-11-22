@@ -210,6 +210,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("/effort", "Change reasoning effort", () => d.openPicker("reasoning")),
       item("/new", "New session", () => d.agent.chat.start()),
       item("/clear", "Clear session", () => d.agent.chat.clear()),
+      item("/copy", "Copy last answer", () => d.copyAgentAnswer()),
     ],
   },
   project: {

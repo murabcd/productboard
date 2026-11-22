@@ -395,6 +395,11 @@ export class Dashboard {
     else this.openUrl(url, "Opened in Helium");
   }
 
+  copyAgentAnswer(): void {
+    const answer = this.agent.chat.current.turns.findLast((turn) => turn.answer.trim())?.answer;
+    if (answer) this.report(this.opener.copy(answer), "Answer copied");
+  }
+
   private openUrl(url: string, notice: string): void {
     this.report(this.opener.open(url), notice);
   }
@@ -631,6 +636,9 @@ export class Dashboard {
         return;
       case "new":
         chat.start();
+        return;
+      case "latest":
+        this.agent.viewport.follow();
         return;
       case "previous":
       case "next":

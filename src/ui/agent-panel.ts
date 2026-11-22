@@ -7,7 +7,7 @@ import type { AgentChoice, AgentChoiceChange, ModelRef, Reasoning } from "../aut
 import { message } from "../state/workspace";
 import { type Key, keyId } from "./input";
 import type { AgentLayout } from "./layout";
-import { transcriptWindow } from "./transcript";
+import { TranscriptViewport } from "./transcript";
 
 const WHEEL_LINES = 3;
 
@@ -20,6 +20,17 @@ export class AgentPanel {
   modelsPending = false;
   modelsError = "";
   readonly chat: AgentChat;
+  private readonly viewports = new WeakMap<AgentChat["current"], TranscriptViewport>();
+
+  get viewport(): TranscriptViewport {
+    const thread = this.chat.current;
+    let viewport = this.viewports.get(thread);
+    if (!viewport) {
+      viewport = new TranscriptViewport();
+      this.viewports.set(thread, viewport);
+    }
+    return viewport;
+  }
 
   constructor(
     backend: AgentBackend | undefined,
@@ -104,6 +115,9 @@ export class AgentPanel {
       case "agent-stop":
         this.chat.stop();
         return;
+      case "agent-latest":
+        this.viewport.follow();
+        return;
       case "agent-previous":
       case "agent-next":
         this.chat.select(keyId(key) === "agent-previous" ? -1 : 1);
@@ -120,7 +134,6 @@ export class AgentPanel {
   }
 
   private scroll(transcript: AgentLayout["transcript"], delta: number): void {
-    const thread = this.chat.current;
-    thread.scroll = transcriptWindow(thread.turns, transcript, thread.scroll, delta).scroll;
+    this.viewport.window(this.chat.current.turns, transcript, delta);
   }
 }

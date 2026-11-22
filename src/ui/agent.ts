@@ -5,9 +5,13 @@ import { cells } from "../text";
 import type { AgentPanel } from "./agent-panel";
 import type { Canvas, ScannerStyle, Style } from "./canvas";
 import type { AgentLayout } from "./layout";
-import { transcriptWindow } from "./transcript";
 
-export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLayout, showComposer: boolean): void {
+export function drawAgent(
+  canvas: Canvas,
+  { chat, viewport }: AgentPanel,
+  layout: AgentLayout,
+  showComposer: boolean,
+): void {
   const thread = chat.current;
   const { left, rows, status, boxBottom, boxTop, transcript } = layout;
   const { room } = transcript;
@@ -18,8 +22,9 @@ export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLay
   if (showComposer)
     canvas.reserve("composer", { left: left + 2, top: boxBottom - rows, width: room - 3, height: rows });
 
+  const visible = viewport.window(thread.turns, transcript);
   if (thread.turns.length) {
-    const { rows } = transcriptWindow(thread.turns, transcript, thread.scroll);
+    const { rows } = visible;
     rows.forEach(({ kind, line }, row) => {
       const y = transcript.top + row;
       if (kind === "prompt") {
@@ -48,6 +53,13 @@ export function drawAgent(canvas: Canvas, { chat }: AgentPanel, layout: AgentLay
     canvas.put(status, left + 1, "Attaching image…", "muted", room - 1);
   } else if (!chat.configured) {
     canvas.put(status, left + 1, "Ctrl+K · Connect Agent", "muted", room - 1);
+  }
+  if (!visible.following) {
+    const label = "Jump to latest ↓";
+    const x = left + room - cells(label) - 1;
+    canvas.paint(status, x - 1, cells(label) + 2, "workspace");
+    canvas.put(status, x, label, "link");
+    canvas.mark(status, x, cells(label), { kind: "agent", action: "latest" });
   }
 }
 

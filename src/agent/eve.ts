@@ -3,7 +3,6 @@ import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { Client, type ClientSession, createDataUrlFilePart, isTurnFailureEvent } from "eve/client";
-import { JiraSearchResult } from "../../agent/lib/jira-search";
 import {
   type AgentChoice,
   type AgentChoiceChange,
@@ -18,6 +17,7 @@ import {
 import type { JiraClient } from "../jira/client";
 import type { AgentBackend } from "./chat";
 import { chatgptModels } from "./chatgpt";
+import { EveStream } from "./eve-stream";
 import { openJiraSearch } from "./jira-search";
 import { type AgentModel, listModels, PROVIDER_NAMES } from "./models";
 
@@ -127,7 +127,7 @@ export class EveAgent implements AgentBackend {
     if (session) retireSession(session);
   }
 
-  async ask({ thread, prompt, sprint, images, signal, history, onIssues, onText }: Ask): Promise<void> {
+  async ask({ thread, prompt, sprint, images, signal, history, ...callbacks }: Ask): Promise<void> {
     const config = this.config;
     await this.closing;
     signal.throwIfAborted();
@@ -154,22 +154,31 @@ export class EveAgent implements AgentBackend {
         existing || history.length === 0
           ? ""
           : `Earlier conversation: ${JSON.stringify(
-              history.map(({ prompt, answer }) => ({ prompt, answer: answer.slice(0, 1500) })),
+              history.map(({ prompt, answer, sprint, issues, interrupted, error, images }) => ({
+                prompt,
+                answer,
+                sprint,
+                issues,
+                interrupted,
+                error,
+                images: images.map(({ filename, mediaType }) => ({ filename, mediaType })),
+              })),
             )}\n\n`;
-      const text = `${prior}${prompt || "Describe the attached images."}`;
-      const message = images.length ? [{ type: "text" as const, text }, ...images.map(createDataUrlFilePart)] : text;
+      const restoredImages = existing ? [] : history.flatMap((turn) => turn.images);
+      const attachments = [...restoredImages, ...images];
+      const text = `${prior}${restoredImages.length ? "Earlier image attachments precede the current message's images.\n\n" : ""}${prompt || "Describe the attached images."}`;
+      const message = attachments.length
+        ? [{ type: "text" as const, text }, ...attachments.map(createDataUrlFilePart)]
+        : text;
       const response = await session.send(message, {
         signal: stop,
         clientContext: sprint
           ? `The user attached Jira sprint ${JSON.stringify(sprint.name)} (ID ${sprint.id}). For Jira searches about this sprint, use JQL sprint = ${sprint.id}.`
           : undefined,
       });
+      const stream = new EveStream(callbacks);
       for await (const event of response) {
-        if (event.type === "message.appended") onText(event.data.messageDelta);
-        if (event.type === "action.result" && event.data.result.kind === "tool-result") {
-          const result = JiraSearchResult.safeParse(event.data.result.output);
-          if (result.success) onIssues(result.data.issues);
-        }
+        stream.accept(event);
         if (isTurnFailureEvent(event)) throw new Error(event.data.message);
       }
       stop.throwIfAborted();
@@ -178,13 +187,14 @@ export class EveAgent implements AgentBackend {
         evict();
         retireSession(session);
       }
-      const retry =
-        config.choice.provider === "chatgpt"
-          ? "Check your model and ChatGPT sign-in with codex login status."
-          : "Check the provider key and model.";
-      throw new Error(deadline.aborted ? "Agent timed out. Try again." : `Agent could not reply. ${retry}`, {
-        cause: error,
-      });
+      throw new Error(
+        deadline.aborted
+          ? "Agent timed out. Try again."
+          : "Agent could not finish the reply. Send again to retry; use /models if the problem continues.",
+        {
+          cause: error,
+        },
+      );
     } finally {
       stop.removeEventListener("abort", evict);
     }

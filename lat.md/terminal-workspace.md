@@ -143,16 +143,24 @@ and its keys.
 
 The frame reserves areas that OpenTUI draws itself: the Agent text box and image
 previews. Issue citations open the normal detail panel and can
-return to the conversation. [[src/ui/transcript.ts#transcriptWindow]] shares
-one viewport between drawing and scrolling. Page keys move by the visible
+return to the conversation. [[src/ui/transcript.ts#TranscriptViewport]] shares
+one viewport between drawing and scrolling. [[src/ui/agent-panel.ts#AgentPanel]]
+keeps a viewport per conversation. It follows streamed replies until wheel or
+page navigation moves away from the bottom, then anchors the top row to a section
+within its turn. Tool growth, completion footers, and composer resizing preserve
+that reading position. Reaching the bottom, clicking Jump to latest, Ctrl+End,
+or submitting a question resumes following. Page keys move by the visible
 rows after the composer has taken its space. Transcript layout is reused
-while the turn content and pane width stay the same.
+while the turn content and pane width stay the same. These interactions follow
+[OpenCode's scrolling behavior](https://github.com/anomalyco/opencode/blob/ee5fe34e136488a1839ac73bcca8321c51a31b75/packages/cli-rs/crates/tui/src/routes/session/scroll.rs),
+adapted to this terminal's frame renderer.
 
-Typing `/` in an empty Agent composer offers `/models`, `/effort`, `/new`, and
-`/clear` above the text box while the query stays in the draft. Selecting a
+Typing `/` in an empty Agent composer offers `/models`, `/effort`, `/new`,
+`/clear`, and `/copy` above the text box while the query stays in the draft. Selecting a
 command clears its text. `/models` and `/effort` open their corresponding
 pickers. `/new` uses the same chat action as Ctrl+N and keeps earlier chats
 available.
+`/copy` copies the latest nonempty answer through the dashboard's clipboard opener.
 `/clear` stops any reply and replaces the current chat with an empty one in
 the same position. Eve retires its session, so the next message starts fresh.
 [[src/ui/dialog.ts#drawComposerMenu]] draws these pickers and `@`
@@ -191,6 +199,10 @@ searches when the query changes or the picker closes.
 [[src/jira/client.ts#JiraClient]] searches across Jira projects and Jira matches
 appear before loaded tasks. Sprints come from the current board. Task keys are
 passed in the prompt and a sprint scopes the next message.
+At the start of the composer, Up recalls sent prompts in the current chat;
+at the end, Down moves forward through them and restores the unsent draft.
+History retains the original attachment tokens and never replaces an edited
+recalled prompt. Multiline cursor navigation and completion menus take precedence.
 
 Eve's Jira search tool calls [[src/agent/jira-search.ts#openJiraSearch]]
 over an authenticated loopback connection owned by the dashboard. The tool can
@@ -203,3 +215,13 @@ The dashboard keeps
 conversation history in memory and cancels pending work on exit. Sessions,
 search access and streaming callbacks belong to the Eve process that created
 them.
+
+[[src/agent/eve-stream.ts#EveStream]] uses Eve's installed message reducer to
+reconcile text deltas with authoritative completions and project tool calls by
+call ID. The terminal shows JQL, running or failed searches, result counts, and
+partial-result hints. [[src/agent/chat.ts#AgentChat]] preserves failed and
+interrupted turns, marks unfinished tools, restores a failed question only into
+an empty draft, and rejects callbacks after a turn settles. A replacement Eve
+session receives all earlier turns without a fixed turn or character cutoff,
+including Jira evidence, sprint references, and images. Existing sessions use
+Eve's own history and compaction. The UI does not persist chats to disk.

@@ -27,6 +27,7 @@ export function toKeys(key: Pick<KeyEvent, "name" | "ctrl" | "meta" | "shift" | 
   if (key.ctrl && key.name === "up") return [{ name: "agent-previous" }];
   if (key.ctrl && key.name === "down") return [{ name: "agent-next" }];
   if (key.ctrl && key.name === "o") return [{ name: "agent-cited" }];
+  if (key.ctrl && key.name === "end") return [{ name: "agent-latest" }];
   if (key.ctrl && key.name === "c") return [{ name: "ctrl-c" }];
   if (key.shift && !key.ctrl && !key.meta && !key.super) {
     if (key.name === "up" || key.name === "down") return [{ name: key.name, shift: true }];

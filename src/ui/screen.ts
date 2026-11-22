@@ -29,6 +29,7 @@ const COMPOSER_KEYS = new Set<KeyName>([
   "agent-previous",
   "agent-next",
   "agent-cited",
+  "agent-latest",
   "commands",
   "pageup",
   "pagedown",
@@ -108,6 +109,17 @@ class DashboardView extends Renderable {
       if (!completion && event.sequence === "@" && this.composer.canMention()) {
         event.preventDefault();
         this.dispatch(() => this.dashboard.openPicker("agent-context"));
+        return;
+      }
+      if (
+        !completion &&
+        plain &&
+        (event.name === "up" || event.name === "down") &&
+        this.composer.recall(event.name === "up" ? -1 : 1)
+      ) {
+        event.preventDefault();
+        this.fitComposer();
+        this.requestRender();
         return;
       }
     }

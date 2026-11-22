@@ -576,6 +576,65 @@ describe("OpenTUI shell", () => {
     }
   });
 
+  test("Agent holds streamed rows after wheel or page navigation and jumps back to the live tail", async () => {
+    const finish = deferred<void>();
+    let answer = `\`\`\`\n${Array.from({ length: 70 }, (_, i) => `Stream row ${i + 1}`).join("\n")}`;
+    const ask = mock<AgentBackend["ask"]>(async ({ onText }) => {
+      onText(answer);
+      await finish.promise;
+    });
+    const { setup, dashboard } = await start(100, { agent: fakeAgent(ask) });
+    await clickSidebar(setup, "Agent");
+    await setup.mockInput.typeText("Follow this reply");
+    setup.mockInput.pressEnter();
+    await settle();
+    await setup.renderOnce();
+    const visible = () =>
+      Array.from(setup.captureCharFrame().matchAll(/Stream row (\d+)/g), (match) => Number(match[1]));
+    expect(visible().at(-1)).toBe(70);
+    await setup.mockMouse.scroll(40, 8, "up");
+    await setup.renderOnce();
+    const reading = visible();
+    answer += "\nStream row 71\nStream row 72";
+    ask.mock.calls[0]?.[0].onText(answer, true);
+    await setup.renderOnce();
+    expect(visible()).toEqual(reading);
+    expect(setup.captureCharFrame()).toContain("Jump to latest ↓");
+    const hintRow = dashboard.agentLayout.status;
+    const hintColumn = setup.captureCharFrame().split("\n")[hintRow]?.indexOf("Jump to latest") ?? -1;
+    await setup.mockMouse.click(hintColumn, hintRow);
+    await setup.renderOnce();
+    expect(visible().at(-1)).toBe(72);
+    expect(setup.captureCharFrame()).not.toContain("Jump to latest");
+    setup.mockInput.pressKey("\x1b[5~");
+    await setup.renderOnce();
+    const older = visible();
+    answer += "\nStream row 73";
+    ask.mock.calls[0]?.[0].onText(answer, true);
+    await setup.renderOnce();
+    expect(visible()).toEqual(older);
+    setup.mockInput.pressKey("\x1b[1;5F");
+    await setup.renderOnce();
+    expect(visible().at(-1)).toBe(73);
+    finish.resolve();
+    await settle();
+  });
+
+  test("composer arrows recall sent prompts at the boundaries and return to the unsent draft", async () => {
+    const { setup, dashboard } = await start(100, { agent: fakeAgent(async ({ onText }) => onText("Reply")) });
+    await clickSidebar(setup, "Agent");
+    await setup.mockInput.typeText("Sent prompt");
+    setup.mockInput.pressEnter();
+    await settle();
+    await setup.mockInput.typeText("Unsent draft");
+    setup.mockInput.pressKey("a", { ctrl: true });
+    setup.mockInput.pressArrow("up");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Sent prompt");
+    setup.mockInput.pressKey("e", { ctrl: true });
+    setup.mockInput.pressArrow("down");
+    expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("Unsent draft");
+  });
+
   test("Agent context searches across Jira and attaches a task without changing the workspace", async () => {
     const ask = mock<AgentBackend["ask"]>(async () => {});
     const firstRequest = deferred<AbortSignal>();

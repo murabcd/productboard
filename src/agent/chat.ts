@@ -1,7 +1,7 @@
 import type { AgentChoice, AgentChoiceChange, ModelRef } from "../auth";
 import type { Issue } from "../jira/types";
 import { clean } from "../text";
-import { AgentDraft, type SprintContext } from "./draft";
+import { AgentDraft, type DraftParts, type SprintContext } from "./draft";
 import type { AgentImage } from "./images";
 import type { AgentModel } from "./models";
 
@@ -22,8 +22,17 @@ export interface AgentBackend {
     signal: AbortSignal;
     history: readonly Turn[];
     onIssues(issues: Issue[]): void;
-    onText(delta: string): void;
+    onText(text: string, replace?: boolean): void;
+    onTools(tools: readonly AgentTool[]): void;
   }): Promise<void>;
+}
+
+export interface AgentTool {
+  readonly id: string;
+  readonly name: string;
+  readonly query: string;
+  readonly state: "running" | "completed" | "failed" | "interrupted";
+  readonly detail: string;
 }
 
 export interface Turn {
@@ -35,6 +44,11 @@ export interface Turn {
   readonly started: number;
   finished?: number;
   interrupted?: boolean;
+  error?: string;
+  readonly sprint?: SprintContext;
+  readonly images: readonly AgentImage[];
+  issues: Issue[];
+  tools: readonly AgentTool[];
 }
 
 interface Conversation {
@@ -43,7 +57,8 @@ interface Conversation {
   issues: Map<string, Issue>;
   pending?: AbortController;
   draft: AgentDraft;
-  scroll: number;
+  prompts: DraftParts[];
+  recall?: { index: number; draft: DraftParts; shown: DraftParts };
 }
 
 const conversation = (): Conversation => ({
@@ -51,7 +66,7 @@ const conversation = (): Conversation => ({
   turns: [],
   issues: new Map(),
   draft: new AgentDraft(),
-  scroll: 0,
+  prompts: [],
 });
 
 type Connection = { kind: "offline" | "connecting" | "closed" } | { kind: "online"; backend: AgentBackend };
@@ -135,6 +150,21 @@ export class AgentChat {
     this.current.pending?.abort();
   }
 
+  /** Recall only untouched history entries; keep the draft at the end. */
+  recall(direction: -1 | 1): boolean {
+    const thread = this.current;
+    const { draft, prompts, recall } = thread;
+    if (recall && recall.shown !== draft.parts) return false;
+    const index = (recall?.index ?? prompts.length) + direction;
+    if (index < 0 || index > prompts.length) return false;
+    const saved = recall?.draft ?? draft.parts;
+    const parts = index === prompts.length ? saved : prompts[index];
+    if (!parts) return false;
+    draft.replace(parts);
+    thread.recall = index === prompts.length ? undefined : { index, draft: saved, shown: parts };
+    return true;
+  }
+
   async dispose(): Promise<void> {
     const backend = this.backend;
     this.connection = { kind: "closed" };
@@ -163,14 +193,20 @@ export class AgentChat {
       answer: "",
       choice: backend.current,
       started: Date.now(),
+      sprint: request.sprint,
+      images: request.images,
+      issues: [],
+      tools: [],
     };
     thread.pending = pending;
     draft.replace([]);
     draft.error = "";
-    thread.scroll = 0;
-    const history = thread.turns.slice(-6);
+    thread.recall = undefined;
+    if (thread.prompts.at(-1) !== parts) thread.prompts.push(parts);
+    const history = thread.turns.slice();
     thread.turns.push(turn);
     let failure = "";
+    let accepting = true;
     try {
       const reply = backend.ask({
         thread: thread.id,
@@ -178,11 +214,23 @@ export class AgentChat {
         signal: pending.signal,
         history,
         onIssues: (issues) => {
-          if (!pending.signal.aborted) for (const issue of issues) thread.issues.set(issue.key, issue);
+          if (!accepting || pending.signal.aborted) return;
+          turn.issues.push(...issues);
+          for (const issue of issues) thread.issues.set(issue.key, issue);
         },
-        onText: (delta) => {
-          if (pending.signal.aborted) return;
-          turn.answer += clean(delta, true);
+        onText: (text, replace = false) => {
+          if (!accepting || pending.signal.aborted) return;
+          turn.answer = (replace ? "" : turn.answer) + clean(text, true);
+          this.redraw();
+        },
+        onTools: (tools) => {
+          if (!accepting || pending.signal.aborted) return;
+          turn.tools = tools.map((tool) => ({
+            ...tool,
+            name: clean(tool.name),
+            query: clean(tool.query),
+            detail: clean(tool.detail),
+          }));
           this.redraw();
         },
       });
@@ -191,12 +239,22 @@ export class AgentChat {
     } catch (error) {
       if (!pending.signal.aborted) failure = error instanceof Error ? clean(error.message) : "Agent request failed.";
     } finally {
+      accepting = false;
       turn.finished = Date.now();
+      turn.error = failure || undefined;
+      turn.tools = turn.tools.map((tool) =>
+        tool.state === "running"
+          ? {
+              ...tool,
+              state: pending.signal.aborted ? "interrupted" : "failed",
+              detail: pending.signal.aborted ? "Stopped" : "Did not finish",
+            }
+          : tool,
+      );
       const answered = turn.answer.trim() !== "";
-      if (pending.signal.aborted && answered) turn.interrupted = true;
-      else if (pending.signal.aborted || failure) {
-        if (!answered) thread.turns.pop();
-        if (draft.parts.length === 0) draft.replace(parts);
+      if (pending.signal.aborted) turn.interrupted = true;
+      if (pending.signal.aborted || failure) {
+        if ((!answered || failure) && draft.parts.length === 0) draft.replace(parts);
         draft.error = pending.signal.aborted ? "Stopped." : failure;
       }
       thread.pending = undefined;
