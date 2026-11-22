@@ -345,8 +345,12 @@ shortcut hints.
 Saved views use [[src/ui/header.ts#pageHeader]] for the same description row as
 other pages. The description follows the active breakdown and changes for its
 full issue list. [[src/ui/layout.ts#chartTop]] leaves one blank row after the
-toolbar; chart counts, heading and bars also have one blank row between blocks.
-Charts do not reserve the issue list's column-heading row.
+toolbar, with one blank row between chart counts and bars. The shared page header
+identifies the breakdown; charts add no duplicate section heading or issue-list
+column-heading row.
+Before a saved scope has data, the chart uses the issue sections' loading and
+failure text at the same body position. Same-scope refreshes keep the last chart
+visible and use the shared footer refresh status.
 
 [[src/ui/view-chart.ts#drawViewChart]] uses the existing square glyph and theme palette,
 on consecutive terminal rows. Nonzero buckets retain at least one square;

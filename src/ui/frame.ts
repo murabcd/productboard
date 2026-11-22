@@ -164,6 +164,7 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
     return;
   }
   if (d.views.chart) {
+    const work = d.workspace;
     const top = chartTop(d.width);
     const buckets = d.views.buckets;
     const kind = d.views.active?.breakdown ?? "status";
@@ -171,9 +172,13 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
     const bucket = buckets[d.views.cursor];
     const drawer = peekLayout(canvas.width);
     const chart = new Canvas(peek && bucket ? drawer.left : canvas.width, canvas.height - top);
-    drawViewChart(chart, 0, buckets, kind, d.views.cursor);
-    canvas.paste(chart, 0, top);
-    if (peek && bucket) {
+    if (!work.current) {
+      canvas.put(issueListLayout(d.width).status, 4, emptyText(d), "mutedBold", canvas.width - 6);
+    } else {
+      drawViewChart(chart, 0, buckets, kind, d.views.cursor);
+      canvas.paste(chart, 0, top);
+    }
+    if (work.current && peek && bucket) {
       const total = buckets.reduce((sum, item) => sum + item.issues.length, 0);
       canvas.paste(
         drawViewPeek(bucket, kind, total, peek, drawer.width, canvas.height - top - FOOTER_ROWS),
@@ -181,7 +186,6 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
         top,
       );
     }
-    const work = d.workspace;
     const count = `${work.issues.length} loaded${work.more ? " · more available" : ""}`;
     const hints: Hint[] = [
       ["[ ]", "Breakdown"],

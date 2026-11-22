@@ -92,6 +92,11 @@ test("Space previews exact loaded bar members without reads; selection updates t
 test("Enter and clicks drill down without opening hidden issue details; narrow Space opens the list", async () => {
   const { d, detail } = setup();
   d.click({ kind: "action", action: "peek" });
+  expect(d.views.peek).not.toBeNull();
+  expect(text(d)).toContain("Status peek");
+  d.click({ kind: "action", action: "peek" });
+  expect(d.views.peek).toBeNull();
+  d.click({ kind: "action", action: "peek" });
   d.handle({ name: "enter" });
   expect(d.views.peek).toBeNull();
   expect(d.list.window(20).listed).toHaveLength(10);

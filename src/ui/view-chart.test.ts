@@ -30,16 +30,16 @@ test("square bars keep small counts visible in compact consecutive rows", () => 
   const canvas = new Canvas(60, 24);
   drawViewChart(canvas, 0, breakdown(rows, "status"), "status", 2);
   for (const [index, stage] of STAGES.entries()) {
-    const y = 4 + index;
+    const y = 2 + index;
     expect(canvas.text(y)).toContain("■");
     expect(canvas.text(y)).not.toContain("▏");
     expect(canvas.targetAt(30, y)).toEqual({ kind: "view-bucket", id: stage });
   }
-  const selected = canvas.runs(6).find((run) => run.text.includes("■"));
+  const selected = canvas.runs(4).find((run) => run.text.includes("■"));
   expect(selected).toMatchObject({ style: "review", surface: "selected" });
   const empty = new Canvas(60, 18);
   drawViewChart(empty, 6, breakdown([], "status"), "status", 0);
-  expect(empty.text(10)).toContain("No loaded issues");
+  expect(empty.text(8)).toContain("No loaded issues");
   expect(empty.text(15).trim()).toBe("");
   expect(empty.targetAt(30, 15)).toBeUndefined();
 });
@@ -78,7 +78,7 @@ test("compact charts scroll the selected bucket above the footer at minimum term
     "age",
     0,
   );
-  expect([4, 5, 6, 7, 8].map((y) => ages.runs(y).find((run) => run.text.includes("■"))?.style)).toEqual([
+  expect([2, 3, 4, 5, 6].map((y) => ages.runs(y).find((run) => run.text.includes("■"))?.style)).toEqual([
     "done",
     "accent",
     "review",

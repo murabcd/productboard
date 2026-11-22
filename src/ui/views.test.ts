@@ -6,6 +6,7 @@ import { deferred, issues, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key } from "./input";
+import { issueListLayout, sidebarWidth } from "./layout";
 
 const ENTER: Key = { name: "enter" };
 const ESC: Key = { name: "escape" };
@@ -149,6 +150,9 @@ test("charts disclose loaded counts, keep last data on failure, and reject old s
   work.snapshot = snapshot(work.query, ["EX-1", "EX-2"], true);
   expect(text(d)).toContain("2 loaded · more available");
   work.refresh();
+  expect(text(d)).toContain("Refreshing…");
+  expect(text(d)).toContain("■");
+  expect(text(d)).not.toContain("Loading issues…");
   requests[0]?.result.reject(new Error("Offline"));
   await settle();
   expect(d.views.buckets.flatMap((bucket) => bucket.issues)).toHaveLength(2);
@@ -158,6 +162,45 @@ test("charts disclose loaded counts, keep last data on failure, and reject old s
   requests[1]?.result.resolve(snapshot(work.query, ["OTHER-1"]));
   await settle();
   expect(d.views.buckets.flatMap((bucket) => bucket.issues).map((issue) => issue.key)).toEqual(["OTHER-1"]);
+  await d.dispose();
+});
+
+test.each([
+  [60, View.Team],
+  [80, View.Team],
+  [140, View.Team],
+  [60, View.Mentions],
+  [80, View.Mentions],
+  [140, View.Mentions],
+] as const)("saved views share section loading text and position at width %i for scope %i", async (width, scope) => {
+  const { d, work, requests } = setup();
+  work.snapshot = null;
+  d.resize(width, 24);
+  d.showView(scope);
+  work.refresh();
+  const section = frame(d);
+  const saved = d.views.saved.save({ ...draft, scope: { ...draft.scope, view: scope } });
+  d.views.open(saved.id);
+  const chart = frame(d);
+  const row = issueListLayout(width).status;
+  const column = sidebarWidth(width) + 4;
+  const label = scope === View.Mentions ? "Looking for mentions…" : "Loading issues…";
+  expect(chart.text(row)).toBe(section.text(row));
+  expect(chart.text(row).indexOf(label)).toBe(column);
+  expect(chart.runs(row)).toEqual(section.runs(row));
+  expect(text(d)).not.toContain("Open 0");
+  expect(text(d)).not.toContain("No loaded issues");
+  const request = requests.at(-1);
+  if (!request) throw new Error("Missing scope request");
+  request.result.reject(new Error("Offline"));
+  await settle();
+  expect(frame(d).text(row).indexOf("Could not load issues · r retry")).toBe(column);
+  work.refresh();
+  expect(frame(d).text(row).indexOf(label)).toBe(column);
+  requests.at(-1)?.result.resolve(snapshot(work.query, ["EX-3"]));
+  await settle();
+  expect(text(d)).not.toContain(label);
+  expect(text(d)).toContain("■");
   await d.dispose();
 });
 

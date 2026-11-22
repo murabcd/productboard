@@ -301,7 +301,7 @@ export class Dashboard {
 
   /** A header, footer or peek button, or its key. */
   runAction(action: Action): void {
-    if (this.views.chart && ["peek", "details", "display"].includes(action)) return;
+    if (this.views.chart && (action === "details" || action === "display")) return;
     switch (action) {
       case "new-view":
         this.views.create();

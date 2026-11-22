@@ -24,13 +24,7 @@ export function drawViewChart(canvas: Canvas, top: number, buckets: Bucket[], ki
     "muted",
     width - 4,
   );
-  canvas.put(
-    top + 2,
-    2,
-    { status: "Work by status", assignee: "Open work by assignee", age: "Open issue age" }[kind],
-    "title",
-  );
-  const start = top + 4;
+  const start = top + 2;
   if (!all.length) {
     canvas.put(start, 2, "No loaded issues in this breakdown", "muted", width - 4);
     return;

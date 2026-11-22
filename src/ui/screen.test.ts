@@ -961,6 +961,6 @@ test("the saved-view dialog uses native typing, reverse Tab, nested pickers and 
   expect(dashboard.views.current?.name).toBe("Sprint health");
   expect(dashboard.views.chart).toBe(true);
   await terminal.renderOnce();
-  expect(terminal.captureCharFrame()).toContain("Work by status");
+  expect(terminal.captureCharFrame()).toContain("Loaded issues grouped by status");
   await dashboard.dispose();
 });

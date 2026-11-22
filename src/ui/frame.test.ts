@@ -104,9 +104,7 @@ describe("issue rows", () => {
     expect(content(descriptionRow + 3)).toBe("");
     expect(content(descriptionRow + 4)).toBe("Open 3   Done 0");
     expect(content(descriptionRow + 5)).toBe("");
-    expect(content(descriptionRow + 6)).toBe("Work by status");
-    expect(content(descriptionRow + 7)).toBe("");
-    expect(content(descriptionRow + 8)).toContain("Blocked");
+    expect(content(descriptionRow + 6)).toContain("Blocked");
     dashboard.views.chooseBreakdown("assignee");
     expect(content(descriptionRow)).toBe("Open issues grouped by assignee");
     dashboard.views.chooseBreakdown("age");
