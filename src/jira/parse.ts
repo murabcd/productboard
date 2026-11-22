@@ -5,6 +5,7 @@ import { clean } from "../text";
 import { mentions, plainText, toDoc } from "./adf";
 import type { Attachment, Choice, Comment, Detail, Issue, Sprint } from "./types";
 import { SPRINT_STATES } from "./types";
+import { DEFAULT_WORKFLOW, type Workflow, workflowStage } from "./workflow";
 
 export class PayloadError extends Error {}
 
@@ -92,9 +93,12 @@ function currentSprint(sprints: z.infer<typeof SprintRefs> | undefined): string 
 }
 
 /** The first still-open issue that blocks this one, if any. */
-export function openBlocker(raw: RawIssue): string | undefined {
+export function openBlocker(raw: RawIssue, workflow: Workflow = DEFAULT_WORKFLOW): string | undefined {
   const link = raw.fields.issuelinks?.find(
-    (l) => l.type.name === "Blocks" && l.inwardIssue && l.inwardIssue.fields.status.statusCategory.key !== "done",
+    (l) =>
+      workflow.blockedLinkTypes.includes(l.type.name) &&
+      l.inwardIssue &&
+      l.inwardIssue.fields.status.statusCategory.key !== "done",
   );
   return link?.inwardIssue ? clean(link.inwardIssue.key) : undefined;
 }
@@ -173,13 +177,16 @@ export function stamp(value: string | undefined): string {
 const personName = (person: z.infer<typeof Person>): string =>
   person?.displayName ? clean(person.displayName) : "Unknown";
 
-export function toIssue(raw: RawIssue): Issue {
+export function toIssue(raw: RawIssue, workflow: Workflow = DEFAULT_WORKFLOW): Issue {
   const { fields } = raw;
+  const status = clean(fields.status.name);
+  const category = fields.status.statusCategory.key;
   return {
     key: clean(raw.key),
     summary: clean(fields.summary),
-    status: clean(fields.status.name),
-    category: fields.status.statusCategory.key,
+    status,
+    category,
+    stage: workflowStage({ status, category }, workflow),
     priority: clean(fields.priority?.name ?? ""),
     assigneeId: fields.assignee?.accountId ?? "",
     assignee: fields.assignee ? clean(fields.assignee.displayName) : "Unassigned",

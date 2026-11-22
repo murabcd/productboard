@@ -16,7 +16,7 @@ test("a connected ChatGPT account can start Eve and offer models without API key
     close: async () => exited.resolve(),
   }));
   const agent = EveAgent.create(
-    { search: async () => [] },
+    { issuePage: async () => ({ issues: [], more: false }) },
     {
       read: () => choice,
       recent: () => [],
@@ -55,7 +55,7 @@ test("a replacement Eve session receives full history, evidence and earlier imag
   const exited = deferred<void>();
   const choice: AgentChoice = { provider: "openai", model: "fixture", reasoning: "medium" };
   const agent = EveAgent.create(
-    { search: async () => [] },
+    { issuePage: async () => ({ issues: [], more: false }) },
     {
       read: () => choice,
       recent: () => [],
@@ -131,7 +131,7 @@ test("a model switch while a turn waits for Eve retirement cannot change its att
   const medium = { ...low, reasoning: "medium" } as const;
   const high = { ...low, reasoning: "high" } as const;
   const agent = EveAgent.create(
-    { search: async () => [] },
+    { issuePage: async () => ({ issues: [], more: false }) },
     {
       read: () => low,
       recent: () => [],

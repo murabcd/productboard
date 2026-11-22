@@ -2,16 +2,9 @@
 
 import { shortDate, usDate, when } from "../dates";
 import type { DocBlock } from "./adf";
+import type { Stage } from "./workflow";
 
 export type Category = "new" | "indeterminate" | "done";
-
-/** Status names teams use for stages Jira's three categories don't have. */
-export const BLOCKED_STATUS = /blocked/i;
-export const BACKLOG_STATUS = /backlog/i;
-/** Icebox counts as done in Jira, but the work was parked, not finished. */
-export const ICEBOX_STATUS = /icebox/i;
-export const REVIEW_STATUS = /review|\bqa\b/i;
-export const READY_FOR_RELEASE_STATUS = /ready for release/i;
 
 /** Today's sections in display order; an issue appears only in the first that fits. */
 export const TODAY_SECTIONS = [
@@ -23,7 +16,7 @@ export const TODAY_SECTIONS = [
   "Your issues, changed since yesterday",
   "Assigned to you",
   "Waiting for release",
-  "Forgotten in active sprints",
+  "Long untouched",
 ] as const;
 export type TodaySection = (typeof TODAY_SECTIONS)[number];
 
@@ -32,6 +25,8 @@ export interface Issue {
   summary: string;
   status: string;
   category: Category;
+  /** Resolved by Jira parsing; older Agent search records carry only status and category. */
+  stage?: Stage;
   priority: string;
   assigneeId: string;
   assignee: string;

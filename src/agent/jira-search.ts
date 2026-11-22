@@ -2,10 +2,9 @@ import { randomBytes } from "node:crypto";
 import { JiraSearchInput, type JiraSearchResult } from "../../agent/lib/jira-search";
 import type { JiraClient } from "../jira/client";
 import { JiraError } from "../jira/http";
-import { LIST_FIELDS, toIssue } from "../jira/parse";
 
 /** The local Eve process can search through the dashboard's existing Jira client. */
-export function openJiraSearch(jira: Pick<JiraClient, "search">) {
+export function openJiraSearch(jira: Pick<JiraClient, "issuePage">) {
   const token = randomBytes(32).toString("hex");
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -19,17 +18,14 @@ export function openJiraSearch(jira: Pick<JiraClient, "search">) {
       if (!input.success) return new Response(null, { status: 400 });
       const { jql, limit } = input.data;
       try {
-        const found = await jira.search(jql, LIST_FIELDS, limit + 1, {
+        const page = await jira.issuePage(jql, limit, {
           priority: "background",
           signal: request.signal,
         });
         const result: JiraSearchResult = {
           kind: "jira-search",
-          more: found.length > limit,
-          issues: found.slice(0, limit).map((raw) => {
-            const issue = toIssue(raw);
-            return { ...issue, summary: issue.summary.slice(0, 300) };
-          }),
+          ...page,
+          issues: page.issues.map((issue) => ({ ...issue, summary: issue.summary.slice(0, 300) })),
         };
         return Response.json(result);
       } catch (error) {

@@ -78,14 +78,14 @@ export class EveAgent implements AgentBackend {
   private recent: readonly ModelRef[];
 
   private constructor(
-    private readonly jira: Pick<JiraClient, "search">,
+    private readonly jira: Pick<JiraClient, "issuePage">,
     private config: EveConfig,
     private readonly deps: EveDependencies,
   ) {
     this.recent = deps.recent();
   }
 
-  static create(jira: Pick<JiraClient, "search">, deps = localDependencies): EveAgent | undefined {
+  static create(jira: Pick<JiraClient, "issuePage">, deps = localDependencies): EveAgent | undefined {
     const config = configFor(deps.read(), deps);
     return config ? new EveAgent(jira, config, deps) : undefined;
   }
@@ -236,7 +236,7 @@ export class EveAgent implements AgentBackend {
   }
 }
 
-function openEveProcess(jira: Pick<JiraClient, "search">, { choice, credentials }: EveConfig): EveProcess {
+function openEveProcess(jira: Pick<JiraClient, "issuePage">, { choice, credentials }: EveConfig): EveProcess {
   const search = openJiraSearch(jira);
   const token = randomBytes(32).toString("hex");
   const child = spawn(

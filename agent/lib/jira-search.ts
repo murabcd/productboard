@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Stage } from "../../src/jira/workflow";
 
 export const JiraSearchInput = z.object({
   jql: z.string().trim().min(1).max(1200).describe("Jira Query Language, including an optional ORDER BY clause"),
@@ -14,6 +15,7 @@ export const JiraSearchResult = z.object({
       summary: z.string(),
       status: z.string(),
       category: z.enum(["new", "indeterminate", "done"]),
+      stage: Stage.optional(),
       priority: z.string(),
       assigneeId: z.string(),
       assignee: z.string(),

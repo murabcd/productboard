@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { Catalog, Snapshot } from "../jira/client";
+import type { Snapshot } from "../jira/client";
 import { type IssueQuery, initialQuery, View } from "../jira/query";
-import type { Sprint } from "../jira/types";
+import type { Choice, Sprint } from "../jira/types";
 import { type Deferred, deferred, settle, snapshot } from "../testing";
 import { REFRESH_MS, Workspace } from "./workspace";
 
@@ -14,7 +14,8 @@ function setup() {
       requests.push({ query, signal, reply });
       return reply.promise;
     }),
-    catalog: mock((): Promise<Catalog> => deferred<Catalog>().promise),
+    boards: mock((): Promise<Choice[]> => deferred<Choice[]>().promise),
+    projects: mock((): Promise<Choice[]> => deferred<Choice[]>().promise),
     sprints: mock((_board: string, _signal: AbortSignal): Promise<Sprint[]> => deferred<Sprint[]>().promise),
   };
   let now = 1_000_000;
@@ -24,6 +25,32 @@ function setup() {
 }
 
 describe("workspace", () => {
+  test("catalogs publish and retry independently, keeping the last successful choices", async () => {
+    const { work, source, advance } = setup();
+    const boards = deferred<Choice[]>();
+    const projects = [{ value: "TEAM", label: "Another team", detail: "", state: "" }];
+    source.boards.mockReturnValueOnce(boards.promise);
+    source.projects.mockResolvedValueOnce(projects);
+    work.loadCatalog();
+    await settle();
+    expect(work.projects).toEqual(projects);
+    expect(work.projectsPending).toBe(false);
+    expect(work.boardsPending).toBe(true);
+    boards.reject(new Error("No Jira Software access"));
+    await settle();
+    expect(work.boardCatalogError).toBe("No Jira Software access");
+    expect(work.projectCatalogError).toBe("");
+    advance(REFRESH_MS);
+    work.tick();
+    expect(source.boards).toHaveBeenCalledTimes(2);
+    expect(source.projects).toHaveBeenCalledTimes(1);
+    source.projects.mockRejectedValueOnce(new Error("Projects unavailable"));
+    work.loadCatalog();
+    await settle();
+    expect(work.projects).toEqual(projects);
+    expect(work.projectCatalogError).toBe("Projects unavailable");
+  });
+
   test("a failed refresh keeps the last successful list", async () => {
     const { work, requests } = setup();
     work.refresh();
@@ -104,13 +131,13 @@ describe("workspace", () => {
 
   test("failed board lists retry on the refresh cycle", async () => {
     const { work, source, advance } = setup();
-    source.catalog.mockImplementationOnce(() => Promise.reject(new Error("boards failed")));
+    source.boards.mockImplementationOnce(() => Promise.reject(new Error("boards failed")));
     work.loadCatalog();
     await settle();
     expect(work.catalogError).toContain("boards failed");
     advance(REFRESH_MS);
     work.tick();
-    expect(source.catalog).toHaveBeenCalledTimes(2);
+    expect(source.boards).toHaveBeenCalledTimes(2);
     expect(work.catalogError).toBe("");
   });
 
@@ -120,16 +147,13 @@ describe("workspace", () => {
     work.chooseBoard("2");
     await settle();
     expect(work.catalogError).toBe("sprints failed");
-    source.catalog.mockResolvedValueOnce({
-      boards: [{ value: "2", label: "Team board", detail: "", state: "" }],
-      projects: [],
-    });
+    source.boards.mockResolvedValueOnce([{ value: "2", label: "Team board", detail: "", state: "" }]);
     work.loadCatalog();
     await settle();
     expect(work.catalogError).toBe("sprints failed");
     advance(REFRESH_MS);
     work.tick();
-    expect(source.catalog).toHaveBeenCalledTimes(1);
+    expect(source.boards).toHaveBeenCalledTimes(1);
     expect(source.sprints).toHaveBeenCalledTimes(2);
   });
 
@@ -195,9 +219,7 @@ describe("workspace", () => {
       goal: "",
     });
     const board = (value: string, label: string) => ({ value, label, detail: "", state: "" });
-    source.catalog.mockImplementation(() =>
-      Promise.resolve({ boards: [board("13", "BT board"), board("2", "FLOM board")], projects: [] }),
-    );
+    source.boards.mockImplementation(() => Promise.resolve([board("13", "Team A"), board("2", "Team B")]));
     source.sprints.mockImplementation((id: string) =>
       Promise.resolve(id === "2" ? [sprint(5, "active"), sprint(4, "closed")] : [sprint(1, "closed")]),
     );

@@ -24,8 +24,9 @@ change cancels the previous read and rejects any late result.
 
 Startup opens Inbox and loads mentions alongside the board catalog.
 A scope starts loading as soon as it is ready. Clearing server filters applies
-one scope change. Board and project discovery and the selected board's sprint
-catalog track their own failures and retry independently of the issue list.
+one scope change. Board discovery, project discovery, and the selected board's
+sprint catalog publish and retry independently of one another and the issue
+list. A failed catalog retains its last successful choices.
 The Filter menu uses the selected board's sprint catalog. Its optional sprint
 filter carries across issue lists. Changing the sprint board in Filter clears
 an active sprint filter and starts the new board’s sprint read immediately.
@@ -51,6 +52,11 @@ minimum-size screen owns its quit shortcut even when Agent was active.
 
 Use [[src/text.ts]] for remote text sanitization, grapheme handling, and cell
 widths.
+
+[[src/desktop.ts#desktop]] opens links in the system default browser and copies
+text through the macOS clipboard. Setup and dashboard actions share this adapter.
+Partial attention snapshots retain their successful rows and show the missing
+checks in the footer, with the normal refresh action available to retry.
 
 ## Themes
 
@@ -110,7 +116,7 @@ group headings count against the same capacity the frame draws. The frame
 uses that projection for the visible rows and issue count. This keeps
 selection and viewport changes together across filtering and refresh.
 
-Status groups are workflow stages from [[src/ui/status.ts#stage]]. Rows show
+Status groups are workflow stages from [[src/ui/status.ts]]. Rows show
 the key, the title, then reason, assignee, sprint and priority columns. A
 column is left out when the view or headings already say the same thing.
 [[src/ui/dialog.ts#dialogPanel]] centers setup prompts and modal workspace pickers

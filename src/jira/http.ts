@@ -222,7 +222,7 @@ async function previewBytes(response: Response): Promise<Uint8Array> {
       }
       if (size <= MAX_DOWNLOAD_BYTES) return Buffer.concat(chunks, size);
     }
-    throw new JiraError("This file is too large to preview. Press o to open it in Helium.");
+    throw new JiraError("This file is too large to preview. Press o to open it in browser.");
   } finally {
     void reader?.cancel().catch(() => {});
     reader?.releaseLock();

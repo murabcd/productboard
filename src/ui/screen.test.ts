@@ -42,7 +42,8 @@ async function start(
 ) {
   const work = new Workspace({
     snapshot: mock(() => deferred<never>().promise),
-    catalog: mock(() => deferred<never>().promise),
+    boards: mock(() => deferred<never>().promise),
+    projects: mock(() => deferred<never>().promise),
     sprints: mock(() => deferred<never>().promise),
   });
   work.query = { ...initialQuery, view: View.Mine };

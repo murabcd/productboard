@@ -4,6 +4,7 @@ import { plainText, toDoc } from "../jira/adf";
 import { toComments } from "../jira/parse";
 import { initialQuery, View } from "../jira/query";
 import type { Detail } from "../jira/types";
+import { workflowStage } from "../jira/workflow";
 import { type Source, Workspace } from "../state/workspace";
 import { deferred, fakeAgent, rawComment, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
@@ -65,7 +66,8 @@ function setup(agent?: AgentBackend) {
   const opener = { open: mock(async () => {}), copy: mock(async () => {}) };
   const source = {
     snapshot: mock<Source["snapshot"]>(() => deferred<never>().promise),
-    catalog: mock(() => deferred<never>().promise),
+    boards: mock(() => deferred<never>().promise),
+    projects: mock(() => deferred<never>().promise),
     sprints: mock(() => deferred<never>().promise),
   };
   const work = new Workspace(source);
@@ -204,7 +206,7 @@ describe("dashboard", () => {
     expect(draw(dashboard, 120, 30).text(10)).toContain("Ship statuses");
   });
 
-  test("the attachment picker opens other files in Helium and returns to details", async () => {
+  test("the attachment picker opens other files in browser and returns to details", async () => {
     const { dashboard, pending, opener } = setup();
     dashboard.handle(ENTER);
     pending[0]?.resolve(detail("", { attachments: [file("42", "flow chart.pdf", "application/pdf")] }));
@@ -403,7 +405,7 @@ describe("concept layout", () => {
       ...base,
       issues: base.issues.map((issue, n) => {
         const [status, category] = statuses[n] ?? ["", "new"];
-        return { ...issue, status, category };
+        return { ...issue, status, category, stage: workflowStage({ status, category }) };
       }),
     };
   };

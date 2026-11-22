@@ -1,30 +1,10 @@
 /** Workflow stages, and how a status and priority look in a list. */
 
-import {
-  BACKLOG_STATUS,
-  BLOCKED_STATUS,
-  ICEBOX_STATUS,
-  type Issue,
-  READY_FOR_RELEASE_STATUS,
-  REVIEW_STATUS,
-} from "../jira/types";
+import type { Issue } from "../jira/types";
+import { type Stage, workflowStage } from "../jira/workflow";
 import type { Style } from "./canvas";
 
-/** Jira statuses such as "QA Blocked" and "Dev Blocked" share one workflow stage. */
-export const STAGES = ["Blocked", "In progress", "In review", "Ready for release", "Done", "To do", "Backlog"] as const;
-export type Stage = (typeof STAGES)[number];
-
-/** Blocked, in review or QA, and ready to ship stand out from Jira's three
- * categories: to do, in progress and done. */
-export function stage({ status, category }: Pick<Issue, "status" | "category">): Stage {
-  if (BLOCKED_STATUS.test(status)) return "Blocked";
-  if (ICEBOX_STATUS.test(status)) return "Backlog";
-  if (category === "done") return "Done";
-  if (REVIEW_STATUS.test(status)) return "In review";
-  if (READY_FOR_RELEASE_STATUS.test(status)) return "Ready for release";
-  if (category === "indeterminate") return "In progress";
-  return BACKLOG_STATUS.test(status) ? "Backlog" : "To do";
-}
+export { STAGES, workflowStage as stage } from "../jira/workflow";
 
 const STAGE_ICONS: Record<Stage, [icon: string, style: Style]> = {
   Blocked: ["⊘", "error"],
@@ -37,8 +17,8 @@ const STAGE_ICONS: Record<Stage, [icon: string, style: Style]> = {
 };
 
 /** An issue's stage icon and color; the status text uses the same color. */
-export const statusIcon = (issue: Pick<Issue, "status" | "category">): [icon: string, style: Style] =>
-  STAGE_ICONS[stage(issue)];
+export const statusIcon = (issue: Pick<Issue, "status" | "category" | "stage">): [icon: string, style: Style] =>
+  STAGE_ICONS[workflowStage(issue)];
 
 const ACRONYMS = new Set(["QA", "QC", "UAT", "UI", "UX", "PR", "AI", "CI", "CD", "MVP"]);
 

@@ -1,13 +1,14 @@
 /** Async view state: keep successful results and reject responses for old scopes. */
 
-import type { Catalog, Snapshot } from "../jira/client";
+import type { Snapshot } from "../jira/client";
 import { type IssueQuery, initialQuery, isReady, PAGE, sameQuery, sameScope, scoped } from "../jira/query";
 import type { Choice, Issue, Sprint } from "../jira/types";
 import { clean } from "../text";
 
 export interface Source {
   snapshot(query: IssueQuery, signal: AbortSignal): Promise<Snapshot>;
-  catalog(): Promise<Catalog>;
+  boards(): Promise<Choice[]>;
+  projects(): Promise<Choice[]>;
   sprints(board: string, signal: AbortSignal): Promise<Sprint[]>;
 }
 
@@ -26,14 +27,15 @@ export class Workspace {
   projects: Choice[] = [];
   board = "";
   sprints: Sprint[] = [];
-  catalogPending = false;
-  boardCatalogError = "";
   sprintCatalogError = "";
+  private readonly catalogs = {
+    boards: { pending: false, error: "", retryAt: Number.POSITIVE_INFINITY },
+    projects: { pending: false, error: "", retryAt: Number.POSITIVE_INFINITY },
+  };
 
   private request: AbortController | undefined;
   private sprintRequest: AbortController | undefined;
   private nextRefresh = Number.POSITIVE_INFINITY;
-  private catalogRetryAt = Number.POSITIVE_INFINITY;
   private sprintsRetryAt = Number.POSITIVE_INFINITY;
   private readonly listeners = new Set<() => void>();
 
@@ -81,7 +83,27 @@ export class Workspace {
   }
 
   get catalogError(): string {
-    return this.boardCatalogError || this.sprintCatalogError;
+    return this.projectCatalogError || this.boardCatalogError || this.sprintCatalogError;
+  }
+
+  get boardCatalogError(): string {
+    return this.catalogs.boards.error;
+  }
+
+  get projectCatalogError(): string {
+    return this.catalogs.projects.error;
+  }
+
+  get boardsPending(): boolean {
+    return this.catalogs.boards.pending;
+  }
+
+  get projectsPending(): boolean {
+    return this.catalogs.projects.pending;
+  }
+
+  get catalogPending(): boolean {
+    return this.boardsPending || this.projectsPending;
   }
 
   change(query: IssueQuery): void {
@@ -128,7 +150,9 @@ export class Workspace {
   tick(): void {
     const now = this.now();
     if (!this.pending && now >= this.nextRefresh) this.refresh();
-    if (now >= this.catalogRetryAt) this.loadCatalog();
+    for (const kind of ["boards", "projects"] as const) {
+      if (now >= this.catalogs[kind].retryAt) this.loadChoices(kind);
+    }
     if (now >= this.sprintsRetryAt) void this.loadSprints();
   }
 
@@ -139,26 +163,30 @@ export class Workspace {
   }
 
   loadCatalog(): void {
-    if (this.catalogPending) return;
-    this.catalogPending = true;
-    this.boardCatalogError = "";
-    this.catalogRetryAt = Number.POSITIVE_INFINITY;
+    this.loadChoices("boards");
+    this.loadChoices("projects");
+  }
+
+  private loadChoices(kind: "boards" | "projects"): void {
+    const state = this.catalogs[kind];
+    if (state.pending) return;
+    state.pending = true;
+    state.error = "";
+    state.retryAt = Number.POSITIVE_INFINITY;
     this.changed();
-    this.source
-      .catalog()
+    this.source[kind]()
       .then(
-        (catalog) => {
-          this.boards = catalog.boards;
-          this.projects = catalog.projects;
-          if (!this.board) this.openDefaultBoard();
+        (choices) => {
+          this[kind] = choices;
+          if (kind === "boards" && !this.board) this.openDefaultBoard();
         },
         (error: unknown) => {
-          this.boardCatalogError = message(error);
-          this.catalogRetryAt = this.now() + REFRESH_MS;
+          state.error = message(error);
+          state.retryAt = this.now() + REFRESH_MS;
         },
       )
       .finally(() => {
-        this.catalogPending = false;
+        state.pending = false;
         this.changed();
       });
   }
@@ -238,7 +266,9 @@ export class Workspace {
 
   /** Reload whichever board, project or sprint list failed or is missing. */
   retryCatalogs(): void {
-    if (this.boardCatalogError || this.boards.length === 0) this.loadCatalog();
+    for (const kind of ["boards", "projects"] as const) {
+      if (this.catalogs[kind].error || this[kind].length === 0) this.loadChoices(kind);
+    }
     if (this.sprintCatalogError || this.sprints.length === 0) void this.loadSprints();
   }
 

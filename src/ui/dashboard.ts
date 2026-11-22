@@ -284,7 +284,7 @@ export class Dashboard {
     this.workspace.change(withAssignee(this.workspace.query, assignee));
   }
 
-  /** Images preview over the details panel; other files open in Helium. */
+  /** Images preview over the details panel; other files open in browser. */
   openAttachment(item: Attachment): void {
     if (isImage(item)) this.images.open(this.attachments.filter(isImage), item);
     else this.openUrl(this.attachmentUrl(item), "Opened attachment");
@@ -389,14 +389,14 @@ export class Dashboard {
     return this.images.current;
   }
 
-  /** Open the shown issue in Helium, or copy its link. */
+  /** Open the shown issue in browser, or copy its link. */
   openIssue(copy: boolean): void {
     if (this.modal?.kind === "text") return;
     const issue = this.modal?.issue ?? this.list.selected;
     if (!issue) return;
     const url = `https://${this.site}/browse/${issue.key}`;
     if (copy) this.report(this.opener.copy(url), "Link copied");
-    else this.openUrl(url, "Opened in Helium");
+    else this.openUrl(url, "Opened in browser");
   }
 
   copyAgentAnswer(turnId?: string): void {
@@ -747,7 +747,7 @@ export class Dashboard {
     "right l j down pagedown": () => this.images.step(1),
     "left h k up pageup": () => this.images.step(-1),
     o: (preview) => {
-      this.openUrl(this.attachmentUrl(preview.image), "Opened in Helium");
+      this.openUrl(this.attachmentUrl(preview.image), "Opened in browser");
     },
   });
 

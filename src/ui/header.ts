@@ -21,7 +21,7 @@ const DESCRIPTIONS: Record<View, string> = {
   [View.Mine]: "Issues assigned to you",
   [View.Created]: "Issues you created",
   [View.Team]: "Browse all issues in the selected scope",
-  [View.Today]: "What needs attention across active sprints",
+  [View.Today]: "What needs attention in the selected scope",
   [View.Search]: "Issue titles, descriptions and comments",
 };
 

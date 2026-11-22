@@ -11,6 +11,9 @@ normalizes them before they reach workspace state.
 Keychain and stores the site, email, and last board in
 `~/.config/productboard/config.json`.
 
+The optional workflow preferences belong to that site and are cleared, along
+with the remembered board, when the site changes.
+
 [[src/jira/http.ts#JiraHttp]] sends authorization to the configured Jira site
 and follows attachment redirects without forwarding it. Search uses POST as a
 read operation.
@@ -41,6 +44,17 @@ Needs attention applies the project, sprint, assignee, and status filters to its
 With the Done filter, only recent mentions and changes to your issues are
 queried because the other sections show open work.
 
+Needs attention checks all open work in the selected scope, without requiring
+an active sprint or a sprint-capable board. [[src/jira/attention-reads.ts#readAttention]] keeps
+successful checks when another fails and returns warnings with the snapshot.
+The terminal marks these results as partial. Complete failure, expired
+credentials, and scope cancellation remain errors. Each paginated source
+contributes to the load-more indicator.
+
+[[src/jira/client.ts#JiraClient]] exposes board and project reads separately so
+missing Jira Software access cannot discard accessible projects. The workspace
+publishes and retries each catalog independently.
+
 Each site stores sprints in its own custom field, so [[src/jira/client.ts#JiraClient]]
 looks up the field ID once per session and asks for it with every search. Lists
 still load without sprints when that lookup fails.
@@ -52,3 +66,19 @@ in the first applicable section. Each reason adds something the row's status
 does not already show: a blocker's cause, idle days, who mentioned you, or when
 your issue last changed. Ready-for-release work waits on a release, so it gets
 its own late section instead of counting as stuck.
+
+## Workflow interpretation
+
+[[src/jira/workflow.ts#Workflow]] validates per-site status and blocker-link
+mappings. [[src/jira/workflow.ts#workflowStage]] uses Jira categories as the
+baseline and keeps Done authoritative.
+
+Exact status mappings, ignoring case
+and surrounding spaces, refine open-work stages; common English names provide
+defaults. [[src/jira/parse.ts#toIssue]] carries the resolved stage into the
+domain issue so grouping, colors, and attention use the same interpretation.
+The same workflow classifier handles older Agent records that have no resolved stage.
+[[src/agent/jira-search.ts#openJiraSearch]] uses the client's parsed issue pages
+and preserves the resolved stage in validated Agent results and saved chats.
+Blocker detection matches inward dependency links using the configured link
+type names, which default to Blocks.

@@ -53,6 +53,10 @@ to open Inbox with Jira only.
 Run `productboard --login` to update your Jira sign-in or
 `productboard --check` to verify saved access without opening the dashboard.
 
+Each installation connects directly to the Jira Cloud site and account you supply.
+Issue and attachment links open in your default browser. Jira Software boards and
+sprints are optional; project filters and issue lists remain usable without them.
+
 ## Features
 
 - Use **Team issues → All issues** to browse every issue in the selected scope,
@@ -61,6 +65,10 @@ Run `productboard --login` to update your Jira sign-in or
   project, assignee, sprint, status, and local text filters stay in place.
   Team issues starts with All issues and remembers your last mode across launches.
   Lists load 200 issues at a time; press `n` to load more.
+- **Needs attention** checks open work in the selected scope, including work
+  outside sprints and Kanban projects. An explicit sprint filter still narrows it.
+  If an individual check is unavailable, the footer shows **Partial results**
+  and names the missing source. Press `r` to retry.
 - Use **Filter → Sprint** to narrow issue lists to one sprint, and **Any sprint**
   to clear the selection. Use **Sprint board** to switch which board supplies the
   sprint choices.
@@ -81,6 +89,35 @@ Use a Nerd Font in your terminal to display the sidebar icons.
 To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel
 Light**, **Vercel Dark**, or **Default**. The choice is saved for the next
 launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/geist/terminal).
+
+### Custom workflows
+
+Status grouping uses Jira's To do, In progress, and Done categories. Common English
+names add Blocked, In review, Ready for release, and Backlog groups. Jira's Done
+category always stays Done. Original status names remain visible on each issue.
+
+For custom or localized names, add an optional `workflow` object to
+`~/.config/productboard/config.json`, keeping the existing site and email:
+
+```json
+{
+  "workflow": {
+    "statuses": {
+      "На проверке": "In review",
+      "Ожидает релиза": "Ready for release",
+      "Заблокировано": "Blocked"
+    },
+    "blockedLinkTypes": ["Blocks", "Блокирует"]
+  }
+}
+```
+
+Status names match exactly, ignoring case and surrounding spaces. Available groups
+are `Blocked`, `In progress`, `In review`, `Ready for release`, `Done`, `To do`, and
+`Backlog`. `blockedLinkTypes` lists the Jira issue-link type names that mean a
+dependency blocks the issue; it defaults to `["Blocks"]`. These mappings apply to
+grouping and Needs attention after restarting Productboard. Changing Jira sites
+clears the saved board and workflow mappings.
 
 ## Agent
 

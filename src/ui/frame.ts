@@ -323,6 +323,8 @@ function statusText(d: Dashboard): [string, Style] {
   }
   if (d.notice) return [d.notice, "accent"];
   if (work.pending) return [work.current ? "Refreshing…" : "Loading…", "muted"];
+  if (work.current && work.snapshot?.warnings?.length)
+    return [`Partial results · ${work.snapshot.warnings.join(" · ")} · r retry`, "warning"];
   if (work.updated && work.current) return [`Updated ${usTime(work.updated)}`, "muted"];
   return ["", "muted"];
 }
@@ -390,6 +392,6 @@ function drawPreview(canvas: Canvas, d: Dashboard, preview: Preview): void {
   }
   const hints: Hint[] = [];
   if (preview.images.length > 1) hints.push(["←→", "Previous / next"]);
-  hints.push(["o", "Open in Helium"]);
+  hints.push(["o", "Open in browser"]);
   drawFooter(canvas, d, `Image ${preview.index + 1} of ${preview.images.length}`, hints);
 }

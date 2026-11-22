@@ -1,33 +1,21 @@
 /** Today: what needs a product manager's attention, most urgent first. */
 
 import { localDay, usDate } from "../dates";
-import type { JiraClient } from "./client";
-import { jiraTime, LIST_FIELDS, openBlocker, type RawIssue, toIssue } from "./parse";
-import { type IssueQuery, jql } from "./query";
-import {
-  BACKLOG_STATUS,
-  BLOCKED_STATUS,
-  type Issue,
-  mentionNote,
-  READY_FOR_RELEASE_STATUS,
-  TODAY_SECTIONS,
-  type TodaySection,
-} from "./types";
+import { readAttention } from "./attention-reads";
+import { jiraTime, openBlocker, type RawIssue, toIssue } from "./parse";
+import type { IssueQuery } from "./query";
+import { type Issue, mentionNote, TODAY_SECTIONS, type TodaySection } from "./types";
+import { DEFAULT_WORKFLOW, type Workflow } from "./workflow";
 
 /** Its heading already names the person, so rows there leave the assignee out. */
 export const YOURS: TodaySection = "Assigned to you";
 
 /** In progress with no update for this many days counts as stuck. */
 export const STUCK_DAYS = 5;
-/** Untouched this long, sprint work is forgotten (often a sprint never closed). */
+/** Long-idle work is set aside so it doesn't bury current problems. */
 export const FORGOTTEN_DAYS = 30;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
-
-const TIMED_FIELDS = [...LIST_FIELDS, "updated"];
-const SPRINT_FIELDS = [...TIMED_FIELDS, "duedate", "issuelinks"];
-
-type Source = Pick<JiraClient, "search" | "mentions">;
 
 /** How long ago a moment was, e.g. "45m ago", "3h ago", "6d ago". */
 export function ago(ms: number, now: number): string {
@@ -37,18 +25,28 @@ export function ago(ms: number, now: number): string {
   return `${Math.floor(span / DAY_MS)}d ago`;
 }
 
-/** Why an active-sprint issue needs attention, or undefined when it doesn't.
+/** Why an open issue needs attention, or undefined when it doesn't.
  * Blocked names its cause when Jira knows one; a "Blocked" status alone
  * leaves the reason empty because the status column already says it. */
-function attention(issue: Issue, raw: RawIssue, flagged: Set<string>, now: number): [TodaySection, string] | undefined {
+function attention(
+  issue: Issue,
+  raw: RawIssue,
+  flagged: Set<string>,
+  now: number,
+  workflow: Workflow,
+): [TodaySection, string] | undefined {
   const idle = raw.fields.updated ? Math.floor((now - jiraTime(raw.fields.updated)) / DAY_MS) : 0;
   // Long-untouched work would bury live problems, so it is set aside first.
-  if (idle >= FORGOTTEN_DAYS) return ["Forgotten in active sprints", `${idle}d no update`];
+  if (
+    idle >= FORGOTTEN_DAYS &&
+    (issue.category === "indeterminate" || raw.fields.sprints?.some((sprint) => sprint.state === "active"))
+  )
+    return ["Long untouched", `${idle}d no update`];
   if (flagged.has(issue.key)) return ["Blocked", "Flagged"];
-  const blocker = openBlocker(raw);
+  const blocker = openBlocker(raw, workflow);
   if (blocker) return ["Blocked", `blocked by ${blocker}`];
-  if (BLOCKED_STATUS.test(issue.status)) return ["Blocked", ""];
-  if (READY_FOR_RELEASE_STATUS.test(issue.status)) {
+  if (issue.stage === "Blocked") return ["Blocked", ""];
+  if (issue.stage === "Ready for release") {
     return idle >= STUCK_DAYS ? ["Waiting for release", `${idle}d waiting`] : undefined;
   }
   if (issue.category === "indeterminate" && idle >= STUCK_DAYS) return ["Stuck", `${idle}d no update`];
@@ -59,26 +57,15 @@ function attention(issue: Issue, raw: RawIssue, flagged: Set<string>, now: numbe
 }
 
 export async function today(
-  source: Source,
+  source: Parameters<typeof readAttention>[0],
   query: IssueQuery,
-  { now = Date.now(), signal }: { now?: number; signal?: AbortSignal } = {},
-): Promise<{ issues: Issue[]; more: boolean }> {
-  const open = { ...query, status: "open" } satisfies IssueQuery;
-  const showOpen = query.status !== "done";
-  const inSprint = "sprint in openSprints()";
-  const options = { signal };
-  const [sprintWork, flagged, mentioned, created, assigned] = await Promise.all([
-    showOpen ? source.search(jql(open, inSprint), SPRINT_FIELDS, query.limit + 1, options) : [],
-    showOpen ? source.search(jql(open, inSprint, "flagged = Impediment"), LIST_FIELDS, query.limit, options) : [],
-    source.mentions(jql(query, "updated >= startOfDay(-1)"), query.limit, signal),
-    source.search(
-      jql(query, "(creator = currentUser() OR reporter = currentUser())", "updated >= startOfDay(-1)"),
-      TIMED_FIELDS,
-      query.limit,
-      options,
-    ),
-    showOpen ? source.search(jql(open, "assignee = currentUser()"), TIMED_FIELDS, query.limit, options) : [],
-  ]);
+  {
+    now = Date.now(),
+    signal,
+    workflow = DEFAULT_WORKFLOW,
+  }: { now?: number; signal?: AbortSignal; workflow?: Workflow } = {},
+): Promise<{ issues: Issue[]; more: boolean; warnings: string[] }> {
+  const { work, flagged, mentioned, created, assigned, warnings } = await readAttention(source, query, signal);
 
   const sections = new Map<TodaySection, Issue[]>(TODAY_SECTIONS.map((name) => [name, []]));
   const placed = new Set<string>();
@@ -90,15 +77,18 @@ export async function today(
 
   const flaggedKeys = new Set(flagged.map((raw) => raw.key));
   const updated = new Map<string, string>();
-  for (const raw of sprintWork.slice(0, query.limit)) {
-    const issue = toIssue(raw);
-    const found = attention(issue, raw, flaggedKeys, now);
+  const attentionWork = new Map(
+    [...work.slice(0, query.limit), ...flagged.slice(0, query.limit)].map((raw) => [raw.key, raw]),
+  );
+  for (const raw of attentionWork.values()) {
+    const issue = toIssue(raw, workflow);
+    const found = attention(issue, raw, flaggedKeys, now, workflow);
     if (found) place(found[0], issue, found[1]);
     updated.set(raw.key, raw.fields.updated ?? "");
   }
   // Idle work reads oldest first; every other section keeps the newest first.
   const age = (issue: Issue) => jiraTime(updated.get(issue.key) || "1970-01-01T00:00:00.000+0000");
-  for (const name of ["Stuck", "Waiting for release", "Forgotten in active sprints"] as const)
+  for (const name of ["Stuck", "Waiting for release", "Long untouched"] as const)
     sections.get(name)?.sort((a, b) => age(a) - age(b));
 
   const yesterday = localDay(now - DAY_MS);
@@ -108,14 +98,17 @@ export async function today(
   }
   // The status column shows the new state; the reason says when it changed.
   const updatedAgo = (raw: RawIssue) => (raw.fields.updated ? `updated ${ago(jiraTime(raw.fields.updated), now)}` : "");
-  for (const raw of created) place("Your issues, changed since yesterday", toIssue(raw), updatedAgo(raw));
+  for (const raw of created.slice(0, query.limit))
+    place("Your issues, changed since yesterday", toIssue(raw, workflow), updatedAgo(raw));
   // Work under way first, then planned work, then the backlog.
-  const rank = ({ fields }: RawIssue) =>
-    fields.status.statusCategory.key === "indeterminate" ? 0 : BACKLOG_STATUS.test(fields.status.name) ? 2 : 1;
-  for (const raw of assigned.toSorted((a, b) => rank(a) - rank(b))) place(YOURS, toIssue(raw), updatedAgo(raw));
+  const rank = (issue: Issue) => (issue.category === "indeterminate" ? 0 : issue.stage === "Backlog" ? 2 : 1);
+  const assignedIssues = assigned.slice(0, query.limit).map((raw) => ({ issue: toIssue(raw, workflow), raw }));
+  for (const { issue, raw } of assignedIssues.toSorted((a, b) => rank(a.issue) - rank(b.issue)))
+    place(YOURS, issue, updatedAgo(raw));
 
   return {
     issues: TODAY_SECTIONS.flatMap((name) => sections.get(name) ?? []),
-    more: sprintWork.length > query.limit,
+    more: [work, flagged, created, assigned].some((rows) => rows.length > query.limit) || mentioned.more,
+    warnings,
   };
 }

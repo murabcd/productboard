@@ -3,6 +3,55 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+test("workflow mappings survive same-site sign-in, reset on a different site, and cannot invalidate credentials", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "productboard-workflow-"));
+  try {
+    const config = join(directory, ".config", "productboard");
+    const path = join(config, "config.json");
+    await mkdir(config, { recursive: true });
+    const workflow = { statuses: { "На проверке": "In review" }, blockedLinkTypes: ["Блокирует"] };
+    const preferences = { site: "example.atlassian.net", email: "test@example.com", board: "36", workflow };
+    await writeFile(path, JSON.stringify(preferences));
+    await writeFile(
+      join(directory, "security"),
+      '#!/bin/sh\nif [ "$1" = "find-generic-password" ]; then printf "test-token\\n"; else cat >/dev/null; fi\n',
+      { mode: 0o700 },
+    );
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "-e",
+        `
+        import { writeFileSync } from "node:fs";
+        import { readConfig, saveCredentials, loadCredentials } from "./src/auth";
+        const credentials = { site: "example.atlassian.net", email: "test@example.com", token: "test-token" };
+        saveCredentials(credentials);
+        const sameSite = readConfig();
+        saveCredentials({ ...credentials, site: "another-team.atlassian.net" });
+        const otherSite = readConfig();
+        writeFileSync(process.env.TEST_CONFIG, JSON.stringify({
+          ...sameSite, workflow: { statuses: { Custom: "Invalid" } }
+        }));
+        console.log(JSON.stringify({ sameSite, otherSite, loaded: loadCredentials() }));
+      `,
+      ],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env: { HOME: directory, PATH: `${directory}:/usr/bin:/bin`, TEST_CONFIG: path },
+      },
+    );
+    expect(result.stderr.toString()).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout.toString())).toEqual({
+      sameSite: preferences,
+      otherSite: { site: "another-team.atlassian.net", email: "test@example.com" },
+      loaded: { site: preferences.site, email: preferences.email, token: "test-token" },
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("model picks persist across launches, keep five distinct provider and model pairs, and ignore reasoning changes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "productboard-model-history-"));
   try {

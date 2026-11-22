@@ -29,6 +29,7 @@ import {
 import { type IssueQuery, initialQuery, jql, PAGE, RECENT_ISSUES_JQL, View } from "./query";
 import { today } from "./today";
 import type { Choice, Detail, Issue, Sprint } from "./types";
+import { DEFAULT_WORKFLOW, type Workflow } from "./workflow";
 
 export interface Snapshot {
   issues: Issue[];
@@ -36,11 +37,7 @@ export interface Snapshot {
   more: boolean;
   /** Mentions view: how many recently updated issues were read. */
   scanned: number;
-}
-
-export interface Catalog {
-  boards: Choice[];
-  projects: Choice[];
+  warnings?: string[];
 }
 
 const DETAIL_FIELDS = "description,project,assignee,priority,comment,attachment";
@@ -51,7 +48,10 @@ export class JiraClient {
   private me: Promise<Myself> | undefined;
   private sprintField: Promise<string | undefined> | undefined;
 
-  constructor(private readonly http: JiraHttp) {}
+  constructor(
+    private readonly http: JiraHttp,
+    private readonly workflow: Workflow = DEFAULT_WORKFLOW,
+  ) {}
 
   get site(): string {
     return this.http.credentials.site;
@@ -108,27 +108,25 @@ export class JiraClient {
 
   async snapshot(query: IssueQuery, signal?: AbortSignal): Promise<Snapshot> {
     if (query.view === View.Mentions) return { query, ...(await this.mentions(jql(query), query.limit, signal)) };
-    if (query.view === View.Today) return { query, scanned: 0, ...(await today(this, query, { signal })) };
-    return { query, scanned: 0, ...(await this.issuePage(jql(query), query.limit, signal)) };
+    if (query.view === View.Today)
+      return { query, scanned: 0, ...(await today(this, query, { signal, workflow: this.workflow })) };
+    return { query, scanned: 0, ...(await this.issuePage(jql(query), query.limit, { signal })) };
   }
 
   recentIssues(): Promise<Pick<Snapshot, "issues" | "more">> {
     return this.issuePage(RECENT_ISSUES_JQL, PAGE);
   }
 
-  private async issuePage(
-    query: string,
-    limit: number,
-    signal?: AbortSignal,
-  ): Promise<Pick<Snapshot, "issues" | "more">> {
-    const found = await this.search(query, LIST_FIELDS, limit + 1, { signal });
-    return { issues: found.slice(0, limit).map(toIssue), more: found.length > limit };
+  /** Parsed issue pages share the site's workflow across the dashboard and Agent. */
+  async issuePage(query: string, limit: number, options?: ReadOptions): Promise<Pick<Snapshot, "issues" | "more">> {
+    const found = await this.search(query, LIST_FIELDS, limit + 1, options);
+    return { issues: found.slice(0, limit).map((raw) => toIssue(raw, this.workflow)), more: found.length > limit };
   }
 
   async findIssues(text: string, signal: AbortSignal): Promise<Issue[]> {
     const query = { ...initialQuery, view: View.Search, text };
     const found = await this.search(jql(query), LIST_FIELDS, 12, { signal });
-    return found.map(toIssue);
+    return found.map((raw) => toIssue(raw, this.workflow));
   }
 
   /** Issues matching the JQL whose comments @-mention you, newest mention first. */
@@ -147,7 +145,7 @@ export class JiraClient {
         const page = row.fields.comment;
         const thread = isComplete(page) ? page.comments : await this.allComments(row.key, signal);
         const mention = latestMention(toComments(thread, accountId));
-        return mention ? [{ ...toIssue(row), mention }] : [];
+        return mention ? [{ ...toIssue(row, this.workflow), mention }] : [];
       }),
     );
     const issues = found.flat().sort((a, b) => (b.mention?.created ?? "").localeCompare(a.mention?.created ?? ""));
@@ -170,16 +168,14 @@ export class JiraClient {
     }
   }
 
-  async catalog(): Promise<Catalog> {
-    const [boards, projects] = await Promise.all([
-      this.pages("/rest/agile/1.0/board", RawBoard, "board list"),
-      this.pages("/rest/api/3/project/search", RawProject, "project list"),
-    ]);
-    const byLabel = (a: Choice, b: Choice) => a.label.localeCompare(b.label);
-    return {
-      boards: boards.map(toBoardChoice).sort(byLabel),
-      projects: projects.map(toProjectChoice).sort(byLabel),
-    };
+  async boards(): Promise<Choice[]> {
+    const boards = await this.pages("/rest/agile/1.0/board", RawBoard, "board list");
+    return boards.map(toBoardChoice).sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  async projects(): Promise<Choice[]> {
+    const projects = await this.pages("/rest/api/3/project/search", RawProject, "project list");
+    return projects.map(toProjectChoice).sort((a, b) => a.label.localeCompare(b.label));
   }
 
   async sprints(board: string, signal?: AbortSignal): Promise<Sprint[]> {

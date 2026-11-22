@@ -21,7 +21,7 @@ const SECTION_ICONS: Record<TodaySection, [icon: string, style: Style]> = {
   "Your issues, changed since yesterday": ["◇", "accent"],
   "Assigned to you": ["◫", "accent"],
   "Waiting for release": ["◕", "ship"],
-  "Forgotten in active sprints": ["◌", "muted"],
+  "Long untouched": ["◌", "muted"],
 };
 
 /** Issues matching the search, grouped under their headings in first-seen order. */

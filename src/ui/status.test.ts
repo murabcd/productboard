@@ -1,10 +1,20 @@
 import { describe, expect, test } from "bun:test";
+import { toIssue } from "../jira/parse";
 import type { Category } from "../jira/types";
+import { Workflow } from "../jira/workflow";
+import { rawIssue } from "../testing";
 import { priorityMark, statusIcon, statusLabel } from "./status";
 
 const style = (status: string, category: Category) => statusIcon({ status, category })[1];
 
 describe("status colors", () => {
+  test("a localized site mapping controls the rendered stage color", () => {
+    const raw = rawIssue("TEAM-1", "indeterminate");
+    raw.fields.status.name = "На проверке";
+    const issue = toIssue(raw, Workflow.parse({ statuses: { "На проверке": "In review" } }));
+    expect(statusIcon(issue)).toEqual(["◑", "review"]);
+  });
+
   test("each stage of the workflow has its own color", () => {
     expect(style("QA Blocked", "indeterminate")).toBe("error");
     expect(style("Release Blocked", "indeterminate")).toBe("error");
@@ -15,7 +25,7 @@ describe("status colors", () => {
     expect(style("In Progress", "indeterminate")).toBe("accent");
     expect(style("Product Research", "indeterminate")).toBe("accent");
     expect(style("Released", "done")).toBe("done");
-    expect(style("Icebox", "done")).toBe("muted");
+    expect(style("Icebox", "done")).toBe("done");
     expect(style("Ready for dev", "new")).toBe("muted");
   });
 });

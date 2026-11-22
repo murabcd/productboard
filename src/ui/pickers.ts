@@ -105,7 +105,7 @@ function boardPicker(choose: (d: Dashboard, board: string) => void): PickerSourc
     load: (d) => {
       if (d.workspace.boards.length === 0) d.workspace.loadCatalog();
     },
-    empty: ({ workspace }) => catalogStatus(workspace.boardCatalogError, workspace.catalogPending),
+    empty: ({ workspace }) => catalogStatus(workspace.boardCatalogError, workspace.boardsPending),
   };
 }
 
@@ -195,7 +195,7 @@ function commandItems(d: Dashboard): PickerItem[] {
     item("Toggle issue peek", "Space", () => d.runAction("peek"), act),
     item("Open an issue Agent mentioned", "^O", () => d.openPicker("cited"), act),
     item("Open issue details", "Enter", () => d.runAction("details"), act),
-    item("Open issue in Helium", "o", () => d.openIssue(false), act),
+    item("Open issue in browser", "o", () => d.openIssue(false), act),
     item("Copy issue link", "y", () => d.openIssue(true), act),
     item("Search all of Jira", "f", () => d.startFind(), act),
     item("Refresh", "r", () => d.runAction("refresh"), act),
@@ -242,9 +242,9 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
         (project) => d.changeQuery({ project: project.value }),
       ),
     load: (d) => {
-      if (d.workspace.boards.length === 0) d.workspace.loadCatalog();
+      if (d.workspace.projects.length === 0) d.workspace.loadCatalog();
     },
-    empty: ({ workspace }) => catalogStatus(workspace.boardCatalogError, workspace.catalogPending),
+    empty: ({ workspace }) => catalogStatus(workspace.projectCatalogError, workspace.projectsPending),
   },
   assignee: {
     title: "People in loaded issues",
@@ -271,7 +271,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       ),
   },
   attachment: {
-    title: "Attachments · Enter previews images, opens other files in Helium",
+    title: "Attachments · Enter previews images, opens other files in browser",
     items: (d) =>
       d.attachments.map((attachment) =>
         item(attachment.filename, describeAttachment(attachment), () => d.openAttachment(attachment), {

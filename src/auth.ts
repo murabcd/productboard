@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { Credentials } from "./jira/http";
 import { TEAM_MODES, type TeamMode } from "./jira/query";
+import { Workflow } from "./jira/workflow";
 import { THEME_IDS, type ThemeId } from "./theme";
 
 const KEYCHAIN_SERVICE = "productboard";
@@ -41,6 +42,7 @@ const Config = z.object({
   email: z.string(),
   /** The board chosen last, opened again on the next start. */
   board: z.string().optional(),
+  workflow: Workflow.optional().catch(undefined),
   agent: AgentChoice.optional(),
   chatgptConnected: z.boolean().optional(),
   recentAgentModels: z.array(ModelRef).optional().catch(undefined),
@@ -109,7 +111,8 @@ export function saveCredentials(credentials: Credentials): void {
   // A board belongs to one site, so it is kept only when the site stays the same.
   const previous = readConfig();
   const board = previous?.site === site ? previous.board : undefined;
-  writeConfig({ ...previous, site, email, board });
+  const workflow = previous?.site === site ? previous.workflow : undefined;
+  writeConfig({ ...previous, site, email, board, workflow });
 }
 
 const AGENT_SERVICE = "productboard-agent";

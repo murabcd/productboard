@@ -356,6 +356,18 @@ describe("mentions", () => {
 });
 
 describe("boards and sprints", () => {
+  test("projects are available while Jira Software boards fail", async () => {
+    const { client } = fakeJira((url) =>
+      url.pathname.endsWith("/board")
+        ? json({ errorMessages: ["Boards unavailable"] }, { status: 403 })
+        : json({ values: [{ key: "TEAM", name: "Another team" }], isLast: true }),
+    );
+    const [boards, projects] = await Promise.allSettled([client.boards(), client.projects()]);
+    expect(boards.status).toBe("rejected");
+    expect(projects.status).toBe("fulfilled");
+    if (projects.status === "fulfilled") expect(projects.value.map((project) => project.value)).toEqual(["TEAM"]);
+  });
+
   test("boards and projects are read across pages", async () => {
     const { client } = fakeJira((url) => {
       const startAt = Number(url.searchParams.get("startAt"));
@@ -366,12 +378,12 @@ describe("boards and sprints", () => {
       }
       return json({ values: [{ key: "EX", name: "Example" }], isLast: true });
     });
-    const catalog = await client.catalog();
-    expect(catalog.boards.map((b) => [b.label, b.detail])).toEqual([
+    const [boards, projects] = await Promise.all([client.boards(), client.projects()]);
+    expect(boards.map((b) => [b.label, b.detail])).toEqual([
       ["Team A", "Example (EX)"],
       ["Team B", ""],
     ]);
-    expect(catalog.projects[0]?.value).toBe("EX");
+    expect(projects[0]?.value).toBe("EX");
   });
 
   test("sprints keep Jira's state; boards without sprints say so", async () => {

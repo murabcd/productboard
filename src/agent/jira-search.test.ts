@@ -1,13 +1,14 @@
 import { expect, mock, test } from "bun:test";
 import { JiraSearchResult } from "../../agent/lib/jira-search";
-import { JiraError } from "../jira/http";
-import { LIST_FIELDS } from "../jira/parse";
-import { rawIssue } from "../testing";
+import { JiraClient } from "../jira/client";
+import { JiraError, JiraHttp } from "../jira/http";
+import { Workflow } from "../jira/workflow";
+import { fakeFetch, issues, rawIssue } from "../testing";
 import { openJiraSearch } from "./jira-search";
 
 test("Eve can search across Jira through the authenticated bridge with bounded results", async () => {
-  const search = mock(async () => [rawIssue("EX-1"), rawIssue("WEB-1"), rawIssue("OPS-1")]);
-  const bridge = openJiraSearch({ search });
+  const issuePage = mock(async () => ({ issues: issues("EX-1", "WEB-1"), more: true }));
+  const bridge = openJiraSearch({ issuePage });
   const { PRODUCTBOARD_JIRA_SEARCH_URL: url, PRODUCTBOARD_JIRA_SEARCH_TOKEN: token } = bridge.env;
   const query = "status = Blocked ORDER BY updated DESC";
   const request = (limit: number, credential = token) =>
@@ -19,11 +20,11 @@ test("Eve can search across Jira through the authenticated bridge with bounded r
   try {
     expect((await request(2, "wrong-token")).status).toBe(404);
     expect((await request(51)).status).toBe(400);
-    expect(search).not.toHaveBeenCalled();
+    expect(issuePage).not.toHaveBeenCalled();
 
     const response = await request(2);
     expect(response.ok).toBe(true);
-    expect(search).toHaveBeenCalledWith(query, LIST_FIELDS, 3, {
+    expect(issuePage).toHaveBeenCalledWith(query, 2, {
       priority: "background",
       signal: expect.any(AbortSignal),
     });
@@ -35,11 +36,39 @@ test("Eve can search across Jira through the authenticated bridge with bounded r
   }
 });
 
+test("Agent search retains the site's workflow stage through the validated result", async () => {
+  const raw = rawIssue("TEAM-42", "indeterminate");
+  raw.fields.status.name = "На проверке";
+  const http = new JiraHttp(
+    { site: "example.atlassian.net", email: "test@example.com", token: "test-token" },
+    fakeFetch(async (input) =>
+      Response.json(new URL(String(input)).pathname.endsWith("/field") ? [] : { issues: [raw], isLast: true }),
+    ),
+  );
+  const bridge = openJiraSearch(new JiraClient(http, Workflow.parse({ statuses: { "На проверке": "In review" } })));
+  try {
+    const response = await fetch(bridge.env.PRODUCTBOARD_JIRA_SEARCH_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${bridge.env.PRODUCTBOARD_JIRA_SEARCH_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ jql: "project = TEAM" }),
+    });
+    expect(response.ok).toBe(true);
+    const result = JiraSearchResult.parse(await response.json());
+    expect(result.issues[0]).toMatchObject({ key: "TEAM-42", status: "На проверке", stage: "In review" });
+  } finally {
+    await bridge.close();
+    http.close();
+  }
+});
+
 test.each([400, 401, 403, 429, 500])(
   "Jira search preserves actionable status %i without returning credentials or server bodies",
   async (status) => {
     const bridge = openJiraSearch({
-      search: async () => {
+      issuePage: async () => {
         throw new JiraError("private upstream body", status);
       },
     });

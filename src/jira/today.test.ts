@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { rawComment, rawIssue } from "../testing";
+import { JiraError } from "./http";
 import { type RawIssue, toComments, toIssue } from "./parse";
 import { initialQuery, View } from "./query";
 import { ago, today } from "./today";
+import { Workflow } from "./workflow";
 
 const NOW = Date.parse("2026-11-09T12:00:00+03:00");
 const person = { accountId: "dev", displayName: "Cameron" };
@@ -29,6 +31,7 @@ function sprintIssue(
       status: { name: options.status ?? "In Progress", statusCategory: { key: options.category ?? "indeterminate" } },
       updated: options.updated ?? "2026-11-09T10:00:00.000+0300",
       duedate: options.due ?? null,
+      sprints: [{ name: "Sprint 1", state: "active" }],
       issuelinks: options.blockedBy
         ? [
             {
@@ -68,7 +71,7 @@ function source(
     search: async (jql: string) => {
       searches.push(jql);
       if (jql.includes("flagged = Impediment")) return (extra.flagged ?? []).map((key) => rawIssue(key));
-      if (jql.includes("sprint in openSprints()")) return sprint;
+      if (!jql.includes("currentUser()")) return sprint;
       if (jql.includes("creator = currentUser()")) return (extra.created ?? []).map((key) => timed(key));
       return (extra.assigned ?? []).map((item) => (typeof item === "string" ? timed(item) : item));
     },
@@ -85,6 +88,94 @@ const rows = (issues: { key: string; section?: string; reason?: string }[]) =>
   issues.map((i) => [i.section, i.key, i.reason]);
 
 describe("Today", () => {
+  test("Kanban work needs no sprint field or sprint JQL, and custom blocker links use the site's mapping", async () => {
+    const blocked = sprintIssue("TEAM-1", { status: "Заблокировано" });
+    const linked = sprintIssue("TEAM-2", { blockedBy: ["TEAM-9", "indeterminate"] });
+    const waiting = sprintIssue("TEAM-3", { status: "Ожидает релиза", updated: "2026-11-02T10:00:00.000+0300" });
+    for (const raw of [blocked, linked, waiting]) delete raw.fields.sprints;
+    const link = linked.fields.issuelinks?.[0];
+    if (link) link.type.name = "Блокирует";
+    const fake = source([blocked, linked, waiting]);
+    const workflow = Workflow.parse({
+      statuses: { Заблокировано: "Blocked", "Ожидает релиза": "Ready for release" },
+      blockedLinkTypes: ["Блокирует"],
+    });
+    const result = await today(fake, query, { now: NOW, workflow });
+    expect(result.issues.find((issue) => issue.key === "TEAM-1")?.section).toBe("Blocked");
+    expect(result.issues.find((issue) => issue.key === "TEAM-2")?.reason).toBe("blocked by TEAM-9");
+    expect(result.issues.find((issue) => issue.key === "TEAM-3")?.section).toBe("Waiting for release");
+    expect(fake.searches.every((jql) => !jql.includes("sprint"))).toBe(true);
+  });
+
+  test("an unsupported flagged query leaves useful results with a partial-results warning", async () => {
+    const fake = source([sprintIssue("TEAM-1", { assigned: false })], { assigned: ["TEAM-2"] });
+    const result = await today(
+      {
+        ...fake,
+        search: async (...args: Parameters<typeof fake.search>) => {
+          if (args[0].includes("flagged = Impediment")) throw new JiraError("Field unavailable", 400);
+          return fake.search(...args);
+        },
+      },
+      query,
+      { now: NOW },
+    );
+    expect(result.issues.map((issue) => issue.key)).toContain("TEAM-1");
+    expect(result.issues.map((issue) => issue.key)).toContain("TEAM-2");
+    expect(result.warnings).toEqual(["Flagged issues unavailable"]);
+  });
+
+  test("failed comment access keeps team work, while complete failure and rejected credentials stay errors", async () => {
+    const fake = source([sprintIssue("TEAM-1", { assigned: false })]);
+    const unavailable = async (): Promise<never> => {
+      throw new JiraError("Not permitted", 403);
+    };
+    const result = await today({ ...fake, mentions: unavailable }, query, { now: NOW });
+    expect(result.issues.map((issue) => issue.key)).toContain("TEAM-1");
+    expect(result.warnings).toEqual(["Mentions unavailable"]);
+    await expect(today({ search: unavailable, mentions: unavailable }, query)).rejects.toThrow("Not permitted");
+    await expect(today({ search: unavailable, mentions: unavailable }, { ...query, status: "done" })).rejects.toThrow(
+      "Not permitted",
+    );
+    await expect(
+      today(
+        {
+          ...fake,
+          mentions: async () => {
+            throw new JiraError("Sign in again", 401);
+          },
+        },
+        query,
+      ),
+    ).rejects.toThrow("Sign in again");
+  });
+
+  test("cancellation cannot publish a partial snapshot", async () => {
+    const controller = new AbortController();
+    const fake = source([]);
+    await expect(
+      today(
+        {
+          ...fake,
+          mentions: async () => {
+            controller.abort(new Error("Scope changed"));
+            return { issues: [], more: false, scanned: 0 };
+          },
+        },
+        query,
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow("Scope changed");
+  });
+
+  test("personal and flagged result limits also expose more work", async () => {
+    const result = await today(source([], { assigned: ["TEAM-1", "TEAM-2"] }), { ...query, limit: 1 });
+    expect(result.more).toBe(true);
+    expect(result.issues.filter((issue) => issue.section === "Assigned to you").map((issue) => issue.key)).toEqual([
+      "TEAM-1",
+    ]);
+  });
+
   test("sorts sprint work into blocked, stuck, unowned and overdue with reasons", async () => {
     const result = await today(
       source(
@@ -119,8 +210,8 @@ describe("Today", () => {
       ["Overdue", "EX-7", "due 11/05/2026"],
       ["Mentioned you", "EX-50", "Charlie · 9:00 AM"],
       ["Waiting for release", "EX-12", "7d waiting"], // done by the team, not stuck; EX-13 is too fresh
-      ["Forgotten in active sprints", "EX-9", "677d no update"],
-      ["Forgotten in active sprints", "EX-11", "69d no update"],
+      ["Long untouched", "EX-9", "677d no update"],
+      ["Long untouched", "EX-11", "69d no update"],
     ]);
   });
 

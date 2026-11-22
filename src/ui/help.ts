@@ -19,7 +19,7 @@ export const HELP = [
     ["Enter", "Details"],
     ["Space", "Peek; Esc closes it"],
     ["Shift-↑ ↓  J K", "Scroll the peek"],
-    ["o  y", "Open in Helium / copy link"],
+    ["o  y", "Open in browser / copy link"],
     ["z  Z", "Fold the group / unfold all"],
     ["n", "Load more"],
     ["r", "Refresh"],

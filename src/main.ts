@@ -2,13 +2,14 @@ import { version } from "../package.json";
 import { ChatArchive } from "./agent/archive";
 import { EveAgent } from "./agent/eve";
 import { loadCredentials, readConfig, rememberBoard, rememberTeamMode, rememberTheme } from "./auth";
+import { desktop } from "./desktop";
 import { JiraClient } from "./jira/client";
 import { type Credentials, JiraHttp } from "./jira/http";
 import { connectAgent, connectJira } from "./setup";
 import { Workspace } from "./state/workspace";
 import { clean } from "./text";
 import { DEFAULT_THEME } from "./theme";
-import { Dashboard, type Opener } from "./ui/dashboard";
+import { Dashboard } from "./ui/dashboard";
 import { openScreen, type Screen } from "./ui/screen";
 
 const USAGE = `Usage: productboard [--login | --agent-login | --check | --version | --help]
@@ -36,7 +37,7 @@ async function main(args: string[]): Promise<number> {
     if (command) return fail(`Run productboard ${command} in a terminal.`);
     return fail(typeof saved === "string" ? saved : "Run productboard in a terminal, or use productboard --check.");
   }
-  const screen = await openScreen((url) => run(["open", url]));
+  const screen = await openScreen(desktop.open);
   let result: number | string;
   try {
     result = await interactive(screen, command, typeof saved === "string" ? undefined : saved);
@@ -68,7 +69,7 @@ async function interactive(
 async function withJira(credentials: Credentials, use: (client: JiraClient) => Promise<number>): Promise<number> {
   const http = new JiraHttp(credentials);
   try {
-    return await use(new JiraClient(http));
+    return await use(new JiraClient(http, readConfig()?.workflow));
   } finally {
     http.close();
   }
@@ -92,7 +93,7 @@ async function dashboard(client: JiraClient, screen: Screen): Promise<number> {
       storageError = "Could not open saved chats. Check local disk space and permissions.";
       return undefined;
     }));
-  const board = new Dashboard(workspace, client, macOpener, screen.redraw, {
+  const board = new Dashboard(workspace, client, desktop, screen.redraw, {
     archive,
     agent: EveAgent.create(client),
     connectAgent: async (theme) => ((await connectAgent(screen, theme)) ? EveAgent.create(client) : undefined),
@@ -111,24 +112,6 @@ async function dashboard(client: JiraClient, screen: Screen): Promise<number> {
     await board.dispose();
   }
   return 0;
-}
-
-const macOpener: Opener = {
-  open: (url) => run(["open", "-a", "Helium", url]),
-  copy: (text) => run(["pbcopy"], text),
-};
-
-async function run(command: string[], input?: string): Promise<void> {
-  const child = Bun.spawn(command, {
-    stdin: input === undefined ? "ignore" : new Blob([input]),
-    stdout: "ignore",
-    stderr: "pipe",
-    timeout: 5000,
-  });
-  if ((await child.exited) !== 0) {
-    const error = clean((await new Response(child.stderr).text()).trim());
-    throw new Error(error || "Could not open the link");
-  }
 }
 
 function say(text: string): number {

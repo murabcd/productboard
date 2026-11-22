@@ -9,7 +9,7 @@ import { useRenderer } from "./screen";
 
 function start(backend: AgentBackend) {
   const never = () => deferred<never>().promise;
-  const workspace = new Workspace({ snapshot: never, catalog: never, sprints: never });
+  const workspace = new Workspace({ snapshot: never, boards: never, projects: never, sprints: never });
   const copy = mock(async (_text: string) => {});
   const dashboard = new Dashboard(
     workspace,

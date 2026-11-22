@@ -7,7 +7,7 @@ import { frame } from "./frame";
 
 function teamFocus(issues: number) {
   const never = () => deferred<never>().promise;
-  const work = new Workspace({ snapshot: never, catalog: never, sprints: never });
+  const work = new Workspace({ snapshot: never, boards: never, projects: never, sprints: never });
   work.query = { ...initialQuery, view: View.Today };
   const keys = Array.from({ length: issues }, (_, n) => `EX-${n + 1}`);
   const base = snapshot(work.query, keys);
@@ -25,6 +25,16 @@ function teamFocus(issues: number) {
 }
 
 describe("issue rows", () => {
+  test("partial attention results keep their rows and show the missing data sources", () => {
+    const dashboard = teamFocus(1);
+    if (dashboard.workspace.snapshot) dashboard.workspace.snapshot.warnings = ["Flagged issues unavailable"];
+    dashboard.resize(138, 24);
+    const canvas = frame(dashboard);
+    const text = Array.from({ length: canvas.height }, (_, row) => canvas.text(row)).join("\n");
+    expect(text).toContain("EX-1");
+    expect(text).toContain("Partial results · Flagged issues unavailable · r retry");
+  });
+
   test.each([
     [138, 1],
     [80, 2],
@@ -42,7 +52,7 @@ describe("issue rows", () => {
         .text(row)
         .slice(width === 138 ? 20 : 0)
         .trim();
-    expect(content(descriptionRow)).toBe("What needs attention across active sprints");
+    expect(content(descriptionRow)).toBe("What needs attention in the selected scope");
     if (width === 60) {
       expect(content(descriptionRow + 1)).toBe("All issues   Needs attention");
       expect(content(descriptionRow + 2)).toMatch(/^Filter 1 ▾ +Status: Done +Display ▾$/);
