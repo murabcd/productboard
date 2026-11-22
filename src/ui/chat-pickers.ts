@@ -93,7 +93,7 @@ export const CHAT_PICKERS = {
       return [...agent.chat.conversations]
         .reverse()
         .filter((thread) =>
-          `${thread.name} ${thread.turns.map((turn) => `${turn.displayPrompt} ${turn.answer}`).join(" ")}`
+          `${thread.name} ${thread.turns.map((turn) => `${turn.prompt} ${turn.displayPrompt} ${turn.answer}`).join(" ")}`
             .toLocaleLowerCase()
             .includes(needle),
         )

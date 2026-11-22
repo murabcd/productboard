@@ -65,6 +65,25 @@ test("tool activity is reachable from keyboard search and its clickable transcri
   }
 });
 
+test("saved chat search finds pasted prompt contents beyond the visible token label", async () => {
+  const { dashboard, chat } = start(fakeAgent(async ({ onText }) => onText("Answer")));
+  try {
+    chat.current.draft.replace([
+      { kind: "paste", label: "[Pasted text #1]", text: "Investigate the unique Falcon rollout" },
+    ]);
+    await chat.send();
+    const saved = chat.current.id;
+    chat.start();
+    dashboard.openPicker("chats");
+    dashboard.picker?.setQuery("Falcon rollout");
+    expect(dashboard.picker?.selected?.value).toBe(saved);
+    dashboard.handle({ name: "enter" });
+    expect(chat.current.id).toBe(saved);
+  } finally {
+    await dashboard.dispose();
+  }
+});
+
 test("the native composer queues on Enter and sends now on Ctrl+Enter in a minimum pane", async () => {
   const pending = deferred<void>();
   const ask = mock<Parameters<typeof fakeAgent>[0]>(async ({ prompt, onText }) => {
