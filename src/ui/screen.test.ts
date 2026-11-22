@@ -729,7 +729,7 @@ describe("OpenTUI shell", () => {
     await setup.mockInput.typeText("/mode");
     await setup.renderOnce();
     const menu = () => setup.captureCharFrame().split("\n").slice(0, dashboard.agentLayout.boxTop).join("\n");
-    expect(menu().split("\n").at(-1)).toMatch(/\/models +Switch model/);
+    expect(menu()).toMatch(/\/models +Switch model/);
     expect(menu()).not.toContain("/mode▏");
     expect(setup.captureCharFrame().split("\n")[composer?.top ?? -1]).toContain("/mode");
     expect(draftText(dashboard.agent.chat.current.draft.parts)).toBe("/mode");
@@ -759,7 +759,10 @@ describe("OpenTUI shell", () => {
 
     await setup.mockInput.typeText("/mode");
     await setup.renderOnce();
-    const commandRow = dashboard.agentLayout.boxTop - 1;
+    const commandRow = setup
+      .captureCharFrame()
+      .split("\n")
+      .findIndex((line) => line.includes("/models"));
     const commandColumn = setup.captureCharFrame().split("\n")[commandRow]?.indexOf("/models") ?? -1;
     expect(commandColumn).toBeGreaterThanOrEqual(0);
     await setup.mockMouse.click(commandColumn, commandRow);
@@ -880,7 +883,7 @@ describe("OpenTUI shell", () => {
     setup.mockInput.pressEscape();
     await Bun.sleep(30); // a lone Esc is recognized after a short wait
     await settle();
-    expect(dashboard.agent.chat.current.pending).toBeUndefined();
+    expect(dashboard.agent.chat.current.operation).toBeUndefined();
     expect(dashboard.agent.tab).toBe(true); // the first Esc only interrupts
   });
 

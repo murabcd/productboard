@@ -17,7 +17,7 @@ export function drawAgent(
   const { room } = transcript;
   for (let y = boxTop; y <= boxBottom; y++) {
     canvas.paint(y, left, room, "raised");
-    canvas.put(y, left, "┃", thread.pending ? "muted" : "accent");
+    canvas.put(y, left, "┃", thread.operation ? "muted" : "accent");
   }
   if (showComposer)
     canvas.reserve("composer", { left: left + 2, top: boxBottom - rows, width: room - 3, height: rows });
@@ -42,11 +42,16 @@ export function drawAgent(
     drawWelcome(canvas, left, room, transcript.top, transcript.capacity);
   }
 
-  if (thread.pending) {
+  if (thread.operation) {
     const started = thread.turns.at(-1)?.started ?? Date.now();
     drawScanner(canvas, status, left + 1, Math.floor((Date.now() - started) / SCANNER_FRAME_MS));
     canvas.put(status, left + 1 + SCANNER_WIDTH + 2, "esc", "text");
-    canvas.put(status, left + 1 + SCANNER_WIDTH + 6, "interrupt", "muted");
+    canvas.put(
+      status,
+      left + 1 + SCANNER_WIDTH + 6,
+      thread.operation.kind === "compaction" ? "compacting context" : "interrupt",
+      "muted",
+    );
   } else if (thread.draft.error) {
     canvas.put(status, left + 1, thread.draft.error, "error", room - 1);
   } else if (thread.draft.loading) {
@@ -55,6 +60,8 @@ export function drawAgent(
     canvas.put(status, left + 1, chat.storageError, "error", room - 1);
   } else if (!chat.configured) {
     canvas.put(status, left + 1, "Ctrl+K · Connect Agent", "muted", room - 1);
+  } else if (thread.checkpoint) {
+    canvas.put(status, left + 1, "Context compacted · full chat kept", "muted", room - 1);
   }
   if (!visible.following) {
     const label = "Jump to latest ↓";

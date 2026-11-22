@@ -2,6 +2,7 @@ import type { AgentChoice, AgentChoiceChange, ModelRef } from "../auth";
 import type { Issue } from "../jira/types";
 import { clean } from "../text";
 import type { ChatArchive } from "./archive";
+import type { ContextCheckpoint } from "./context";
 import { type AgentTool, type Conversation, conversation, conversationData, type Turn } from "./conversation";
 import type { SprintContext } from "./draft";
 import type { AgentImage } from "./images";
@@ -16,6 +17,7 @@ export interface AgentBackend {
   models(): Promise<AgentModel[]>;
   close(): Promise<void>;
   discardThread(thread: string): void;
+  compact(request: { history: readonly Turn[]; checkpoint?: ContextCheckpoint; signal: AbortSignal }): Promise<string>;
   /** Answer with another model or reasoning from now on. */
   use(choice: AgentChoice, change: AgentChoiceChange): Promise<void>;
   ask(request: {
@@ -25,6 +27,7 @@ export interface AgentBackend {
     images: readonly AgentImage[];
     signal: AbortSignal;
     history: readonly Turn[];
+    checkpoint?: ContextCheckpoint;
     onIssues(issues: Issue[]): void;
     onText(text: string, replace?: boolean): void;
     onTools(tools: readonly AgentTool[]): void;
@@ -91,7 +94,7 @@ export class AgentChat {
   }
 
   private retire(thread: Conversation): void {
-    thread.pending?.abort();
+    thread.operation?.controller.abort();
     this.backend?.discardThread(thread.id);
     clearTimeout(this.saves.get(thread));
     this.saves.delete(thread);
@@ -176,7 +179,35 @@ export class AgentChat {
   }
 
   stop(): void {
-    this.current.pending?.abort();
+    this.current.operation?.controller.abort();
+  }
+
+  async compact(): Promise<void> {
+    const thread = this.current;
+    const backend = this.backend;
+    const last = thread.turns.at(-1);
+    if (thread.operation || !backend || !last) return;
+    const operation = { kind: "compaction", controller: new AbortController() } as const;
+    thread.operation = operation;
+    thread.draft.error = "";
+    this.redraw();
+    try {
+      const summary = await untilStopped(
+        backend.compact({ history: thread.turns, checkpoint: thread.checkpoint, signal: operation.controller.signal }),
+        operation.controller.signal,
+      );
+      thread.checkpoint = { through: last.id, summary, created: Date.now() };
+      backend.discardThread(thread.id);
+    } catch (error) {
+      thread.draft.error = operation.controller.signal.aborted
+        ? "Compaction stopped. Previous context kept."
+        : error instanceof Error
+          ? clean(error.message)
+          : "Compaction failed. Previous context kept.";
+    } finally {
+      thread.operation = undefined;
+      this.changed(thread);
+    }
   }
 
   /** Recall only untouched history entries; keep the draft at the end. */
@@ -198,7 +229,7 @@ export class AgentChat {
   async dispose(): Promise<void> {
     const backend = this.backend;
     this.connection = { kind: "closed" };
-    for (const thread of this.threads) thread.pending?.abort();
+    for (const thread of this.threads) thread.operation?.controller.abort();
     for (const timer of this.saves.values()) clearTimeout(timer);
     this.saves.clear();
     await backend?.close();
@@ -211,7 +242,7 @@ export class AgentChat {
 
   async send(): Promise<void> {
     const thread = this.current;
-    if (thread.pending) return;
+    if (thread.operation) return;
     const { draft } = thread;
     const message = draft.prepare();
     if (!message) return;
@@ -238,7 +269,7 @@ export class AgentChat {
       issues: [],
       tools: [],
     };
-    thread.pending = pending;
+    thread.operation = { kind: "reply", controller: pending };
     draft.replace([]);
     draft.error = "";
     thread.recall = undefined;
@@ -255,6 +286,7 @@ export class AgentChat {
         ...request,
         signal: pending.signal,
         history,
+        checkpoint: thread.checkpoint,
         onIssues: (issues) => {
           if (!accepting || pending.signal.aborted) return;
           turn.issues.push(...issues);
@@ -302,19 +334,19 @@ export class AgentChat {
         if ((!answered || failure) && draft.parts.length === 0) draft.replace(parts);
         draft.error = pending.signal.aborted ? "Stopped." : failure;
       }
-      thread.pending = undefined;
+      thread.operation = undefined;
       this.changed(thread);
     }
   }
 }
 
-async function untilStopped(reply: Promise<void>, signal: AbortSignal): Promise<void> {
+async function untilStopped<T>(reply: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted();
   const { promise, reject } = Promise.withResolvers<never>();
   const stop = () => reject(signal.reason);
   signal.addEventListener("abort", stop, { once: true });
   try {
-    await Promise.race([reply, promise]);
+    return await Promise.race([reply, promise]);
   } finally {
     signal.removeEventListener("abort", stop);
   }

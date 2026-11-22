@@ -75,6 +75,9 @@ export function fakeAgent(ask: AgentBackend["ask"]): AgentBackend & { choice: Ag
     ],
     async close() {},
     discardThread() {},
+    async compact() {
+      return "Conversation checkpoint";
+    },
     async use(choice, change) {
       this.choice = choice;
       if (change === "model") recent = promoteRecentModel(choice, recent);

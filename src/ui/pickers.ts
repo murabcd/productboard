@@ -224,6 +224,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("/chats", "Find saved chats", () => d.openPicker("chats")),
       item("/rename", "Rename chat", () => d.openPicker("chat-rename")),
       item("/delete", "Delete chat", () => d.openPicker("chat-delete")),
+      item("/compact", "Summarize model context", () => void d.agent.chat.compact()),
       item("/copy", "Copy last answer", () => d.copyAgentAnswer()),
     ],
   },

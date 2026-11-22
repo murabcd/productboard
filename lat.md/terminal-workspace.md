@@ -156,7 +156,7 @@ while the turn content and pane width stay the same. These interactions follow
 adapted to this terminal's frame renderer.
 
 Typing `/` in an empty Agent composer offers `/models`, `/effort`, `/new`,
-`/clear`, `/copy`, `/chats`, `/rename`, and `/delete` above the text box while the query stays in the draft. Selecting a
+`/clear`, `/copy`, `/chats`, `/rename`, `/delete`, and `/compact` above the text box while the query stays in the draft. Selecting a
 command clears its text. `/models` and `/effort` open their corresponding
 pickers. `/new` uses the same chat action as Ctrl+N and keeps earlier chats
 available.
@@ -232,4 +232,13 @@ interrupted turns, marks unfinished tools, restores a failed question only into
 an empty draft, and rejects callbacks after a turn settles. A replacement Eve
 session receives all earlier turns without a fixed turn or character cutoff,
 including Jira evidence, sprint references, and images. Existing sessions use
-Eve's own history and compaction.
+Eve's own history and automatic compaction. `/compact` creates an application
+checkpoint with bounded, sequential summary requests through Eve. Each request
+gets the prior summary and the next transcript segment; no transcript prefix is
+silently dropped. [[src/agent/context.ts]] owns model context selection and
+recovery serialization. A successful checkpoint records the last included turn
+and retires the live Eve session; replacement sessions receive that summary and
+subsequent full turns and images. The full record remains available for reading,
+recall, and saved chats, including older image bytes. Failed or cancelled
+compaction preserves the earlier checkpoint. Summarization sessions are retired
+after every segment and never become visible conversation turns.

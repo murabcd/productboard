@@ -250,7 +250,7 @@ class DashboardView extends Renderable {
 
   /** Keep drawing while a reply streams, once per scanner step, then stop. */
   private animate(): void {
-    if (this.animation || !this.composer.visible || !this.dashboard.agent.chat.current.pending) return;
+    if (this.animation || !this.composer.visible || !this.dashboard.agent.chat.current.operation) return;
     this.animation = setTimeout(() => {
       this.animation = undefined;
       this.requestRender();

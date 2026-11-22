@@ -17,6 +17,7 @@ import {
 import type { JiraClient } from "../jira/client";
 import type { AgentBackend } from "./chat";
 import { chatgptModels } from "./chatgpt";
+import { contextText, contextTurns, summarizeContext } from "./context";
 import { EveStream } from "./eve-stream";
 import { openJiraSearch } from "./jira-search";
 import { type AgentModel, listModels, PROVIDER_NAMES } from "./models";
@@ -127,7 +128,32 @@ export class EveAgent implements AgentBackend {
     if (session) retireSession(session);
   }
 
-  async ask({ thread, prompt, sprint, images, signal, history, ...callbacks }: Ask): Promise<void> {
+  async compact({ history, checkpoint, signal }: Parameters<AgentBackend["compact"]>[0]): Promise<string> {
+    const thread = crypto.randomUUID();
+    try {
+      return await summarizeContext(contextText(history, checkpoint), async (prompt) => {
+        let answer = "";
+        await this.ask({
+          thread,
+          prompt,
+          images: [],
+          history: [],
+          signal,
+          onText: (text, replace) => {
+            answer = (replace ? "" : answer) + text;
+          },
+          onIssues: () => {},
+          onTools: () => {},
+        });
+        this.discardThread(thread);
+        return answer;
+      });
+    } finally {
+      this.discardThread(thread);
+    }
+  }
+
+  async ask({ thread, prompt, sprint, images, signal, history, checkpoint, ...callbacks }: Ask): Promise<void> {
     const config = this.config;
     await this.closing;
     signal.throwIfAborted();
@@ -150,20 +176,8 @@ export class EveAgent implements AgentBackend {
       if (this.active !== run) throw new Error("Agent restarted. Send the question again.");
       run.sessions.set(thread, session);
       stop.addEventListener("abort", evict, { once: true });
-      const prior =
-        existing || history.length === 0
-          ? ""
-          : `Earlier conversation: ${JSON.stringify(
-              history.map(({ prompt, answer, sprint, issues, state, images }) => ({
-                prompt,
-                answer,
-                sprint,
-                issues,
-                state,
-                images: images.map(({ filename, mediaType }) => ({ filename, mediaType })),
-              })),
-            )}\n\n`;
-      const restoredImages = existing ? [] : history.flatMap((turn) => turn.images);
+      const prior = existing ? "" : contextText(history, checkpoint);
+      const restoredImages = existing ? [] : contextTurns(history, checkpoint).flatMap((turn) => turn.images);
       const attachments = [...restoredImages, ...images];
       const text = `${prior}${restoredImages.length ? "Earlier image attachments precede the current message's images.\n\n" : ""}${prompt || "Describe the attached images."}`;
       const message = attachments.length

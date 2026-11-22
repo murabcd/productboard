@@ -115,6 +115,11 @@ or `/chats` to search names, prompts, and answers. `/rename` names the current c
 `~/.local/state/productboard`, separated by Jira account. `/clear` removes the
 current record and replaces it with an empty chat.
 
+Use `/compact` between replies to summarize the model's context. The full chat
+stays visible and saved. New sessions receive the checkpoint and later turns;
+older images stay in the saved chat rather than being sent again. `Esc` cancels
+compaction and keeps the previous context.
+
 Jira searches show their JQL, progress, result count, and whether more matches
 are available. Interrupted and failed replies keep their status in the chat.
 If a reply fails, its question returns to the empty composer so you can retry.

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { JiraSearchResult } from "../../agent/lib/jira-search";
 import { AgentChoice } from "../auth";
+import { ContextCheckpoint } from "./context";
 import { AgentDraft, DraftParts, DraftSnapshot, SprintContext } from "./draft";
 import { AgentImage } from "./images";
 
@@ -41,13 +42,14 @@ export const ConversationData = z.object({
   updated: z.number(),
   turns: z.array(Turn),
   draft: DraftSnapshot,
+  checkpoint: ContextCheckpoint.optional(),
 });
 export type ConversationData = z.infer<typeof ConversationData>;
 
 export interface Conversation extends Omit<ConversationData, "draft"> {
   draft: AgentDraft;
   issues: Map<string, JiraSearchResult["issues"][number]>;
-  pending?: AbortController;
+  operation?: { kind: "reply" | "compaction"; controller: AbortController };
   recall?: { index: number; draft: DraftSnapshot; shown: DraftParts };
 }
 
@@ -66,6 +68,7 @@ export function conversation(data?: ConversationData): Conversation {
     name: data?.name ?? "New chat",
     updated: data?.updated ?? Date.now(),
     turns,
+    checkpoint: data?.checkpoint,
     draft,
     issues: new Map(turns.flatMap((turn) => turn.issues.map((issue) => [issue.key, issue]))),
   };
@@ -78,5 +81,6 @@ export function conversationData(thread: Conversation): ConversationData {
     updated: thread.updated,
     turns: thread.turns,
     draft: thread.draft.snapshot(),
+    checkpoint: thread.checkpoint,
   };
 }

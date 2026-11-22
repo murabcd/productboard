@@ -108,7 +108,7 @@ export class AgentPanel {
       case "escape":
       case "ctrl-c":
         // Esc interrupts an active reply before leaving Agent.
-        if (thread.pending) this.chat.stop();
+        if (thread.operation) this.chat.stop();
         else this.tab = false;
         return;
       case "agent-new":
