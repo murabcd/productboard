@@ -108,6 +108,9 @@ latest ↓** or press `Ctrl+End` to return immediately. Sending a question also
 returns to the latest reply. At the start of the composer, `↑` recalls sent
 prompts; at the end, `↓` moves forward and restores your unsent draft.
 Use `/copy` to copy the latest answer.
+Each reply has **Copy answer** and **Fork chat** actions. `/answers` lets you find
+and copy an earlier answer; `/fork` starts a new saved chat through the selected
+reply, including its Jira evidence and attachments. The original chat stays intact.
 
 Chats, prompt history, drafts, and attachments survive restarts. Choose **Chats**
 or `/chats` to search names, prompts, and answers. `/rename` names the current chat;

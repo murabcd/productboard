@@ -1,7 +1,7 @@
 import { expect, mock, test } from "bun:test";
 import type { AgentBackend } from "../agent/chat";
 import { Workspace } from "../state/workspace";
-import { deferred, fakeAgent, issues } from "../testing";
+import { deferred, fakeAgent, issues, settle } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 
@@ -58,6 +58,60 @@ test("tool activity is reachable from keyboard search and its clickable transcri
     expect(target?.kind).toBe("agent-tool");
     dashboard.click(target);
     expect(dashboard.modal).toMatchObject({ title: "Search Jira" });
+  } finally {
+    await dashboard.dispose();
+  }
+});
+
+test("specific answers copy from keyboard search and forks isolate earlier turns and attachments", async () => {
+  const { dashboard, chat, copy } = start(
+    fakeAgent(async ({ prompt, onText, onIssues }) => {
+      onText(`Answer to ${prompt}`);
+      onIssues(issues("EX-1"));
+    }),
+  );
+  try {
+    const image = { filename: "old.png", mediaType: "image/png", bytes: new Uint8Array([1, 2, 3]) };
+    chat.current.draft.restore({ parts: ["First", { kind: "image", label: "[Image]" }], images: [image] });
+    await chat.send();
+    chat.current.draft.replace(["Second"]);
+    await chat.send();
+    const original = chat.current;
+    const first = original.turns[0];
+    const last = original.turns[1];
+    if (!first || !last) throw new Error("Expected replies");
+    original.checkpoint = { through: last.id, summary: "Includes second reply", created: 0 };
+    original.draft.replace(["Original draft"]);
+    dashboard.openPicker("agent-answers");
+    dashboard.picker?.setQuery("First");
+    dashboard.handle({ name: "enter" });
+    await settle();
+    expect(copy).toHaveBeenLastCalledWith("Answer to First");
+    dashboard.openPicker("agent-fork");
+    dashboard.picker?.setQuery("First");
+    dashboard.handle({ name: "enter" });
+    expect(chat.current.id).not.toBe(original.id);
+    expect(chat.current.turns).toHaveLength(1);
+    expect(chat.current.checkpoint).toBeUndefined();
+    expect(chat.current.turns[0]?.images[0]?.bytes).toEqual(image.bytes);
+    expect(chat.current.issues.has("EX-1")).toBe(true);
+    const forked = chat.current.turns[0];
+    if (!forked) throw new Error("Expected forked reply");
+    forked.answer = "Changed only in fork";
+    expect(first.answer).toBe("Answer to First");
+    expect(original.draft.parts).toEqual(["Original draft"]);
+    expect(original.turns).toHaveLength(2);
+    const canvas = frame(dashboard);
+    const row = Array.from({ length: dashboard.height }, (_, row) => row).find((row) =>
+      canvas.text(row).includes("Copy answer"),
+    );
+    expect(row).toBeDefined();
+    if (row !== undefined)
+      expect(canvas.targetAt(canvas.text(row).indexOf("Copy answer"), row)).toMatchObject({
+        kind: "agent-message",
+        action: "copy",
+        turn: first.id,
+      });
   } finally {
     await dashboard.dispose();
   }

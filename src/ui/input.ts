@@ -81,4 +81,5 @@ export type Target =
   | { kind: "box" }
   | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "latest" | "chats" }
   | { kind: "agent-cite"; key: string }
-  | { kind: "agent-tool"; turn: string; call: string };
+  | { kind: "agent-tool"; turn: string; call: string }
+  | { kind: "agent-message"; turn: string; action: "copy" | "fork" };

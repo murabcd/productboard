@@ -398,8 +398,10 @@ export class Dashboard {
     else this.openUrl(url, "Opened in Helium");
   }
 
-  copyAgentAnswer(): void {
-    const answer = this.agent.chat.current.turns.findLast((turn) => turn.answer.trim())?.answer;
+  copyAgentAnswer(turnId?: string): void {
+    const turns = this.agent.chat.current.turns;
+    const answer = (turnId ? turns.find((turn) => turn.id === turnId) : turns.findLast((turn) => turn.answer.trim()))
+      ?.answer;
     if (answer) this.report(this.opener.copy(answer), "Answer copied");
   }
 
@@ -604,6 +606,10 @@ export class Dashboard {
         return;
       case "agent-tool":
         this.openAgentTool(target.turn, target.call);
+        return;
+      case "agent-message":
+        if (target.action === "copy") this.copyAgentAnswer(target.turn);
+        else this.agent.chat.fork(target.turn);
         return;
       case "agent-cite": {
         const issue = this.agent.chat.current.issues.get(target.key);

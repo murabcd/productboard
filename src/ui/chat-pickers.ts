@@ -2,6 +2,30 @@ import type { PickerSource } from "./pickers";
 
 /** Conversation actions use the shared keyboard and search picker. */
 export const CHAT_PICKERS = {
+  "agent-answers": {
+    title: "Copy an answer",
+    items: (d) =>
+      d.agent.chat.current.turns
+        .filter((turn) => turn.answer.trim())
+        .map((turn, index) => ({
+          value: turn.id,
+          label: `${index + 1}. ${turn.displayPrompt}`,
+          detail: turn.answer.slice(0, 100),
+          run: () => d.copyAgentAnswer(turn.id),
+        })),
+  },
+  "agent-fork": {
+    title: "Fork chat through this reply",
+    items: ({ agent }) =>
+      agent.chat.current.turns
+        .filter((turn) => turn.state.kind !== "running")
+        .map((turn, index) => ({
+          value: turn.id,
+          label: `${index + 1}. ${turn.displayPrompt}`,
+          detail: turn.answer.slice(0, 100),
+          run: () => agent.chat.fork(turn.id),
+        })),
+  },
   "agent-tools": {
     title: "Jira tool activity",
     items: (d) =>
@@ -66,4 +90,7 @@ export const CHAT_PICKERS = {
       },
     ],
   },
-} satisfies Record<"chats" | "chat-rename" | "chat-delete" | "agent-tools", PickerSource>;
+} satisfies Record<
+  "chats" | "chat-rename" | "chat-delete" | "agent-tools" | "agent-answers" | "agent-fork",
+  PickerSource
+>;

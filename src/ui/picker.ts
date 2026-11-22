@@ -11,6 +11,8 @@ export type PickerKind =
   | "chat-rename"
   | "chat-delete"
   | "agent-tools"
+  | "agent-answers"
+  | "agent-fork"
   | "project"
   | "assignee"
   | "status"

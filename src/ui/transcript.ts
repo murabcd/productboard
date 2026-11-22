@@ -1,11 +1,19 @@
 import type { Turn } from "../agent/chat";
 import { choiceLabel } from "../agent/models";
+import type { Control } from "./controls";
 import { type Line, layout, wrapSpans } from "./document";
 import type { Target } from "./input";
 import type { AgentLayout } from "./layout";
 import { markdownBlocks } from "./markdown";
 
-type TranscriptRow = { kind: "prompt" | "answer" | "plain"; line: Line; section: string; row: number; target?: Target };
+type TranscriptRow = {
+  kind: "prompt" | "answer" | "plain";
+  line: Line;
+  section: string;
+  row: number;
+  target?: Target;
+  controls?: Control[];
+};
 
 function sectionRows(
   kind: TranscriptRow["kind"],
@@ -67,6 +75,23 @@ function turnRows(turn: Turn, room: number): TranscriptRow[] {
     const details = [choiceLabel(turn.choice), duration(state.finished - turn.started)];
     if (state.kind !== "complete") details.push(state.kind);
     rows.push(...sectionRows("plain", "footer", [[], [{ text: details.join(" · "), style: "muted" }]]));
+    rows.push({
+      kind: "plain",
+      section: "actions",
+      row: 0,
+      line: [],
+      controls: [
+        ...(answer.trim()
+          ? [
+              {
+                label: "Copy answer",
+                target: { kind: "agent-message", turn: turn.id, action: "copy" },
+              } satisfies Control,
+            ]
+          : []),
+        { label: "Fork chat", target: { kind: "agent-message", turn: turn.id, action: "fork" } },
+      ],
+    });
   }
   if (state.kind === "failed")
     rows.push(...sectionRows("plain", "error", wrapSpans([{ text: state.error, style: "error" }], room - 3)));

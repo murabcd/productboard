@@ -83,6 +83,25 @@ export class AgentChat {
     this.changed();
   }
 
+  fork(turnId: string): void {
+    const original = this.current;
+    const index = original.turns.findIndex((turn) => turn.id === turnId && turn.state.kind !== "running");
+    if (index < 0) return;
+    const turns = structuredClone(original.turns.slice(0, index + 1));
+    this.active = conversation({
+      id: crypto.randomUUID(),
+      name: `${original.name} (fork)`,
+      updated: Date.now(),
+      turns,
+      draft: { parts: [], images: [] },
+      checkpoint: turns.some((turn) => turn.id === original.checkpoint?.through)
+        ? structuredClone(original.checkpoint)
+        : undefined,
+    });
+    this.threads.push(this.active);
+    this.changed();
+  }
+
   delete(): void {
     const thread = this.current;
     this.retire(thread);

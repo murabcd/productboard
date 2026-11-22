@@ -161,6 +161,12 @@ command clears its text. `/models` and `/effort` open their corresponding
 pickers. `/new` uses the same chat action as Ctrl+N and keeps earlier chats
 available.
 `/copy` copies the latest nonempty answer through the dashboard's clipboard opener.
+`/answers` searches individual prompts and answer previews to copy one reply.
+Settled reply footers offer the same copy action and Fork chat. `/fork` selects a
+settled reply from the keyboard. [[src/agent/chat.ts#AgentChat]] copies the full
+record through that reply into a new saved chat with its own ID, draft and
+mutable turn/attachment data. A checkpoint is inherited only if its boundary is
+included. Original later turns, draft and live session remain with the source chat.
 `/clear` stops any reply and replaces the current chat with an empty one in
 the same position. Eve retires its session, so the next message starts fresh.
 [[src/ui/dialog.ts#drawComposerMenu]] draws these pickers and `@`

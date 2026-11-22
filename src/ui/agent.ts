@@ -4,6 +4,7 @@ import type { Issue } from "../jira/types";
 import { cells } from "../text";
 import type { AgentPanel } from "./agent-panel";
 import type { Canvas, ScannerStyle, Style } from "./canvas";
+import { buttons } from "./controls";
 import type { AgentLayout } from "./layout";
 
 export function drawAgent(
@@ -25,8 +26,9 @@ export function drawAgent(
   const visible = viewport.window(thread.turns, transcript);
   if (thread.turns.length) {
     const { rows } = visible;
-    rows.forEach(({ kind, line, target }, row) => {
+    rows.forEach(({ kind, line, target, controls }, row) => {
       const y = transcript.top + row;
+      if (controls) buttons(canvas, y, left + 3, controls, left + room);
       if (target) canvas.mark(y, left + 3, room - 3, target);
       if (kind === "prompt") {
         canvas.paint(y, left, room, "raised");

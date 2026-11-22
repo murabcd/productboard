@@ -226,6 +226,8 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("/delete", "Delete chat", () => d.openPicker("chat-delete")),
       item("/compact", "Summarize model context", () => void d.agent.chat.compact()),
       item("/tools", "Inspect Jira searches", () => d.openPicker("agent-tools")),
+      item("/answers", "Copy a specific answer", () => d.openPicker("agent-answers")),
+      item("/fork", "Branch from an earlier reply", () => d.openPicker("agent-fork")),
       item("/copy", "Copy last answer", () => d.copyAgentAnswer()),
     ],
   },
