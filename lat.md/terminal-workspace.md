@@ -316,7 +316,12 @@ drilldowns share these members. [[src/ui/issue-list.ts#IssueList]] applies the l
 subset before its normal grouping, filtering and selection, including after refresh.
 The existing preview drawer and detail reads are reused unchanged.
 
-[[src/ui/view-chart.ts#drawViewChart]] uses terminal cells and the existing palette.
+[[src/ui/view-chart.ts#drawViewChart]] uses the existing square glyph and theme palette,
+on consecutive terminal rows. Nonzero buckets retain at least one square;
+zero buckets stay empty. Selection and mouse targets follow the compact rows, and
+scrolling keeps the selected bucket above the footer. Status colors match issue
+icons; open issue age progresses from green through blue and purple to red, with
+unknown ages and unassigned workload in muted gray.
 The footer labels loaded counts, exposes Load more and retains refresh failures and
 partial-result warnings. Saved views have one active sidebar destination, no mode
 tabs, one breakdown picker, and Save changes only when their saved settings differ.
