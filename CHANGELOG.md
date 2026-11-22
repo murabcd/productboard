@@ -4,6 +4,10 @@ Release notes for Productboard, newest first.
 
 ## v0.1.3 — 2026-11-22
 
+- Save Jira scopes as Views with status, assignee, and open-issue-age breakdowns; open their issues with Enter or preview a group with Space.
+- Reuse recent issue lists, sprint catalogs, and issue details for 60 seconds across navigation, retaining successful data during refreshes.
+- Match saved views to the terminal workspace's descriptions, loading states, compact chart rows, and existing preview drawer.
+- Support site-specific workflow names and blocker links, retain partial Needs attention results, and open links in the system default browser.
 - Follow streaming replies automatically, pause by scrolling up, and resume with Jump to latest or Ctrl+End.
 - Save, search, rename, and reopen local Agent chats with drafts, attachments, and prompt history.
 - Use `/compact` to summarize model context while keeping the full conversation available locally.
