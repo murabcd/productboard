@@ -2,6 +2,16 @@
 
 Release notes for Productboard, newest first.
 
+## v0.1.3 — 2026-11-22
+
+- Follow streaming replies automatically, pause by scrolling up, and resume with Jump to latest or Ctrl+End.
+- Save, search, rename, and reopen local Agent chats with drafts, attachments, and prompt history.
+- Use `/compact` to summarize model context while keeping the full conversation available locally.
+- Inspect Jira searches with clickable tool rows or `/tools`, including queries, results, and useful errors.
+- See failure reasons and visible automatic retries, retain partial replies, and retry failed questions directly.
+- Copy individual replies and fork a saved chat from an earlier answer.
+- Queue follow-ups while Agent replies, edit or cancel queued messages, and use Ctrl+Enter to interrupt and send the current draft immediately.
+
 ## v0.1.2 — 2026-11-14 (rebuilt 2026-11-21)
 
 - Connect Agent with your ChatGPT subscription using your local Codex sign-in. Subscription models are listed under OpenAI and marked **Subscription**.
