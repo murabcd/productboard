@@ -84,6 +84,7 @@ export class IssueList {
   private offset = 0;
   private mode: Grouping = "status";
   private text = "";
+  private subset?: (issues: Issue[]) => Issue[];
 
   constructor(private readonly workspace: Workspace) {}
 
@@ -97,6 +98,12 @@ export class IssueList {
 
   filter(text: string): void {
     this.text = text;
+    this.first();
+  }
+
+  /** A local drilldown shares the normal grouping, search, selection and viewport. */
+  narrowTo(subset?: (issues: Issue[]) => Issue[]): void {
+    this.subset = subset;
     this.first();
   }
 
@@ -114,7 +121,12 @@ export class IssueList {
     const rows: ListRow[] = [];
     const issues: IssueRow[] = [];
     const listed: Issue[] = [];
-    for (const [label, members, icon, style] of groupIssues(source?.issues ?? [], view, grouping, search)) {
+    for (const [label, members, icon, style] of groupIssues(
+      this.subset ? this.subset(source?.issues ?? []) : (source?.issues ?? []),
+      view,
+      grouping,
+      search,
+    )) {
       const closed = folded.has(label);
       rows.push({ label, count: members.length, icon, style, folded: closed });
       listed.push(...members);

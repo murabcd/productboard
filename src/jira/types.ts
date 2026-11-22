@@ -27,6 +27,8 @@ export interface Issue {
   category: Category;
   /** Resolved by Jira parsing; older Agent search records carry only status and category. */
   stage?: Stage;
+  /** Creation instant in milliseconds; absent when Jira did not provide a valid date. */
+  created?: number;
   priority: string;
   assigneeId: string;
   assignee: string;

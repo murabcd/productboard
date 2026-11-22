@@ -90,6 +90,29 @@ To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel
 Light**, **Vercel Dark**, or **Default**. The choice is saved for the next
 launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/geist/terminal).
 
+### Saved views
+
+Choose **+ New** under **Views**, use **Ctrl+N** on an issue page, or choose
+**New view** from **Ctrl+K**. Name the view and choose its issue scope,
+project, sprint, assignee, and breakdown. **Tab / Shift+Tab** moves between
+fields, **Enter** opens a picker, **Ctrl+Enter** creates the view, and **Esc**
+cancels. Draft choices leave the current page unchanged.
+
+Saved views offer **Status**, **Assignee**, and **Open issue age** breakdowns.
+Use **↑ / ↓** or **j / k** to select a bar and **Enter** to open its issues.
+The normal list shortcuts work there: **Space** previews an issue and **Esc**
+closes the preview, then returns to the chart. **[ / ]** switches breakdowns.
+Assignee and age charts include open issues only; missing creation dates appear
+under **Unknown age**. Charts summarize **loaded issues**, with **n** to load
+more when available and partial-result warnings retained in the footer.
+
+Changing filters or breakdown offers **Save changes**, which updates the same
+view. **Ctrl+K → Views** opens all saved views on narrow panes or when the
+sidebar fills up. **Ctrl+K → Delete view** asks before removing a view.
+Views are stored locally with preferences in
+`~/.config/productboard/config.json`. Signing in with another Jira site or
+email clears the saved views; no Jira data is written.
+
 ### Custom workflows
 
 Status grouping uses Jira's To do, In progress, and Done categories. Common English

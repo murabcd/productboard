@@ -228,14 +228,24 @@ export class Workspace {
     });
   }
 
-  private openBoard(board: string, sprints?: Sprint[]): void {
+  /** Restore a saved board and query as one scope transition. */
+  openScope(query: IssueQuery, board: string): void {
+    if (board && board !== this.board) this.openBoard(board, undefined, query);
+    else this.change(query);
+  }
+
+  private openBoard(
+    board: string,
+    sprints?: Sprint[],
+    query = this.query.sprintFilter === null ? this.query : scoped(this.query, { sprintFilter: null }),
+  ): void {
     this.board = board;
     this.sprintRequest?.abort();
     this.sprintRequest = undefined;
     this.sprints = sprints ?? [];
     this.sprintCatalogError = "";
     this.sprintsRetryAt = Number.POSITIVE_INFINITY;
-    if (this.query.sprintFilter !== null) this.change(scoped(this.query, { sprintFilter: null }));
+    this.change(query);
     if (sprints) this.changed();
     else void this.loadSprints();
   }

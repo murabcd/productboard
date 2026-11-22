@@ -1,6 +1,7 @@
 /** Shared page title, description and toolbar controls. */
 
 import { MENTION_DAYS, View } from "../jira/query";
+import { BREAKDOWN_NAMES } from "../state/views";
 import type { Canvas } from "./canvas";
 import { action, buttons, buttonsRight, type Control, controlsWidth } from "./controls";
 import type { Dashboard } from "./dashboard";
@@ -57,13 +58,22 @@ function issuesHeader(d: Dashboard): PageHeader {
     // Active filters show as labels; Clear filters in the Filter menu removes them.
     ...active.map((label): Control => ({ label })),
   ];
+  const saved = d.views.current;
   const header: PageHeader = {
-    title: pageOf(view).name,
-    description: DESCRIPTIONS[view],
+    title: saved ? `${saved.name}${d.views.bucket ? ` · ${d.views.bucket.label}` : ""}` : pageOf(view).name,
+    description: saved ? "" : DESCRIPTIONS[view],
     tabs: [],
     filters,
     actions: [{ label: "Display ▾", target: action("display") }],
   };
+  if (saved && d.views.active) {
+    header.actions = d.views.saved.modified(work.query, work.board)
+      ? [{ label: "Save changes", target: action("view-save") }]
+      : [];
+    header.filters.push({ label: `${BREAKDOWN_NAMES[d.views.active.breakdown]} ▾`, target: action("view-breakdown") });
+    if (!d.views.chart) header.actions.unshift({ label: "← Chart", target: action("view-back") });
+    return header;
+  }
   if (pageOf(view).to === View.Team && work.sprint()) {
     header.actions.unshift({ label: "Sprint brief", target: action("brief") });
   }

@@ -5,8 +5,10 @@ import { type Choice, describeAttachment, SPRINT_STATES, shortSprintName, sprint
 import { THEME_IDS, THEMES } from "../theme";
 import { CHAT_PICKERS } from "./chat-pickers";
 import type { Dashboard } from "./dashboard";
+import { assigneeChoices, projectChoices } from "./filter-choices";
 import { NAVIGATION, navKey } from "./navigation";
 import type { PickerItem, PickerKind, PickerOptions } from "./picker";
+import { VIEW_PICKERS } from "./view-pickers";
 
 const STATUS_LABELS: Record<StatusFilter, string> = { all: "All statuses", open: "Open", done: "Done" };
 
@@ -164,6 +166,17 @@ function commandItems(d: Dashboard): PickerItem[] {
     ...NAVIGATION.map((nav) =>
       item(`Go to ${nav.name}`, navKey(nav), () => (nav.to === "agent" ? d.openAgent() : d.showPage(nav.to)), page),
     ),
+    item("Views", "", () => d.openPicker("saved-views"), page),
+    ...d.views.saved.all.map((view) => item(view.name, "Saved view", () => d.views.open(view.id), page)),
+    item("New view", "^N", () => d.views.create(), act),
+    ...(d.views.current
+      ? [
+          ...(d.views.saved.modified(d.workspace.query, d.workspace.board)
+            ? [item("Save view changes", "", () => d.views.saveChanges(), act)]
+            : []),
+          item("Delete view", "", () => d.openPicker("view-delete"), act),
+        ]
+      : []),
     item("Go to Created", "My issues tab", () => d.showView(View.Created), page),
     ...(d.agent.tab
       ? [item("Add context", "@", () => d.openPicker("agent-context"), act)]
@@ -172,7 +185,7 @@ function commandItems(d: Dashboard): PickerItem[] {
           item("Choose board", "b", () => d.openPicker("board"), act),
           item("Filter by sprint", "s", () => openSprintFilter(d), act),
           ...(d.workspace.sprint() ? [item("Sprint brief", "t", () => d.runAction("brief"), act)] : []),
-          item("Display options…", "D", () => d.openPicker("display"), act),
+          ...(!d.views.active ? [item("Display options…", "D", () => d.openPicker("display"), act)] : []),
         ]),
     item("Change theme", THEMES[d.theme].label, () => d.openPicker("theme"), act),
     item(
@@ -192,11 +205,15 @@ function commandItems(d: Dashboard): PickerItem[] {
       () => d.openPicker("reasoning"),
       act,
     ),
-    item("Toggle issue peek", "Space", () => d.runAction("peek"), act),
+    ...(!d.views.chart
+      ? [
+          item("Toggle issue peek", "Space", () => d.runAction("peek"), act),
+          item("Open issue details", "Enter", () => d.runAction("details"), act),
+          item("Open issue in browser", "o", () => d.openIssue(false), act),
+          item("Copy issue link", "y", () => d.openIssue(true), act),
+        ]
+      : []),
     item("Open an issue Agent mentioned", "^O", () => d.openPicker("cited"), act),
-    item("Open issue details", "Enter", () => d.runAction("details"), act),
-    item("Open issue in browser", "o", () => d.openIssue(false), act),
-    item("Copy issue link", "y", () => d.openIssue(true), act),
     item("Search all of Jira", "f", () => d.startFind(), act),
     item("Refresh", "r", () => d.runAction("refresh"), act),
     item("Keyboard shortcuts", "?", () => d.runAction("help"), act),
@@ -205,6 +222,7 @@ function commandItems(d: Dashboard): PickerItem[] {
 
 export const PICKERS: Record<PickerKind, PickerSource> = {
   ...CHAT_PICKERS,
+  ...VIEW_PICKERS,
   board: boardPicker((d, board) => d.chooseBoard(board)),
   "sprint-board": boardPicker((d, board) => {
     d.chooseBoard(board);
@@ -236,10 +254,8 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   project: {
     title: "Choose project",
     items: (d) =>
-      fromChoices(
-        [{ value: "", label: "All projects", detail: "", state: "" }, ...d.workspace.projects],
-        d.workspace.query.project,
-        (project) => d.changeQuery({ project: project.value }),
+      fromChoices(projectChoices(d.workspace.projects), d.workspace.query.project, (project) =>
+        d.changeQuery({ project: project.value }),
       ),
     load: (d) => {
       if (d.workspace.projects.length === 0) d.workspace.loadCatalog();
@@ -248,18 +264,10 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
   },
   assignee: {
     title: "People in loaded issues",
-    items: (d) => {
-      const issues = d.workspace.issues.filter((i) => i.assigneeId);
-      const people = [...new Map(issues.map((i) => [i.assigneeId, i.assignee]))].sort(([, a], [, b]) =>
-        a.localeCompare(b),
-      );
-      const choices: Choice[] = [
-        { value: "", label: "All people", detail: "", state: "" },
-        { value: "unassigned", label: "Unassigned", detail: "", state: "" },
-        ...people.map(([id, name]) => ({ value: id, label: name, detail: "", state: "" })),
-      ];
-      return fromChoices(choices, d.workspace.query.assignee, (person) => d.chooseAssignee(person.value, person.label));
-    },
+    items: (d) =>
+      fromChoices(assigneeChoices(d.workspace.issues), d.workspace.query.assignee, (person) =>
+        d.chooseAssignee(person.value, person.label),
+      ),
   },
   status: {
     title: "Status",

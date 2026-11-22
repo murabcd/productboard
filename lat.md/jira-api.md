@@ -82,3 +82,11 @@ The same workflow classifier handles older Agent records that have no resolved s
 and preserves the resolved stage in validated Agent results and saved chats.
 Blocker detection matches inward dependency links using the configured link
 type names, which default to Blocks.
+
+## Creation dates for saved views
+
+[[src/jira/parse.ts#LIST_FIELDS]] requests `created` with list records.
+[[src/jira/parse.ts#toIssue]] normalizes valid Jira timestamps once to milliseconds
+in [[src/jira/types.ts#Issue]]. Missing or invalid timestamps remain absent, so
+[[src/ui/view-breakdown.ts#breakdown]] preserves those rows under Unknown age.
+The charts perform no additional Jira reads or writes.

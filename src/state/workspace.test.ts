@@ -3,7 +3,7 @@ import type { Snapshot } from "../jira/client";
 import { type IssueQuery, initialQuery, View } from "../jira/query";
 import type { Choice, Sprint } from "../jira/types";
 import { type Deferred, deferred, settle, snapshot } from "../testing";
-import { REFRESH_MS, Workspace } from "./workspace";
+import { REFRESH_MS, type Source, Workspace } from "./workspace";
 
 /** A workspace whose requests stay pending until the test answers them. */
 function setup() {
@@ -234,4 +234,27 @@ describe("workspace", () => {
     work.chooseBoard("13");
     expect(remembered).toEqual(["13"]);
   });
+});
+
+test("restoring a saved board and sprint starts only the saved issue scope", async () => {
+  const requests: IssueQuery[] = [];
+  const source: Source = {
+    snapshot: async (query) => {
+      requests.push(query);
+      return snapshot(query, ["EX-1"]);
+    },
+    boards: async () => [],
+    projects: async () => [],
+    sprints: async () => [],
+  };
+  const work = new Workspace(source);
+  work.board = "old";
+  work.query = { ...initialQuery, view: View.Team, sprintFilter: 11 };
+  const saved = { ...initialQuery, view: View.Mine, project: "EX", sprintFilter: 27 };
+  work.openScope(saved, "new");
+  expect(work.board).toBe("new");
+  expect(work.query).toBe(saved);
+  expect(requests).toEqual([saved]);
+  await settle();
+  expect(work.issues.map((issue) => issue.key)).toEqual(["EX-1"]);
 });

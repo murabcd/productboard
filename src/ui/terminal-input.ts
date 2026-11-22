@@ -34,7 +34,7 @@ export function toKeys(key: Pick<KeyEvent, "name" | "ctrl" | "meta" | "shift" | 
     if (key.name === "up" || key.name === "down") return [{ name: key.name, shift: true }];
   }
   const named = NAMED[key.name];
-  if (named) return named === "tab" && key.shift ? [] : [{ name: named }];
+  if (named) return named === "tab" && key.shift ? [{ name: named, shift: true }] : [{ name: named }];
   if (key.ctrl || key.meta) return [];
   return textKeys(key.sequence);
 }

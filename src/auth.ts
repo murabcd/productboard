@@ -1,12 +1,13 @@
 /** Where the dashboard keeps its sign-in: settings in a file, the token in Keychain. */
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { Credentials } from "./jira/http";
 import { TEAM_MODES, type TeamMode } from "./jira/query";
 import { Workflow } from "./jira/workflow";
+import { SavedView } from "./state/views";
 import { THEME_IDS, type ThemeId } from "./theme";
 
 const KEYCHAIN_SERVICE = "productboard";
@@ -43,6 +44,7 @@ const Config = z.object({
   /** The board chosen last, opened again on the next start. */
   board: z.string().optional(),
   workflow: Workflow.optional().catch(undefined),
+  views: z.array(SavedView).optional().catch(undefined),
   agent: AgentChoice.optional(),
   chatgptConnected: z.boolean().optional(),
   recentAgentModels: z.array(ModelRef).optional().catch(undefined),
@@ -70,7 +72,13 @@ export function readConfig(): Config | undefined {
 
 function writeConfig(config: Config): void {
   mkdirSync(dirname(CONFIG_PATH), { recursive: true });
-  writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  const temporary = `${CONFIG_PATH}.${crypto.randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+    renameSync(temporary, CONFIG_PATH);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 export function rememberBoard(board: string): void {
@@ -82,6 +90,12 @@ export function rememberTeamMode(teamMode: TeamMode): void {
   const config = readConfig();
   if (!config) throw new Error("Preferences are unavailable");
   if (config.teamMode !== teamMode) writeConfig({ ...config, teamMode });
+}
+
+export function rememberViews(views: readonly SavedView[]): void {
+  const config = readConfig();
+  if (!config) throw new Error("Preferences are unavailable");
+  writeConfig({ ...config, views: [...views] });
 }
 
 export function rememberTheme(theme: ThemeId): void {
@@ -112,7 +126,8 @@ export function saveCredentials(credentials: Credentials): void {
   const previous = readConfig();
   const board = previous?.site === site ? previous.board : undefined;
   const workflow = previous?.site === site ? previous.workflow : undefined;
-  writeConfig({ ...previous, site, email, board, workflow });
+  const views = previous?.site === site && previous.email === email ? previous.views : undefined;
+  writeConfig({ ...previous, site, email, board, workflow, views });
 }
 
 const AGENT_SERVICE = "productboard-agent";

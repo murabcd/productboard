@@ -291,3 +291,34 @@ current draft before other queued messages, retaining the interrupted turn.
 This application action is distinct from automatic follow-ups; Eve deliveries use
 its explicit queue policy rather than implicit steering. Queue actions and typing
 do not steal the paused transcript's reading position.
+
+## Saved views and breakdowns
+
+[[src/state/views.ts#SavedViews]] owns validated local scope records and the active
+breakdown. [[src/auth.ts#rememberViews]] persists them with preferences; a different
+Jira site or email clears them.
+
+Pagination and local text searches are not saved. A failed preference write leaves the saved records unchanged and reports the error.
+
+[[src/ui/views.ts#ViewPanel]] owns creation, chart navigation and drilldowns.
+[[src/ui/view-form.ts#ViewForm]] holds a separate draft in the standard 60-column
+[[src/ui/dialog.ts#dialogPanel]] with the native [[src/ui/search-input.ts#SearchInput]]
+and [[src/ui/view-pickers.ts]] choices. Tab and Shift+Tab move fields, Enter opens
+a picker, Ctrl+Enter creates, and Escape cancels. Nested picker dismissal returns
+to the form. Search and Agent keep their own workspace navigation and shortcuts.
+
+[[src/state/workspace.ts#Workspace]] restores a saved board and scope in one issue
+request, retaining its existing cancellation and last-successful-result contracts.
+[[src/ui/view-breakdown.ts#breakdown]] groups the loaded issue rows by the existing
+workflow stage, assignee account ID, or open issue age. Missing or future creation
+dates belong to Unknown age. Assignee and age omit completed issues. Counts and
+drilldowns share these members. [[src/ui/issue-list.ts#IssueList]] applies the local
+subset before its normal grouping, filtering and selection, including after refresh.
+The existing preview drawer and detail reads are reused unchanged.
+
+[[src/ui/view-chart.ts#drawViewChart]] uses terminal cells and the existing palette.
+The footer labels loaded counts, exposes Load more and retains refresh failures and
+partial-result warnings. Saved views have one active sidebar destination, no mode
+tabs, one breakdown picker, and Save changes only when their saved settings differ.
+The Views picker reaches records beyond the sidebar's visible rows and on narrow
+panes; deletion requires an explicit picker choice.

@@ -31,7 +31,7 @@ export const CommentPage = z.object({
 });
 export type CommentPage = z.infer<typeof CommentPage>;
 
-export const LIST_FIELDS = ["summary", "status", "priority", "assignee"];
+export const LIST_FIELDS = ["summary", "status", "priority", "assignee", "created"];
 
 const BlockLink = z.object({
   type: z.object({ name: z.string() }),
@@ -67,6 +67,7 @@ export const RawIssue = z.object({
     priority: z.object({ name: z.string() }).nullish(),
     assignee: z.object({ accountId: z.string(), displayName: z.string() }).nullish(),
     comment: CommentPage.optional(),
+    created: z.string().optional(),
     updated: z.string().optional(),
     duedate: z.string().nullish(),
     issuelinks: z.array(BlockLink).optional(),
@@ -187,6 +188,7 @@ export function toIssue(raw: RawIssue, workflow: Workflow = DEFAULT_WORKFLOW): I
     status,
     category,
     stage: workflowStage({ status, category }, workflow),
+    created: fields.created && Number.isFinite(jiraTime(fields.created)) ? jiraTime(fields.created) : undefined,
     priority: clean(fields.priority?.name ?? ""),
     assigneeId: fields.assignee?.accountId ?? "",
     assignee: fields.assignee ? clean(fields.assignee.displayName) : "Unassigned",

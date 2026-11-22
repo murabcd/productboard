@@ -935,8 +935,32 @@ describe("OpenTUI shell", () => {
     expect(key("pagedown")).toEqual([{ name: "pagedown" }]);
     expect(key("return")).toEqual([{ name: "enter" }]);
     expect(key("c", { ctrl: true })).toEqual([{ name: "ctrl-c" }]);
-    expect(key("tab", { shift: true })).toEqual([]);
+    expect(key("tab", { shift: true })).toEqual([{ name: "tab", shift: true }]);
     expect(key("x", { meta: true })).toEqual([]);
     expect(key("ж", { sequence: "ж" })).toEqual([{ text: "ж" }]);
   });
+});
+
+test("the saved-view dialog uses native typing, reverse Tab, nested pickers and Ctrl+Enter", async () => {
+  const { setup: terminal, dashboard } = await start(120);
+  dashboard.runAction("new-view");
+  await terminal.renderOnce();
+  await terminal.mockInput.typeText("Sprint health");
+  expect(dashboard.views.form?.draft.name).toBe("Sprint health");
+  await terminal.mockInput.pressKey("TAB");
+  expect(dashboard.views.form?.field).toBe("scope");
+  await terminal.mockInput.pressKey("RETURN");
+  expect(dashboard.picker?.kind).toBe("view-scope");
+  await terminal.mockInput.typeText("My issues");
+  await terminal.mockInput.pressKey("RETURN");
+  expect(dashboard.views.form?.draft.scope.view).toBe(View.Mine);
+  await terminal.mockInput.pressKey("TAB", { shift: true });
+  expect(dashboard.views.form?.field).toBe("name");
+  await terminal.mockInput.pressKey("\x1b[13;5u");
+  expect(dashboard.views.form).toBeNull();
+  expect(dashboard.views.current?.name).toBe("Sprint health");
+  expect(dashboard.views.chart).toBe(true);
+  await terminal.renderOnce();
+  expect(terminal.captureCharFrame()).toContain("Work by status");
+  await dashboard.dispose();
 });

@@ -286,7 +286,7 @@ describe("search", () => {
     expect(snapshot.more).toBe(true);
     expect(requests[0]?.body).toMatchObject({
       maxResults: 3,
-      fields: ["summary", "status", "priority", "assignee", SPRINT_FIELD],
+      fields: ["summary", "status", "priority", "assignee", "created", SPRINT_FIELD],
     });
   });
 

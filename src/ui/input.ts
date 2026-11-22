@@ -1,6 +1,7 @@
 /** Keyboard and mouse input as the dashboard sees it, independent of the terminal library. */
 
 import type { View } from "../jira/query";
+import type { ViewField } from "./view-form";
 
 export type KeyName =
   | "up"
@@ -54,6 +55,12 @@ export function editLine(value: string, key: Key, max: number): string | undefin
 
 /** Buttons in the header, footer and peek panel; each matches a key. */
 export type Action =
+  | "new-view"
+  | "saved-views"
+  | "view-breakdown"
+  | "view-delete"
+  | "view-save"
+  | "view-back"
   | "filter"
   | "display"
   | "brief"
@@ -66,6 +73,9 @@ export type Action =
 
 /** Something on screen the mouse can click. */
 export type Target =
+  | { kind: "saved-view"; id: string }
+  | { kind: "view-bucket"; id: string }
+  | { kind: "view-field"; field: ViewField }
   | { kind: "action"; action: Action }
   /** The open dialog's surface, and its esc button. */
   | { kind: "dialog" }

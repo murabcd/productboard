@@ -15,6 +15,7 @@ const SEARCH_ACTIONS = new Set<KeyName>([
   "escape",
   "ctrl-c",
   "commands",
+  "agent-send-now",
 ]);
 
 /** List navigation and confirmation stay with the current view or picker. */

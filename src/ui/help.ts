@@ -36,6 +36,15 @@ export const HELP = [
     ["t", "Sprint brief"],
     ["Esc", "Clear the filter or search"],
   ]),
+  section("Saved views", [
+    ["Ctrl-N", "New view (outside Agent)"],
+    ["Ctrl-K", "Views / save changes / delete view"],
+    ["[ ]", "Previous / next breakdown"],
+    ["Enter", "Open the selected bar’s issues"],
+    ["Esc", "Close peek, then return to chart"],
+    ["Tab Shift-Tab", "Next / previous creation field"],
+    ["Ctrl-Enter", "Create view"],
+  ]),
   section("Details", [
     ["↑ ↓  PgUp PgDn", "Scroll"],
     ["i", "Attachments"],

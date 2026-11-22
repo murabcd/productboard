@@ -5,6 +5,7 @@ import type { AgentBackend } from "../agent/chat";
 import type { JiraClient } from "../jira/client";
 import { type IssueQuery, STATUSES, scoped, type TeamMode, View, withAssignee, withView } from "../jira/query";
 import { type Attachment, type Issue, isImage } from "../jira/types";
+import type { ViewPreferences } from "../state/views";
 import { message, type Workspace } from "../state/workspace";
 import { DEFAULT_THEME, type ThemeId } from "../theme";
 import { AgentPanel } from "./agent-panel";
@@ -31,6 +32,7 @@ import type { Peek } from "./peek";
 import { Picker, type PickerItem, type PickerKind } from "./picker";
 import { openSprintFilter, PICKERS } from "./pickers";
 import { ImagePreviews, type Preview } from "./preview";
+import { ViewPanel } from "./views";
 
 export interface Opener {
   open(url: string): Promise<void>;
@@ -38,6 +40,7 @@ export interface Opener {
 }
 
 export interface DashboardOptions {
+  views?: ViewPreferences;
   archive?: ChatArchive;
   agent?: AgentBackend;
   connectAgent?(theme: ThemeId): Promise<AgentBackend | undefined>;
@@ -51,6 +54,7 @@ const WHEEL_LINES = 3;
 /** What receives input, topmost first. Prompts belong to the list screen. */
 export type Layer =
   | { kind: "too-small" }
+  | { kind: "view-form" }
   | { kind: "agent" }
   | { kind: "preview"; preview: Preview }
   | { kind: "picker"; picker: Picker }
@@ -70,6 +74,7 @@ type IssueSearch = { kind: "jira"; draft: string } | { kind: "filter" };
 
 export class Dashboard {
   readonly list: IssueList;
+  readonly views: ViewPanel;
   private issueSearch?: IssueSearch;
   personLabel = "All people";
   picker: Picker | null = null;
@@ -100,6 +105,7 @@ export class Dashboard {
     this.teamMode = options.teamMode?.initial ?? "all";
     this.selectedTheme = options.appearance?.initial ?? DEFAULT_THEME;
     this.list = new IssueList(workspace);
+    this.views = new ViewPanel(this, options.views);
     this.images = new ImagePreviews((id) => client.attachment(id), redraw);
     this.agent = new AgentPanel(options.agent, redraw, () => this.update(), options.archive);
     this.contextPicker = new ContextPicker(
@@ -269,16 +275,19 @@ export class Dashboard {
   }
 
   changeQuery(change: Partial<IssueQuery>): void {
+    this.views.changedScope();
     this.list.filter("");
     this.workspace.change(scoped(this.workspace.query, change));
   }
 
   chooseBoard(board: string): void {
+    this.views.changedScope();
     if (board !== this.workspace.board && this.workspace.query.sprintFilter !== null) this.list.filter("");
     this.workspace.chooseBoard(board);
   }
 
   chooseAssignee(assignee: string, label: string): void {
+    this.views.changedScope();
     this.list.filter("");
     this.personLabel = label;
     this.workspace.change(withAssignee(this.workspace.query, assignee));
@@ -292,7 +301,22 @@ export class Dashboard {
 
   /** A header, footer or peek button, or its key. */
   runAction(action: Action): void {
+    if (this.views.chart && ["peek", "details", "display"].includes(action)) return;
     switch (action) {
+      case "new-view":
+        this.views.create();
+        return;
+      case "saved-views":
+      case "view-breakdown":
+      case "view-delete":
+        this.openPicker(action);
+        return;
+      case "view-save":
+        this.views.saveChanges();
+        return;
+      case "view-back":
+        this.views.back();
+        return;
       case "filter":
       case "display":
       case "commands":
@@ -330,6 +354,7 @@ export class Dashboard {
 
   clearFilters(): void {
     const { query } = this.workspace;
+    this.views.changedScope();
     this.list.filter("");
     if (!query.project && !query.assignee && query.status === "all" && query.sprintFilter === null) return;
     this.personLabel = "All people";
@@ -338,12 +363,14 @@ export class Dashboard {
 
   openAgent(): void {
     this.closeLayers();
+    this.views.leave();
     this.agent.tab = true;
   }
 
   startFind(): void {
     if (this.issueSearch?.kind === "jira") return;
     this.closeLayers();
+    this.views.leave();
     this.agent.tab = false;
     this.issueSearch = { kind: "jira", draft: this.workspace.query.text };
   }
@@ -354,7 +381,7 @@ export class Dashboard {
 
   /** Keep the peek panel on the selected issue, loading its details once. */
   private syncPeek(): void {
-    const issue = this.peekOpen && this.peekFits() ? this.list.selected : undefined;
+    const issue = !this.views.chart && this.peekOpen && this.peekFits() ? this.list.selected : undefined;
     if (!issue) {
       this.peek = null;
       return;
@@ -391,6 +418,7 @@ export class Dashboard {
 
   /** Open the shown issue in browser, or copy its link. */
   openIssue(copy: boolean): void {
+    if (this.views.chart && !this.modal) return;
     if (this.modal?.kind === "text") return;
     const issue = this.modal?.issue ?? this.list.selected;
     if (!issue) return;
@@ -424,7 +452,7 @@ export class Dashboard {
     );
   }
 
-  private notify(notice: string): void {
+  notify(notice: string): void {
     this.notice = notice;
     clearTimeout(this.noticeTimer);
     this.noticeTimer = setTimeout(() => {
@@ -438,6 +466,7 @@ export class Dashboard {
     if (this.width < MIN_WIDTH || this.height < MIN_HEIGHT) return { kind: "too-small" };
     if (this.preview) return { kind: "preview", preview: this.preview };
     if (this.picker && !this.completionMenu) return { kind: "picker", picker: this.picker };
+    if (this.views.form) return { kind: "view-form" };
     if (this.modal) return { kind: "modal", panel: this.modal };
     const box = this.searchBox();
     if (box?.editing) return { kind: "search", box };
@@ -477,6 +506,7 @@ export class Dashboard {
   }
 
   searchEdit(layer: Layer): SearchEdit | undefined {
+    if (layer.kind === "view-form") return this.views.form?.searchEdit;
     if (layer.kind === "picker") return layer.picker.searchEdit;
     if (layer.kind === "search") return layer.box;
   }
@@ -495,14 +525,20 @@ export class Dashboard {
   }
 
   showView(view: View): void {
+    this.showScope(withView(this.workspace.query, view));
+    if (view === View.Search && !this.workspace.query.text) this.startFind();
+  }
+
+  /** Navigation and saved views share one transition, without an intermediate Jira scope. */
+  showScope(query: IssueQuery, board = this.workspace.board): void {
     this.closeLayers();
+    this.views.leave();
     this.agent.tab = false;
     this.list.unfold();
     const work = this.workspace;
-    const switchingTeamMode = pageOf(view).to === View.Team && pageOf(work.query.view).to === View.Team;
-    work.change(withView(work.query, view));
+    const switchingTeamMode = pageOf(query.view).to === View.Team && pageOf(work.query.view).to === View.Team;
+    work.openScope(query, board);
     if (!switchingTeamMode) this.list.filter("");
-    if (view === View.Search && !work.query.text) this.startFind();
   }
 
   /** Esc on search results: clear them and type a new search, staying on the tab. */
@@ -514,6 +550,7 @@ export class Dashboard {
 
   private cycleStatus(): void {
     const { query } = this.workspace;
+    this.views.changedScope();
     const status = STATUSES[(STATUSES.indexOf(query.status) + 1) % STATUSES.length] ?? "all";
     this.workspace.change(scoped(query, { status }));
     this.list.first();
@@ -529,6 +566,9 @@ export class Dashboard {
       return true;
     }
     switch (layer.kind) {
+      case "view-form":
+        this.views.formKey(key);
+        break;
       case "agent":
         this.closePicker();
         if (id === "agent-cited") this.openPicker("cited");
@@ -549,9 +589,11 @@ export class Dashboard {
       case "list":
         if (id === "q" || id === "ctrl-c") return false;
         // Space can't sit in a space-separated binding table.
+        if (this.views.key(key)) break;
         if (id === " ") this.runAction("peek");
         else if (this.peek && "name" in key && key.shift && (id === "up" || id === "down"))
           this.scrollPeek(id === "down" ? 1 : -1);
+        else if (id === "agent-new") this.views.create();
         else this.listKeys.get(id)?.();
     }
     this.syncPeek();
@@ -588,6 +630,11 @@ export class Dashboard {
       this.closePicker({ finish: target?.kind === "dismiss" });
       if (!inline) return;
     }
+    if (this.views.form && !this.picker) {
+      if (target?.kind === "view-field") this.views.field(target.field);
+      else if (target?.kind === "dismiss") this.views.form = null;
+      return;
+    }
     if (!target) return;
     this.clickTarget(target);
     this.syncPeek();
@@ -595,6 +642,14 @@ export class Dashboard {
 
   private clickTarget(target: Target): void {
     switch (target.kind) {
+      case "saved-view":
+        this.views.open(target.id);
+        return;
+      case "view-bucket":
+        this.views.drill(target.id);
+        return;
+      case "view-field":
+        return;
       case "action":
         this.closeLayers();
         this.runAction(target.action);
@@ -698,6 +753,8 @@ export class Dashboard {
       layer.picker.move(delta);
     } else if (layer.kind === "modal") {
       layer.panel.scroll = Math.max(0, layer.panel.scroll + delta * WHEEL_LINES);
+    } else if (layer.kind === "list" && this.views.chart) {
+      this.views.key({ name: delta > 0 ? "down" : "up" });
     } else if (layer.kind === "list" || layer.kind === "search") {
       this.list.move(delta);
       this.syncPeek();
@@ -765,6 +822,7 @@ export class Dashboard {
     z: () => this.list.foldSelected(),
     Z: () => this.list.unfold(),
     "left right": () => {
+      if (this.views.active) return;
       const tabs = pageOf(this.workspace.query.view).tabs.map(([view]) => view);
       const at = tabs.indexOf(this.workspace.query.view);
       if (at >= 0) this.showView(tabs[(at + 1) % tabs.length] ?? View.Mine);

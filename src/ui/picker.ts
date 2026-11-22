@@ -1,7 +1,9 @@
 import type { Key, SearchEdit } from "./input";
 import { rowOffset } from "./layout";
+import type { ViewPickerKind } from "./view-pickers";
 
 export type PickerKind =
+  | ViewPickerKind
   | "board"
   | "sprint-board"
   | "sprint"

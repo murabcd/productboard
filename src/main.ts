@@ -1,7 +1,7 @@
 import { version } from "../package.json";
 import { ChatArchive } from "./agent/archive";
 import { EveAgent } from "./agent/eve";
-import { loadCredentials, readConfig, rememberBoard, rememberTeamMode, rememberTheme } from "./auth";
+import { loadCredentials, readConfig, rememberBoard, rememberTeamMode, rememberTheme, rememberViews } from "./auth";
 import { desktop } from "./desktop";
 import { JiraClient } from "./jira/client";
 import { type Credentials, JiraHttp } from "./jira/http";
@@ -94,6 +94,7 @@ async function dashboard(client: JiraClient, screen: Screen): Promise<number> {
       return undefined;
     }));
   const board = new Dashboard(workspace, client, desktop, screen.redraw, {
+    views: { initial: config?.views, save: rememberViews },
     archive,
     agent: EveAgent.create(client),
     connectAgent: async (theme) => ((await connectAgent(screen, theme)) ? EveAgent.create(client) : undefined),

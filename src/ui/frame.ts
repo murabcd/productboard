@@ -7,7 +7,7 @@ import { describeAttachment, type Issue, shortSprintName } from "../jira/types";
 import { cells } from "../text";
 import { drawAgent } from "./agent";
 import { Canvas, type Style } from "./canvas";
-import { action, buttons } from "./controls";
+import { action, buttons, type Control } from "./controls";
 import type { Dashboard, Layer } from "./dashboard";
 import { drawComposerMenu, pickerDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
@@ -30,6 +30,8 @@ import { drawPeek } from "./peek";
 import { filterChips, PICKERS } from "./pickers";
 import type { Preview } from "./preview";
 import { priorityMark, statusIcon } from "./status";
+import { drawViewChart } from "./view-chart";
+import { viewFormDialog } from "./view-form";
 
 export function frame(d: Dashboard): Canvas {
   const { width, height } = d;
@@ -48,6 +50,15 @@ export function frame(d: Dashboard): Canvas {
   canvas.paste(content, sidebar, 0);
   if (sidebar) drawSidebar(canvas, d, sidebar);
   drawTopBar(canvas, d, sidebar, header);
+  if (d.views.form) {
+    const sprint = d.views.form.draft.scope.sprintFilter;
+    const label =
+      sprint === null
+        ? "Any sprint"
+        : (d.workspace.sprints.find((item) => item.id === sprint)?.name ?? `Sprint ${sprint}`);
+    const { panel, left, top } = viewFormDialog(canvas, d.views.form, label);
+    canvas.paste(panel, left, top);
+  }
   if (layer.kind === "picker" && !d.composerMenu) {
     const source = PICKERS[layer.picker.kind];
     const { panel, left, top } = pickerDialog(canvas, layer.picker, source.empty?.(d) ?? "No matches");
@@ -80,11 +91,16 @@ function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number, header: PageH
     canvas,
     1,
     2,
-    NAVIGATION.map((item) => ({
-      label: item.short,
-      target: navTarget(item),
-      tab: item === here ? "selected" : "unselected",
-    })),
+    [
+      ...NAVIGATION.map(
+        (item): Control => ({
+          label: item.short,
+          target: navTarget(item),
+          tab: item === here && !d.views.active ? "selected" : "unselected",
+        }),
+      ),
+      { label: "Views", target: action("saved-views"), tab: d.views.active ? "selected" : "unselected" },
+    ],
     width - 2,
   );
 }
@@ -98,7 +114,7 @@ function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
   let row = 2;
   for (const group of NAV_GROUPS) {
     for (const item of group) {
-      const active = item === here;
+      const active = item === here && !d.views.active;
       if (active) canvas.paint(row, 1, width - 3, "selected");
       canvas.put(row, iconColumn, item.icon, active ? "accentBold" : "mutedBold", iconWidth);
       canvas.put(row, labelColumn, item.name, active ? "accentBold" : "muted", width - labelColumn - 2);
@@ -106,6 +122,21 @@ function drawSidebar(canvas: Canvas, d: Dashboard, width: number): void {
       row += 1;
     }
     row += 1;
+  }
+  canvas.put(row, 2, "Views", "muted");
+  canvas.mark(row, 2, 5, action("saved-views"));
+  canvas.put(row, width - 8, "+ New", "muted");
+  canvas.mark(row++, width - 8, 5, action("new-view"));
+  const views = d.views.saved.all;
+  const capacity = Math.max(0, canvas.height - row - 2);
+  const selected = views.findIndex((view) => view.id === d.views.active?.id);
+  const offset = Math.max(0, selected - capacity + 1);
+  for (const view of views.slice(offset, offset + capacity)) {
+    const active = view.id === d.views.active?.id;
+    if (active) canvas.paint(row, 1, width - 3, "selected");
+    canvas.put(row, 2, "\uF080", active ? "accentBold" : "muted");
+    canvas.put(row, 5, view.name, active ? "accentBold" : "muted", width - 7);
+    canvas.mark(row++, 1, width - 3, { kind: "saved-view", id: view.id });
   }
 }
 
@@ -118,7 +149,7 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
     drawModal(canvas, d, d.modal);
     return;
   }
-  if (layer.kind === "agent" || (d.agent.tab && layer.kind === "picker")) {
+  if (layer.kind === "agent" || (d.agent.tab && (layer.kind === "picker" || layer.kind === "view-form"))) {
     const layout = d.agentLayout;
     const menu = d.composerMenu;
     drawAgent(canvas, d.agent, layout, layer.kind === "agent" || !!menu);
@@ -128,6 +159,20 @@ function drawWorkspace(canvas: Canvas, d: Dashboard, layer: Layer): void {
       drawComposerMenu(canvas, layout, menu, d.composerMenuCapacity, status || empty);
     }
     drawAgentFooter(canvas, d);
+    return;
+  }
+  if (d.views.chart) {
+    const top = issueListLayout(d.width).top;
+    drawViewChart(canvas, top, d.views.buckets, d.views.active?.breakdown ?? "status", d.views.cursor);
+    const work = d.workspace;
+    const count = `${work.issues.length} loaded${work.more ? " · more available" : ""}`;
+    const hints: Hint[] = [
+      ["↵", "Open issues"],
+      ["[ ]", "Breakdown"],
+      ["?", "Shortcuts", action("help")],
+    ];
+    if (work.more) hints.unshift(["n", `Load ${PAGE} more`, action("load-more")]);
+    drawFooter(canvas, d, count, hints);
     return;
   }
   drawList(canvas, d);
