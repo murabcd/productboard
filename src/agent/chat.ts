@@ -4,7 +4,14 @@ import type { Issue } from "../jira/types";
 import { clean } from "../text";
 import type { ChatArchive } from "./archive";
 import type { ContextCheckpoint } from "./context";
-import { type AgentTool, type Conversation, conversation, conversationData, type Turn } from "./conversation";
+import {
+  AgentOperation,
+  type AgentTool,
+  type Conversation,
+  conversation,
+  conversationData,
+  type Turn,
+} from "./conversation";
 import { AgentDraft, type SprintContext } from "./draft";
 import type { AgentImage } from "./images";
 import type { AgentModel } from "./models";
@@ -96,6 +103,7 @@ export class AgentChat {
       updated: Date.now(),
       turns,
       draft: { parts: [], images: [] },
+      queue: [],
       checkpoint: turns.some((turn) => turn.id === original.checkpoint?.through)
         ? structuredClone(original.checkpoint)
         : undefined,
@@ -186,7 +194,7 @@ export class AgentChat {
   }
 
   start(): void {
-    if (this.current.turns.length === 0 && this.current.draft.parts.length === 0) return;
+    if (this.current.turns.length === 0 && this.current.draft.parts.length === 0 && !this.current.queue.length) return;
     this.active = conversation();
     this.threads.push(this.active);
   }
@@ -208,7 +216,7 @@ export class AgentChat {
     const backend = this.backend;
     const last = thread.turns.at(-1);
     if (thread.operation || !backend || !last) return;
-    const operation = { kind: "compaction", controller: new AbortController() } as const;
+    const operation = new AgentOperation("compaction");
     thread.operation = operation;
     thread.draft.error = "";
     this.redraw();
@@ -225,10 +233,13 @@ export class AgentChat {
         : error instanceof Error
           ? clean(error.message)
           : "Compaction failed. Previous context kept.";
+      return;
     } finally {
       thread.operation = undefined;
+      operation.finish();
       this.changed(thread);
     }
+    await this.drain(thread);
   }
 
   /** Recall only untouched history entries; keep the draft at the end. */
@@ -253,16 +264,61 @@ export class AgentChat {
     for (const thread of this.threads) thread.operation?.controller.abort();
     for (const timer of this.saves.values()) clearTimeout(timer);
     this.saves.clear();
-    await backend?.close();
+    await Promise.all([backend?.close(), ...this.threads.map((thread) => thread.operation?.settled)]);
     await Promise.all(
       this.threads
-        .filter((thread) => thread.turns.length || thread.draft.parts.length)
+        .filter((thread) => thread.turns.length || thread.draft.parts.length || thread.queue.length)
         .map((thread) => this.persist(thread)),
     );
   }
 
   send(): Promise<void> {
+    const thread = this.current;
+    if (thread.operation || thread.queue.entries.some((item) => item.kind === "editing")) {
+      thread.queue.enqueue();
+      this.changed(thread);
+      return thread.operation ? Promise.resolve() : this.drain(thread);
+    }
     return this.submit(this.current, this.current.draft);
+  }
+
+  editQueued(id: string): void {
+    this.current.queue.edit(id);
+    this.changed();
+  }
+
+  cancelQueued(id: string): void {
+    this.current.queue.cancel(id);
+    this.changed();
+  }
+
+  resumeQueue(): Promise<void> {
+    return this.drain(this.current);
+  }
+
+  private async drain(thread: Conversation): Promise<void> {
+    if (!this.configured || !this.threads.includes(thread) || thread.operation) return;
+    const snapshot = thread.queue.take();
+    if (!snapshot) return;
+    const draft = new AgentDraft();
+    draft.restore(snapshot);
+    await this.submit(thread, draft);
+  }
+
+  async sendNow(): Promise<void> {
+    const thread = this.current;
+    if (!this.configured) return this.submit(thread, thread.draft);
+    if (!thread.draft.prepare()) return;
+    const snapshot = thread.draft.snapshot();
+    thread.queue.cancelEditing();
+    const operation = thread.operation;
+    operation?.controller.abort();
+    await operation?.settled;
+    if (!this.threads.includes(thread) || !this.configured) return;
+    if (isDeepStrictEqual(thread.draft.snapshot(), snapshot)) thread.draft.replace([]);
+    const draft = new AgentDraft();
+    draft.restore(snapshot);
+    await this.submit(thread, draft);
   }
 
   retry(turnId: string): Promise<void> {
@@ -289,7 +345,8 @@ export class AgentChat {
       this.redraw();
       return;
     }
-    const pending = new AbortController();
+    const operation = new AgentOperation("reply");
+    const pending = operation.controller;
     const turn: Turn = {
       id: crypto.randomUUID(),
       prompt: request.prompt,
@@ -304,7 +361,7 @@ export class AgentChat {
       issues: [],
       tools: [],
     };
-    thread.operation = { kind: "reply", controller: pending };
+    thread.operation = operation;
     draft.replace([]);
     thread.draft.error = "";
     thread.recall = undefined;
@@ -319,6 +376,8 @@ export class AgentChat {
       thread.draft.error = turn.state.kind === "failed" ? turn.state.error : "Stopped.";
     }
     thread.operation = undefined;
+    operation.finish();
     this.changed(thread);
+    if (turn.state.kind === "complete") await this.drain(thread);
   }
 }

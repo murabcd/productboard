@@ -185,6 +185,7 @@ export class EveAgent implements AgentBackend {
         ? [{ type: "text" as const, text }, ...attachments.map(createDataUrlFilePart)]
         : text;
       const response = await session.send(message, {
+        turnPolicy: "queue",
         signal: stop,
         clientContext: sprint
           ? `The user attached Jira sprint ${JSON.stringify(sprint.name)} (ID ${sprint.id}). For Jira searches about this sprint, use JQL sprint = ${sprint.id}.`

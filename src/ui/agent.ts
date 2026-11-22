@@ -3,6 +3,7 @@
 import type { Issue } from "../jira/types";
 import { cells } from "../text";
 import type { AgentPanel } from "./agent-panel";
+import { drawQueue } from "./agent-queue";
 import type { Canvas, ScannerStyle, Style } from "./canvas";
 import { buttons } from "./controls";
 import type { AgentLayout } from "./layout";
@@ -14,6 +15,7 @@ export function drawAgent(
   showComposer: boolean,
 ): void {
   const thread = chat.current;
+  drawQueue(canvas, thread, layout);
   const { left, rows, status, boxBottom, boxTop, transcript } = layout;
   const { room } = transcript;
   for (let y = boxTop; y <= boxBottom; y++) {

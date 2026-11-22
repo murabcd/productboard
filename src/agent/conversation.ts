@@ -5,6 +5,7 @@ import { ContextCheckpoint } from "./context";
 import { AgentDraft, DraftParts, DraftSnapshot, SprintContext } from "./draft";
 import { FailureKind } from "./failure";
 import { AgentImage } from "./images";
+import { PromptQueue, QueuedPrompt } from "./queue";
 
 export const AgentTool = z.object({
   id: z.string(),
@@ -60,14 +61,26 @@ export const ConversationData = z.object({
   turns: z.array(Turn),
   draft: DraftSnapshot,
   checkpoint: ContextCheckpoint.optional(),
+  queue: z.array(QueuedPrompt).default([]),
 });
 export type ConversationData = z.infer<typeof ConversationData>;
 
-export interface Conversation extends Omit<ConversationData, "draft"> {
+export interface Conversation extends Omit<ConversationData, "draft" | "queue"> {
   draft: AgentDraft;
+  queue: PromptQueue;
   issues: Map<string, JiraSearchResult["issues"][number]>;
-  operation?: { kind: "reply" | "compaction"; controller: AbortController };
+  operation?: AgentOperation;
   recall?: { index: number; draft: DraftSnapshot; shown: DraftParts };
+}
+
+export class AgentOperation {
+  readonly controller = new AbortController();
+  private readonly completion = Promise.withResolvers<void>();
+  readonly settled = this.completion.promise;
+  constructor(readonly kind: "reply" | "compaction") {}
+  finish(): void {
+    this.completion.resolve();
+  }
 }
 
 export function conversation(data?: ConversationData): Conversation {
@@ -87,6 +100,7 @@ export function conversation(data?: ConversationData): Conversation {
     turns,
     checkpoint: data?.checkpoint,
     draft,
+    queue: new PromptQueue(draft, data?.queue),
     issues: new Map(turns.flatMap((turn) => turn.issues.map((issue) => [issue.key, issue]))),
   };
 }
@@ -99,5 +113,6 @@ export function conversationData(thread: Conversation): ConversationData {
     turns: thread.turns,
     draft: thread.draft.snapshot(),
     checkpoint: thread.checkpoint,
+    queue: [...thread.queue.entries],
   };
 }

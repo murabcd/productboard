@@ -14,6 +14,7 @@ export type PickerKind =
   | "agent-answers"
   | "agent-fork"
   | "agent-retry"
+  | "agent-queue"
   | "project"
   | "assignee"
   | "status"

@@ -22,7 +22,8 @@ export type KeyName =
   | "agent-previous"
   | "agent-next"
   | "agent-latest"
-  | "agent-cited";
+  | "agent-cited"
+  | "agent-send-now";
 
 /** A named key, or one typed character. */
 export type Key = { name: KeyName; shift?: true } | { text: string };
@@ -79,7 +80,9 @@ export type Target =
   | { kind: "choice"; value: string }
   /** The search box above the list. */
   | { kind: "box" }
-  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "latest" | "chats" }
+  | { kind: "agent"; action: "tab" | "new" | "previous" | "next" | "latest" | "chats" | "send-now" }
   | { kind: "agent-cite"; key: string }
   | { kind: "agent-tool"; turn: string; call: string }
-  | { kind: "agent-message"; turn: string; action: "copy" | "fork" | "retry" | "compact" };
+  | { kind: "agent-message"; turn: string; action: "copy" | "fork" | "retry" | "compact" }
+  | { kind: "agent-queue"; action: "edit" | "cancel"; id: string }
+  | { kind: "agent-queue"; action: "resume" | "manage" };

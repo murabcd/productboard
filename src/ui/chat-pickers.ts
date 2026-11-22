@@ -1,7 +1,42 @@
+import { draftText } from "../agent/draft";
 import type { PickerSource } from "./pickers";
 
 /** Conversation actions use the shared keyboard and search picker. */
 export const CHAT_PICKERS = {
+  "agent-queue": {
+    title: "Queued follow-ups",
+    items: ({ agent }) => [
+      {
+        value: "resume",
+        label: "Resume queue",
+        detail: agent.chat.current.operation ? "Waiting for the current reply" : "Send the next ready message",
+        run: () => void agent.chat.resumeQueue(),
+      },
+      ...agent.chat.current.queue.entries.flatMap((item, index) => {
+        const group = `${index + 1}. ${draftText(item.kind === "editing" ? agent.chat.current.draft.parts : item.draft.parts)}`;
+        return [
+          ...(item.kind === "ready"
+            ? [
+                {
+                  value: `edit/${item.id}`,
+                  label: "Edit",
+                  detail: "Keeps its place in the queue",
+                  group,
+                  run: () => agent.chat.editQueued(item.id),
+                },
+              ]
+            : []),
+          {
+            value: `cancel/${item.id}`,
+            label: "Cancel",
+            detail: item.kind === "editing" ? "Keep the text as an unsent draft" : "Remove this queued message",
+            group,
+            run: () => agent.chat.cancelQueued(item.id),
+          },
+        ];
+      }),
+    ],
+  },
   "agent-retry": {
     title: "Retry a failed or interrupted reply",
     items: ({ agent }) =>
@@ -103,6 +138,13 @@ export const CHAT_PICKERS = {
     ],
   },
 } satisfies Record<
-  "chats" | "chat-rename" | "chat-delete" | "agent-tools" | "agent-answers" | "agent-fork" | "agent-retry",
+  | "chats"
+  | "chat-rename"
+  | "chat-delete"
+  | "agent-tools"
+  | "agent-answers"
+  | "agent-fork"
+  | "agent-retry"
+  | "agent-queue",
   PickerSource
 >;

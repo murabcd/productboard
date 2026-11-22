@@ -52,7 +52,11 @@ export class AgentComposer extends TextareaRenderable {
   }
 
   sync(): void {
-    const placeholder = this.chat.configured ? "Ask anything… (@ for context, / for commands)" : "Agent is not set up";
+    const placeholder = !this.chat.configured
+      ? "Agent is not set up"
+      : this.chat.current.operation
+        ? "Queue a follow-up… (Ctrl+Enter sends now)"
+        : "Ask anything… (@ for context, / for commands)";
     if (this.placeholder !== placeholder) this.placeholder = placeholder;
     const thread = this.chat.current;
     const parts = thread.draft.parts;

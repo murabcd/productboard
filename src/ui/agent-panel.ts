@@ -117,6 +117,9 @@ export class AgentPanel {
       case "agent-stop":
         this.chat.stop();
         return;
+      case "agent-send-now":
+        void this.chat.sendNow();
+        return;
       case "agent-latest":
         this.viewport.follow();
         return;

@@ -143,7 +143,8 @@ export class Dashboard {
   }
 
   get agentLayout() {
-    return agentLayout(this.width, this.height, this.agent.composerRows);
+    const count = this.agent.chat.current.queue.length;
+    return agentLayout(this.width, this.height, this.agent.composerRows, count ? Math.min(2, count) + 1 : 0);
   }
 
   get contextMenu(): Picker | undefined {
@@ -613,6 +614,12 @@ export class Dashboard {
         else if (target.action === "compact") void this.agent.chat.compact();
         else this.agent.chat.fork(target.turn);
         return;
+      case "agent-queue":
+        if (target.action === "edit") this.agent.chat.editQueued(target.id);
+        else if (target.action === "cancel") this.agent.chat.cancelQueued(target.id);
+        else if (target.action === "resume") void this.agent.chat.resumeQueue();
+        else this.openPicker("agent-queue");
+        return;
       case "agent-cite": {
         const issue = this.agent.chat.current.issues.get(target.key);
         if (!issue) return;
@@ -660,6 +667,9 @@ export class Dashboard {
         return;
       case "chats":
         this.openPicker("chats");
+        return;
+      case "send-now":
+        void chat.sendNow();
         return;
       case "latest":
         this.agent.viewport.follow();

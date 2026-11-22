@@ -139,7 +139,12 @@ function drawAgentFooter(canvas: Canvas, d: Dashboard): void {
   const { current } = d.agent;
   const hints: Hint[] = [
     ["⇧↵", "New line"],
-    ["^N", "New chat", { kind: "agent", action: "new" }],
+    ...(d.agent.chat.current.operation
+      ? ([
+          ["↵", "Queue"],
+          ["^↵", "Send now", { kind: "agent", action: "send-now" }],
+        ] satisfies Hint[])
+      : ([["^N", "New chat", { kind: "agent", action: "new" }]] satisfies Hint[])),
   ];
   const label = d.notice || (current ? choiceLabel(current) : "Agent is not set up");
   drawFooter(canvas, d, label, hints, ["", "muted"]);

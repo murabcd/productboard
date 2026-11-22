@@ -47,7 +47,8 @@ test("failed or interrupted compaction keeps the previous checkpoint, drafts and
   pending.resolve("Late summary");
   await settle();
   expect(chat.current.checkpoint).toBe(checkpoint);
-  expect(chat.current.draft.parts).toEqual(["Draft"]);
+  expect(chat.current.draft.parts).toEqual([]);
+  expect(chat.current.queue.entries).toMatchObject([{ kind: "ready", draft: { parts: ["Draft"] } }]);
   expect(chat.current.draft.error).toContain("Previous context kept");
 });
 

@@ -1,9 +1,11 @@
 import { expect, mock, test } from "bun:test";
+import { createTestRenderer } from "@opentui/core/testing";
 import type { AgentBackend } from "../agent/chat";
 import { Workspace } from "../state/workspace";
 import { deferred, fakeAgent, issues, settle } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
+import { useRenderer } from "./screen";
 
 function start(backend: AgentBackend) {
   const never = () => deferred<never>().promise;
@@ -60,6 +62,50 @@ test("tool activity is reachable from keyboard search and its clickable transcri
     expect(dashboard.modal).toMatchObject({ title: "Search Jira" });
   } finally {
     await dashboard.dispose();
+  }
+});
+
+test("the native composer queues on Enter and sends now on Ctrl+Enter in a minimum pane", async () => {
+  const pending = deferred<void>();
+  const ask = mock<Parameters<typeof fakeAgent>[0]>(async ({ prompt, onText }) => {
+    onText(`Reply ${prompt}`);
+    if (prompt === "First") await pending.promise;
+  });
+  const { dashboard, chat } = start(fakeAgent(ask));
+  dashboard.resize(60, 18);
+  const setup = await createTestRenderer({ width: 60, height: 18, exitOnCtrlC: false, kittyKeyboard: true });
+  const screen = useRenderer(setup.renderer, async () => {});
+  void screen.show(dashboard);
+  try {
+    await setup.renderOnce();
+    await setup.mockInput.typeText("First");
+    setup.mockInput.pressEnter();
+    await settle();
+    await setup.renderOnce();
+    await setup.mockInput.typeText("Later");
+    setup.mockInput.pressEnter();
+    await settle();
+    await setup.renderOnce();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(chat.current.queue.length).toBe(1);
+    expect(setup.captureCharFrame()).toContain("Queued follow-ups");
+    expect(setup.captureCharFrame()).toContain("Edit");
+    dashboard.agent.composerRows = 6;
+    const layout = dashboard.agentLayout;
+    expect(layout.transcript.top + layout.transcript.capacity).toBeLessThan(layout.queue.top);
+    expect(layout.queue.top + layout.queue.rows).toBe(layout.boxTop);
+    expect(layout.rows).toBeGreaterThan(0);
+    await setup.mockInput.typeText("Now");
+    setup.mockInput.pressEnter({ ctrl: true });
+    await settle();
+    await setup.renderOnce();
+    expect(ask.mock.calls.map(([request]) => request.prompt)).toEqual(["First", "Now", "Later"]);
+    expect(chat.current.turns[0]?.state.kind).toBe("interrupted");
+    expect(chat.current.queue.length).toBe(0);
+  } finally {
+    pending.resolve();
+    await dashboard.dispose();
+    await setup.dispose();
   }
 });
 

@@ -43,22 +43,25 @@ export function rowOffset(offset: number, selected: number, count: number, capac
 
 export const COMPOSER_MAX_ROWS = 6;
 
-export function agentLayout(width: number, height: number, composerRows: number) {
+export function agentLayout(width: number, height: number, composerRows: number, queueRows = 0) {
   const workspaceWidth = width - sidebarWidth(width);
   const room = Math.min(workspaceWidth - 5, 72);
   const left = Math.floor((workspaceWidth - room) / 2);
-  const rows = Math.max(1, Math.min(COMPOSER_MAX_ROWS, composerRows));
   const status = height - FOOTER_ROWS - 1;
+  const top = headerRows(width).toolbar + 2;
+  queueRows = Math.max(0, Math.min(queueRows, status - top - 5));
+  const rows = Math.max(1, Math.min(COMPOSER_MAX_ROWS, composerRows, status - top - queueRows - 4));
   const boxBottom = status - 1;
   const boxTop = boxBottom - rows - 1;
-  const top = headerRows(width).toolbar + 2;
+  const queueTop = boxTop - queueRows;
   return {
     left,
     rows,
     status,
     boxBottom,
     boxTop,
-    transcript: { top, capacity: Math.max(1, boxTop - top - 1), room },
+    queue: { top: queueTop, rows: queueRows },
+    transcript: { top, capacity: Math.max(1, queueTop - top - 1), room },
   };
 }
 

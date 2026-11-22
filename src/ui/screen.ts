@@ -30,6 +30,7 @@ const COMPOSER_KEYS = new Set<KeyName>([
   "agent-next",
   "agent-cited",
   "agent-latest",
+  "agent-send-now",
   "commands",
   "pageup",
   "pagedown",

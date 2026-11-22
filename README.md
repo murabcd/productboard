@@ -102,6 +102,14 @@ switch between chats, and `Ctrl+O` to open an issue Agent
 mentioned. Type `/clear` and press Enter to clear the current chat. This also
 stops any reply in that chat.
 
+While a reply is running, `Enter` queues your draft as a follow-up. The queue
+appears above the composer with **Edit**, **Cancel**, and **Manage** controls;
+`/queue` provides the same actions from the keyboard. Editing keeps a message's
+place; `Enter` saves the edit. A stopped or failed reply pauses the queue. Choose
+**Resume** to continue. Saved queues reopen paused, including edits in progress.
+`Ctrl+Enter` or **Send now** interrupts the current reply and sends your draft
+immediately, preserving the partial reply. Other queued messages follow it.
+
 Replies scroll as they stream. Scroll up with the wheel or `PageUp` to keep
 your place; scrolling back to the bottom resumes following. Click **Jump to
 latest ↓** or press `Ctrl+End` to return immediately. Sending a question also

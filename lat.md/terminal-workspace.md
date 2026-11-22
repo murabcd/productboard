@@ -264,3 +264,24 @@ late callbacks. Partial replies wait for explicit Retry and remain in the record
 the new attempt receives the original prompt and attachments without replacing
 an edited draft. Retrying an older turn forks through that turn first. `/retry`
 and reply buttons expose the same action; context failures also offer Compact.
+
+[[src/agent/queue.ts#PromptQueue]] owns queued follow-ups and atomic composer edits.
+Enter during a reply or compaction snapshots a ready message with its attachments.
+Editing replaces a ready item with a placeholder at the same position; the sole
+editable content lives in the composer. Enter saves it back in place. Canceling an
+edit leaves its text as an unsent draft. The queue never overwrites another draft.
+[[src/ui/agent-queue.ts#drawQueue]] shows the first queued messages and exposes edit,
+cancel, manage and resume actions. `/queue` reaches every entry from the keyboard.
+Layout reserves queue rows and limits the composer height before either can
+overlap the transcript or header in a minimum pane.
+
+Successful replies drain ready items in order. Failure, cancellation and an editing
+placeholder pause delivery. Reopened queues wait for a user action. Queue state
+and editing placeholders share the saved conversation record. Clear/delete retire
+the conversation before any drain can continue. [[src/agent/conversation.ts#AgentOperation]]
+provides a completion boundary for cancellation, shutdown and Send now. Ctrl+Enter
+explicitly interrupts the current operation, waits for settlement and sends the
+current draft before other queued messages, retaining the interrupted turn.
+This application action is distinct from automatic follow-ups; Eve deliveries use
+its explicit queue policy rather than implicit steering. Queue actions and typing
+do not steal the paused transcript's reading position.

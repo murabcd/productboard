@@ -21,6 +21,7 @@ const NAMED: Record<string, KeyName> = {
 };
 
 export function toKeys(key: Pick<KeyEvent, "name" | "ctrl" | "meta" | "shift" | "sequence" | "super">): Key[] {
+  if (key.ctrl && (key.name === "return" || key.name === "enter")) return [{ name: "agent-send-now" }];
   if ((key.ctrl && key.name === "k") || (key.super && key.name === "k")) return [{ name: "commands" }];
   if (key.ctrl && key.name === "n") return [{ name: "agent-new" }];
   if (key.ctrl && key.name === "x") return [{ name: "agent-stop" }];

@@ -24,6 +24,10 @@ test("saved chats round-trip attachment bytes, drafts and interrupted replies pr
   const image = { filename: "shot.png", mediaType: "image/png", bytes: new Uint8Array([137, 80, 78, 71]) };
   const token = { kind: "image", label: "[Image]" } as const;
   thread.draft.restore({ parts: ["Unsent ", token], images: [image] });
+  thread.queue.enqueue();
+  const queued = thread.queue.entries[0];
+  if (!queued) throw new Error("Missing queue");
+  thread.queue.edit(queued.id);
   thread.turns.push({
     id: crypto.randomUUID(),
     prompt: "Question",
@@ -42,6 +46,7 @@ test("saved chats round-trip attachment bytes, drafts and interrupted replies pr
   const reopened = new AgentChat(undefined, () => {}, await ChatArchive.open(path));
   expect(reopened.current.name).toBe("Sprint review");
   expect(reopened.current.draft.prepare()?.images[0]?.bytes).toEqual(image.bytes);
+  expect(reopened.current.queue.entries).toMatchObject([{ kind: "editing", id: queued.id }]);
   expect(reopened.current.turns[0]).toMatchObject({
     answer: "Partial",
     state: { kind: "interrupted" },
@@ -82,6 +87,8 @@ test("clearing a running saved chat keeps neighbors and late output cannot recre
   const id = chat.current.id;
   const pending = chat.send();
   await settle();
+  chat.current.draft.replace(["Never send after clear"]);
+  await chat.send();
   chat.clear();
   await pending;
   expect(chat.size).toBe(2);

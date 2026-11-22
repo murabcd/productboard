@@ -229,6 +229,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("/answers", "Copy a specific answer", () => d.openPicker("agent-answers")),
       item("/fork", "Branch from an earlier reply", () => d.openPicker("agent-fork")),
       item("/retry", "Retry a failed reply", () => d.openPicker("agent-retry")),
+      item("/queue", "Manage queued follow-ups", () => d.openPicker("agent-queue")),
       item("/copy", "Copy last answer", () => d.copyAgentAnswer()),
     ],
   },
