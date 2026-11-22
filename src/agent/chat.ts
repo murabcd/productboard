@@ -1,9 +1,13 @@
 import type { AgentChoice, AgentChoiceChange, ModelRef } from "../auth";
 import type { Issue } from "../jira/types";
 import { clean } from "../text";
-import { AgentDraft, type DraftParts, type SprintContext } from "./draft";
+import type { ChatArchive } from "./archive";
+import { type AgentTool, type Conversation, conversation, conversationData, type Turn } from "./conversation";
+import type { SprintContext } from "./draft";
 import type { AgentImage } from "./images";
 import type { AgentModel } from "./models";
+
+export type { AgentTool, Turn } from "./conversation";
 
 export interface AgentBackend {
   /** The model and reasoning that answer, shown under each reply. */
@@ -27,60 +31,26 @@ export interface AgentBackend {
   }): Promise<void>;
 }
 
-export interface AgentTool {
-  readonly id: string;
-  readonly name: string;
-  readonly query: string;
-  readonly state: "running" | "completed" | "failed" | "interrupted";
-  readonly detail: string;
-}
-
-export interface Turn {
-  readonly prompt: string;
-  readonly displayPrompt: string;
-  answer: string;
-  readonly choice: AgentChoice;
-  /** When it was sent and when the reply ended, in milliseconds. */
-  readonly started: number;
-  finished?: number;
-  interrupted?: boolean;
-  error?: string;
-  readonly sprint?: SprintContext;
-  readonly images: readonly AgentImage[];
-  issues: Issue[];
-  tools: readonly AgentTool[];
-}
-
-interface Conversation {
-  id: string;
-  turns: Turn[];
-  issues: Map<string, Issue>;
-  pending?: AbortController;
-  draft: AgentDraft;
-  prompts: DraftParts[];
-  recall?: { index: number; draft: DraftParts; shown: DraftParts };
-}
-
-const conversation = (): Conversation => ({
-  id: crypto.randomUUID(),
-  turns: [],
-  issues: new Map(),
-  draft: new AgentDraft(),
-  prompts: [],
-});
-
 type Connection = { kind: "offline" | "connecting" | "closed" } | { kind: "online"; backend: AgentBackend };
 
 export class AgentChat {
   private active = conversation();
   private readonly threads = [this.active];
   private connection: Connection;
+  private readonly saves = new Map<Conversation, ReturnType<typeof setTimeout>>();
+  storageError = "";
 
   constructor(
     backend: AgentBackend | undefined,
     private readonly redraw: () => void,
+    private readonly archive?: ChatArchive,
   ) {
     this.connection = backend ? { kind: "online", backend } : { kind: "offline" };
+    if (archive?.entries.length) {
+      this.threads.splice(0, 1, ...archive.entries.map(conversation));
+      this.active = this.threads.at(-1) ?? this.active;
+    }
+    this.storageError = archive?.error ?? "";
   }
 
   get current(): Conversation {
@@ -93,6 +63,65 @@ export class AgentChat {
 
   get size(): number {
     return this.threads.length;
+  }
+
+  get conversations(): readonly Conversation[] {
+    return this.threads;
+  }
+
+  open(id: string): void {
+    const thread = this.threads.find((thread) => thread.id === id);
+    if (thread) this.active = thread;
+  }
+
+  rename(name: string): void {
+    const value = clean(name).trim();
+    if (value) this.current.name = value.slice(0, 120);
+    this.changed();
+  }
+
+  delete(): void {
+    const thread = this.current;
+    this.retire(thread);
+    const index = this.threads.indexOf(thread);
+    this.threads.splice(index, 1);
+    if (!this.threads.length) this.threads.push(conversation());
+    this.active = this.threads[Math.min(index, this.threads.length - 1)] ?? this.active;
+    this.redraw();
+  }
+
+  private retire(thread: Conversation): void {
+    thread.pending?.abort();
+    this.backend?.discardThread(thread.id);
+    clearTimeout(this.saves.get(thread));
+    this.saves.delete(thread);
+    void this.archive?.remove(thread.id).catch(() => this.storageFailed());
+  }
+
+  changed(thread = this.current): void {
+    this.redraw();
+    if (!this.archive || !this.threads.includes(thread) || this.connection.kind === "closed" || this.saves.has(thread))
+      return;
+    this.saves.set(
+      thread,
+      setTimeout(() => {
+        this.saves.delete(thread);
+        void this.persist(thread);
+      }, 500),
+    );
+  }
+
+  private async persist(thread: Conversation): Promise<void> {
+    try {
+      await this.archive?.save(conversationData(thread));
+    } catch {
+      this.storageFailed();
+    }
+  }
+
+  private storageFailed(): void {
+    this.storageError = "Could not save chats. Check local disk space and permissions.";
+    this.redraw();
   }
 
   get configured(): boolean {
@@ -133,17 +162,17 @@ export class AgentChat {
   }
 
   start(): void {
-    if (this.current.turns.length === 0) return;
+    if (this.current.turns.length === 0 && this.current.draft.parts.length === 0) return;
     this.active = conversation();
     this.threads.push(this.active);
   }
 
   clear(): void {
-    const thread = this.current;
-    this.stop();
-    this.backend?.discardThread(thread.id);
+    const index = this.threads.indexOf(this.current);
+    this.retire(this.current);
     this.active = conversation();
-    this.threads[this.threads.indexOf(thread)] = this.active;
+    this.threads.splice(index, 1, this.active);
+    this.redraw();
   }
 
   stop(): void {
@@ -153,15 +182,16 @@ export class AgentChat {
   /** Recall only untouched history entries; keep the draft at the end. */
   recall(direction: -1 | 1): boolean {
     const thread = this.current;
-    const { draft, prompts, recall } = thread;
+    const { draft, turns, recall } = thread;
     if (recall && recall.shown !== draft.parts) return false;
-    const index = (recall?.index ?? prompts.length) + direction;
-    if (index < 0 || index > prompts.length) return false;
-    const saved = recall?.draft ?? draft.parts;
-    const parts = index === prompts.length ? saved : prompts[index];
-    if (!parts) return false;
-    draft.replace(parts);
-    thread.recall = index === prompts.length ? undefined : { index, draft: saved, shown: parts };
+    const index = (recall?.index ?? turns.length) + direction;
+    if (index < 0 || index > turns.length) return false;
+    const saved = recall?.draft ?? draft.snapshot();
+    const value = index === turns.length ? saved : turns[index];
+    if (!value) return false;
+    draft.restore(value);
+    thread.recall = index === turns.length ? undefined : { index, draft: saved, shown: draft.parts };
+    this.changed();
     return true;
   }
 
@@ -169,7 +199,14 @@ export class AgentChat {
     const backend = this.backend;
     this.connection = { kind: "closed" };
     for (const thread of this.threads) thread.pending?.abort();
+    for (const timer of this.saves.values()) clearTimeout(timer);
+    this.saves.clear();
     await backend?.close();
+    await Promise.all(
+      this.threads
+        .filter((thread) => thread.turns.length || thread.draft.parts.length)
+        .map((thread) => this.persist(thread)),
+    );
   }
 
   async send(): Promise<void> {
@@ -188,13 +225,16 @@ export class AgentChat {
     }
     const pending = new AbortController();
     const turn: Turn = {
+      id: crypto.randomUUID(),
       prompt: request.prompt,
       displayPrompt,
       answer: "",
       choice: backend.current,
       started: Date.now(),
+      state: { kind: "running" },
       sprint: request.sprint,
       images: request.images,
+      parts,
       issues: [],
       tools: [],
     };
@@ -202,9 +242,11 @@ export class AgentChat {
     draft.replace([]);
     draft.error = "";
     thread.recall = undefined;
-    if (thread.prompts.at(-1) !== parts) thread.prompts.push(parts);
+    if (!thread.turns.length && thread.name === "New chat") thread.name = clean(displayPrompt).slice(0, 80);
+    thread.updated = Date.now();
     const history = thread.turns.slice();
     thread.turns.push(turn);
+    this.changed(thread);
     let failure = "";
     let accepting = true;
     try {
@@ -221,7 +263,7 @@ export class AgentChat {
         onText: (text, replace = false) => {
           if (!accepting || pending.signal.aborted) return;
           turn.answer = (replace ? "" : turn.answer) + clean(text, true);
-          this.redraw();
+          this.changed(thread);
         },
         onTools: (tools) => {
           if (!accepting || pending.signal.aborted) return;
@@ -231,7 +273,7 @@ export class AgentChat {
             query: clean(tool.query),
             detail: clean(tool.detail),
           }));
-          this.redraw();
+          this.changed(thread);
         },
       });
       await untilStopped(reply, pending.signal);
@@ -240,8 +282,12 @@ export class AgentChat {
       if (!pending.signal.aborted) failure = error instanceof Error ? clean(error.message) : "Agent request failed.";
     } finally {
       accepting = false;
-      turn.finished = Date.now();
-      turn.error = failure || undefined;
+      const finished = Date.now();
+      turn.state = pending.signal.aborted
+        ? { kind: "interrupted", finished }
+        : failure
+          ? { kind: "failed", finished, error: failure }
+          : { kind: "complete", finished };
       turn.tools = turn.tools.map((tool) =>
         tool.state === "running"
           ? {
@@ -252,13 +298,12 @@ export class AgentChat {
           : tool,
       );
       const answered = turn.answer.trim() !== "";
-      if (pending.signal.aborted) turn.interrupted = true;
       if (pending.signal.aborted || failure) {
         if ((!answered || failure) && draft.parts.length === 0) draft.replace(parts);
         draft.error = pending.signal.aborted ? "Stopped." : failure;
       }
       thread.pending = undefined;
-      this.redraw();
+      this.changed(thread);
     }
   }
 }

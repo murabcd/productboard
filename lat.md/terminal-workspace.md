@@ -156,7 +156,7 @@ while the turn content and pane width stay the same. These interactions follow
 adapted to this terminal's frame renderer.
 
 Typing `/` in an empty Agent composer offers `/models`, `/effort`, `/new`,
-`/clear`, and `/copy` above the text box while the query stays in the draft. Selecting a
+`/clear`, `/copy`, `/chats`, `/rename`, and `/delete` above the text box while the query stays in the draft. Selecting a
 command clears its text. `/models` and `/effort` open their corresponding
 pickers. `/new` uses the same chat action as Ctrl+N and keeps earlier chats
 available.
@@ -211,8 +211,16 @@ of the results to the model and emits the issue records through the event stream
 terminal citations. Jira credentials stay in the dashboard. Provider
 API keys come from the shell or macOS Keychain. The ChatGPT subscription
 uses Eve's model helper, with credentials managed by Codex.
-The dashboard keeps
-conversation history in memory and cancels pending work on exit. Sessions,
+[[src/agent/conversation.ts]] defines the validated conversation record. Prompt
+recall derives from its turns, including the original attachments.
+[[src/agent/archive.ts#ChatArchive]] saves one private, atomic file per chat under
+`~/.local/state/productboard`, partitioned by a hash of the Jira site and email.
+Draft changes and streaming output schedule throttled saves; shutdown flushes
+remaining records. Running turns reopen as interrupted, preserving partial text.
+Invalid files stay on disk and a storage failure is visible in Agent. Clear and
+delete retire the session before removing the record; late callbacks cannot save it
+again. [[src/ui/chat-pickers.ts]] offers full conversation search, rename and delete.
+The dashboard cancels pending work on exit. Sessions,
 search access and streaming callbacks belong to the Eve process that created
 them.
 
@@ -224,4 +232,4 @@ interrupted turns, marks unfinished tools, restores a failed question only into
 an empty draft, and rejects callbacks after a turn settles. A replacement Eve
 session receives all earlier turns without a fixed turn or character cutoff,
 including Jira evidence, sprint references, and images. Existing sessions use
-Eve's own history and compaction. The UI does not persist chats to disk.
+Eve's own history and compaction.

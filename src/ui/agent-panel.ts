@@ -1,6 +1,7 @@
 /** Agent's place on screen: its page and conversation history.
  * The dashboard routes input here. */
 
+import type { ChatArchive } from "../agent/archive";
 import { type AgentBackend, AgentChat } from "../agent/chat";
 import type { AgentModel } from "../agent/models";
 import type { AgentChoice, AgentChoiceChange, ModelRef, Reasoning } from "../auth";
@@ -38,8 +39,9 @@ export class AgentPanel {
     redraw: () => void,
     /** Refreshes open pickers when their data changes. */
     private readonly changed: () => void,
+    archive?: ChatArchive,
   ) {
-    this.chat = new AgentChat(backend, redraw);
+    this.chat = new AgentChat(backend, redraw, archive);
   }
 
   get current(): AgentChoice | undefined {

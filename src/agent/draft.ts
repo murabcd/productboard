@@ -1,20 +1,23 @@
-import type { Sprint } from "../jira/types";
+import { z } from "zod";
 import { clean } from "../text";
-import { type AgentImage, MAX_IMAGES, MAX_MESSAGE_IMAGE_BYTES, readAgentImage } from "./images";
+import { AgentImage, MAX_IMAGES, MAX_MESSAGE_IMAGE_BYTES, readAgentImage } from "./images";
 
-interface DraftImage {
-  kind: "image";
-  label: string;
-}
-
-export type SprintContext = Pick<Sprint, "id" | "name">;
+export const SprintContext = z.object({ id: z.number().int(), name: z.string() });
+export type SprintContext = z.infer<typeof SprintContext>;
 export type DraftReference = { kind: "issue"; key: string } | { kind: "sprint"; sprint: SprintContext };
 
-export type DraftAttachment =
-  | DraftImage
-  | { kind: "paste"; label: string; text: string }
-  | (DraftReference & { label: string });
-export type DraftParts = readonly (string | DraftAttachment)[];
+export const DraftAttachment = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("image"), label: z.string() }),
+  z.object({ kind: z.literal("paste"), label: z.string(), text: z.string() }),
+  z.object({ kind: z.literal("issue"), label: z.string(), key: z.string() }),
+  z.object({ kind: z.literal("sprint"), label: z.string(), sprint: SprintContext }),
+]);
+export type DraftAttachment = z.infer<typeof DraftAttachment>;
+type DraftImage = Extract<DraftAttachment, { kind: "image" }>;
+export const DraftParts = z.array(z.union([z.string(), DraftAttachment])).readonly();
+export type DraftParts = z.infer<typeof DraftParts>;
+export const DraftSnapshot = z.object({ parts: DraftParts, images: z.array(AgentImage).readonly() });
+export type DraftSnapshot = z.infer<typeof DraftSnapshot>;
 
 export class AgentDraft {
   private current: DraftParts = [];
@@ -35,6 +38,27 @@ export class AgentDraft {
 
   replace(parts: DraftParts): void {
     this.current = parts;
+  }
+
+  snapshot(): DraftSnapshot {
+    const images: AgentImage[] = [];
+    const parts = this.current.filter((part) => {
+      if (typeof part === "string" || part.kind !== "image") return true;
+      const image = this.images.get(part);
+      if (!image) return false;
+      images.push(image);
+      return true;
+    });
+    return { parts, images };
+  }
+
+  restore({ parts, images }: DraftSnapshot): void {
+    this.replace(parts);
+    let index = 0;
+    for (const token of this.imageTokens()) {
+      const image = images[index++];
+      if (image) this.images.set(token, image);
+    }
   }
 
   async attachImage(path: string, label: string, insert: (attachment: DraftAttachment) => void): Promise<void> {

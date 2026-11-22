@@ -154,13 +154,12 @@ export class EveAgent implements AgentBackend {
         existing || history.length === 0
           ? ""
           : `Earlier conversation: ${JSON.stringify(
-              history.map(({ prompt, answer, sprint, issues, interrupted, error, images }) => ({
+              history.map(({ prompt, answer, sprint, issues, state, images }) => ({
                 prompt,
                 answer,
                 sprint,
                 issues,
-                interrupted,
-                error,
+                state,
                 images: images.map(({ filename, mediaType }) => ({ filename, mediaType })),
               })),
             )}\n\n`;

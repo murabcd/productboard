@@ -27,7 +27,7 @@ const DESCRIPTIONS: Record<View, string> = {
 
 function agentHeader(d: Dashboard): PageHeader {
   const { chat } = d.agent;
-  const actions: Control[] = [];
+  const actions: Control[] = [{ label: "Chats", target: { kind: "agent", action: "chats" } }];
   if (chat.size > 1) {
     actions.push(
       { label: `← ${chat.history}`, target: { kind: "agent", action: "previous" } },
@@ -37,7 +37,7 @@ function agentHeader(d: Dashboard): PageHeader {
   if (chat.current.turns.length) actions.push({ label: "+ New chat", target: { kind: "agent", action: "new" } });
   return {
     title: AGENT.name,
-    description: "Search across Jira",
+    description: chat.current.name === "New chat" ? "Search across Jira" : chat.current.name,
     tabs: [],
     filters: [],
     actions,

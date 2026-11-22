@@ -1,5 +1,6 @@
 /** Dashboard state and keyboard interaction, independent of the terminal. */
 
+import type { ChatArchive } from "../agent/archive";
 import type { AgentBackend } from "../agent/chat";
 import type { JiraClient } from "../jira/client";
 import { type IssueQuery, STATUSES, scoped, type TeamMode, View, withAssignee, withView } from "../jira/query";
@@ -36,6 +37,7 @@ export interface Opener {
 }
 
 export interface DashboardOptions {
+  archive?: ChatArchive;
   agent?: AgentBackend;
   connectAgent?(theme: ThemeId): Promise<AgentBackend | undefined>;
   teamMode?: { initial?: TeamMode; save(mode: TeamMode): void };
@@ -98,7 +100,7 @@ export class Dashboard {
     this.selectedTheme = options.appearance?.initial ?? DEFAULT_THEME;
     this.list = new IssueList(workspace);
     this.images = new ImagePreviews((id) => client.attachment(id), redraw);
-    this.agent = new AgentPanel(options.agent, redraw, () => this.update());
+    this.agent = new AgentPanel(options.agent, redraw, () => this.update(), options.archive);
     this.contextPicker = new ContextPicker(
       (text, signal) => client.findIssues(text, signal),
       () => this.update(),
@@ -636,6 +638,9 @@ export class Dashboard {
         return;
       case "new":
         chat.start();
+        return;
+      case "chats":
+        this.openPicker("chats");
         return;
       case "latest":
         this.agent.viewport.follow();

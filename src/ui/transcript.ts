@@ -15,24 +15,20 @@ const cache = new WeakMap<
   {
     room: number;
     answer: string;
-    finished: Turn["finished"];
-    interrupted: Turn["interrupted"];
-    error: Turn["error"];
+    state: Turn["state"];
     tools: Turn["tools"];
     rows: TranscriptRow[];
   }
 >();
 
 function turnRows(turn: Turn, room: number): TranscriptRow[] {
-  const { answer, finished, interrupted, error, tools } = turn;
+  const { answer, state, tools } = turn;
   const previous = cache.get(turn);
   if (
     previous &&
     previous.room === room &&
     previous.answer === answer &&
-    previous.finished === finished &&
-    previous.interrupted === interrupted &&
-    previous.error === error &&
+    previous.state === state &&
     previous.tools === tools
   ) {
     return previous.rows;
@@ -60,15 +56,15 @@ function turnRows(turn: Turn, room: number): TranscriptRow[] {
     ...sectionRows("plain", "tools-gap", tools.length ? [[]] : []),
     ...sectionRows("answer", "answer", layout(markdownBlocks(answer), room - 3)),
   ];
-  if (finished !== undefined) {
-    const details = [choiceLabel(turn.choice), duration(finished - turn.started)];
-    if (interrupted) details.push("interrupted");
-    if (error) details.push("failed");
+  if (state.kind !== "running") {
+    const details = [choiceLabel(turn.choice), duration(state.finished - turn.started)];
+    if (state.kind !== "complete") details.push(state.kind);
     rows.push(...sectionRows("plain", "footer", [[], [{ text: details.join(" · "), style: "muted" }]]));
   }
-  if (error) rows.push(...sectionRows("plain", "error", wrapSpans([{ text: error, style: "error" }], room - 3)));
+  if (state.kind === "failed")
+    rows.push(...sectionRows("plain", "error", wrapSpans([{ text: state.error, style: "error" }], room - 3)));
   rows.push(...sectionRows("plain", "end", [[]]));
-  cache.set(turn, { room, answer, finished, interrupted, error, tools, rows });
+  cache.set(turn, { room, answer, state, tools, rows });
   return rows;
 }
 

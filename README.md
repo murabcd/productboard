@@ -109,6 +109,12 @@ returns to the latest reply. At the start of the composer, `↑` recalls sent
 prompts; at the end, `↓` moves forward and restores your unsent draft.
 Use `/copy` to copy the latest answer.
 
+Chats, prompt history, drafts, and attachments survive restarts. Choose **Chats**
+or `/chats` to search names, prompts, and answers. `/rename` names the current chat;
+`/delete` offers to remove its saved record. Local records are private files under
+`~/.local/state/productboard`, separated by Jira account. `/clear` removes the
+current record and replaces it with an empty chat.
+
 Jira searches show their JQL, progress, result count, and whether more matches
 are available. Interrupted and failed replies keep their status in the chat.
 If a reply fails, its question returns to the empty composer so you can retry.
@@ -128,8 +134,8 @@ Agent sends your prompt and attached images to your provider when you press
 Enter. It searches Jira when the question needs issue data. Each search shares
 up to 50 matching issue summaries with
 current fields such as status, assignee, and priority. Its answers can link back
-to Jira issues in the terminal. Productboard keeps chat history for the current
-run. After a model or reasoning change, or a failed or interrupted request,
+to Jira issues in the terminal. After reopening a chat, a model or reasoning
+change, or a failed or interrupted request,
 the next request restores earlier prompts, replies, Jira results, sprint references,
 and image attachments to the new Eve session.
 

@@ -168,9 +168,10 @@ export class AgentComposer extends TextareaRenderable {
     const number = ++this.attachmentNumber;
     const spacer = this.canMention() ? "" : " ";
     if (path) {
-      void this.chat.current.draft
+      const thread = this.chat.current;
+      void thread.draft
         .attachImage(path, `${spacer}[Image #${number}]`, (attachment) => this.insert(attachment))
-        .then(this.changed);
+        .then(() => this.chat.changed(thread));
     } else {
       const label = `${spacer}[Pasted text #${number}${breaks ? ` +${breaks} ${breaks === 1 ? "line" : "lines"}` : ""}]`;
       this.insert({ kind: "paste", label, text: pasted });
@@ -213,5 +214,6 @@ export class AgentComposer extends TextareaRenderable {
     if (offset < end) parts.push(this.getTextRange(offset, end));
     this.thread.draft.replace(parts);
     this.parts = parts;
+    this.chat.changed(this.thread);
   }
 }

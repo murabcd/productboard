@@ -162,7 +162,9 @@ test("a model switch while a turn waits for Eve retirement cannot change its att
     await Promise.all([changing, changedAgain, firstTurn, waiting]);
     expect(agent.current).toEqual(high);
     expect(start).toHaveBeenCalledTimes(1);
-    expect(second.current.turns).toMatchObject([{ error: "Agent restarted. Send the question again.", answer: "" }]);
+    expect(second.current.turns).toMatchObject([
+      { state: { kind: "failed", error: "Agent restarted. Send the question again." }, answer: "" },
+    ]);
     expect(second.current.draft.parts).toEqual(["Turn admitted under Medium"]);
     expect(second.current.draft.error).toBe("Agent restarted. Send the question again.");
   } finally {

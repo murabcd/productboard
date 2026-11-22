@@ -30,7 +30,7 @@ const ModelRef = z.object({
 });
 export type ModelRef = z.infer<typeof ModelRef>;
 
-const AgentChoice = ModelRef.extend({
+export const AgentChoice = ModelRef.extend({
   reasoning: z.enum(REASONING_LEVELS).default(DEFAULT_REASONING),
 });
 export type AgentChoice = z.infer<typeof AgentChoice>;

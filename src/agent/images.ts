@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { basename, extname, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { clean } from "../text";
 
 const MEDIA_TYPES = {
@@ -20,11 +21,15 @@ const QUOTED_PATH = /^(['"])(.*)\1$/;
 const ESCAPED_QUOTE = /'\\''/g;
 const ESCAPED_CHARACTER = /\\(.)/g;
 
-export interface AgentImage {
-  filename: string;
-  mediaType: string;
-  bytes: Uint8Array;
-}
+export const AgentImage = z.object({
+  filename: z.string(),
+  mediaType: z.string(),
+  bytes: z.codec(z.base64().max(MAX_IMAGE_BYTES * 2), z.instanceof(Uint8Array), {
+    decode: (value) => new Uint8Array(Buffer.from(value, "base64")),
+    encode: (value) => Buffer.from(value).toString("base64"),
+  }),
+});
+export type AgentImage = z.infer<typeof AgentImage>;
 
 /** Rex and other terminals paste the dropped path, sometimes with shell quoting. */
 export function pastedImagePath(text: string): string | undefined {

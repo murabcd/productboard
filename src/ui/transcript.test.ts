@@ -4,6 +4,9 @@ import { TranscriptViewport } from "./transcript";
 
 function turn(): Turn {
   return {
+    id: crypto.randomUUID(),
+    state: { kind: "running" },
+    parts: ["Show issues"],
     prompt: "Show issues",
     displayPrompt: "Show issues",
     answer: `\`\`\`\n${Array.from({ length: 80 }, (_, i) => `Row ${i + 1}`).join("\n")}`,
@@ -29,7 +32,7 @@ test("streaming follows the tail, holds the reader's rows, and resumes at the bo
   expect(reading.following).toBe(false);
   reply.answer += "\nRow 82\nRow 83";
   expect(text(viewport.window([reply], pane))).toEqual(text(reading));
-  reply.finished = 2000;
+  reply.state = { kind: "complete", finished: 2000 };
   expect(text(viewport.window([reply], pane))).toEqual(text(reading));
   expect(viewport.window([reply], pane, -1000).following).toBe(true);
   reply.answer += "\nRow 84";

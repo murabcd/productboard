@@ -3,6 +3,7 @@ import { type ModelRef, REASONING_LEVELS, type Reasoning } from "../auth";
 import { STATUSES, type StatusFilter, View } from "../jira/query";
 import { type Choice, describeAttachment, SPRINT_STATES, shortSprintName, sprintChoice } from "../jira/types";
 import { THEME_IDS, THEMES } from "../theme";
+import { CHAT_PICKERS } from "./chat-pickers";
 import type { Dashboard } from "./dashboard";
 import { NAVIGATION, navKey } from "./navigation";
 import type { PickerItem, PickerKind, PickerOptions } from "./picker";
@@ -21,7 +22,7 @@ export function filterChips(d: Dashboard): string[] {
   return chips;
 }
 
-interface PickerSource {
+export interface PickerSource {
   title: string;
   items(d: Dashboard, query: string): PickerItem[];
   /** Start loading what the list shows, when it isn't loaded yet. */
@@ -174,6 +175,15 @@ function commandItems(d: Dashboard): PickerItem[] {
           item("Display options…", "D", () => d.openPicker("display"), act),
         ]),
     item("Change theme", THEMES[d.theme].label, () => d.openPicker("theme"), act),
+    item(
+      "Saved chats",
+      "Search prompts and answers",
+      () => {
+        d.openAgent();
+        d.openPicker("chats");
+      },
+      act,
+    ),
     ...(d.canConnectAgent ? [item("Connect Agent", "", () => void d.connectAgent(), act)] : []),
     item("Select Agent model", current ? modelName(current.model) : "Not set up", () => d.openPicker("model"), act),
     item(
@@ -194,6 +204,7 @@ function commandItems(d: Dashboard): PickerItem[] {
 }
 
 export const PICKERS: Record<PickerKind, PickerSource> = {
+  ...CHAT_PICKERS,
   board: boardPicker((d, board) => d.chooseBoard(board)),
   "sprint-board": boardPicker((d, board) => {
     d.chooseBoard(board);
@@ -210,6 +221,9 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
       item("/effort", "Change reasoning effort", () => d.openPicker("reasoning")),
       item("/new", "New session", () => d.agent.chat.start()),
       item("/clear", "Clear session", () => d.agent.chat.clear()),
+      item("/chats", "Find saved chats", () => d.openPicker("chats")),
+      item("/rename", "Rename chat", () => d.openPicker("chat-rename")),
+      item("/delete", "Delete chat", () => d.openPicker("chat-delete")),
       item("/copy", "Copy last answer", () => d.copyAgentAnswer()),
     ],
   },

@@ -51,6 +51,8 @@ export function drawAgent(
     canvas.put(status, left + 1, thread.draft.error, "error", room - 1);
   } else if (thread.draft.loading) {
     canvas.put(status, left + 1, "Attaching image…", "muted", room - 1);
+  } else if (chat.storageError) {
+    canvas.put(status, left + 1, chat.storageError, "error", room - 1);
   } else if (!chat.configured) {
     canvas.put(status, left + 1, "Ctrl+K · Connect Agent", "muted", room - 1);
   }

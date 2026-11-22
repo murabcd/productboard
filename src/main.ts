@@ -1,4 +1,5 @@
 import { version } from "../package.json";
+import { ChatArchive } from "./agent/archive";
 import { EveAgent } from "./agent/eve";
 import { loadCredentials, readConfig, rememberBoard, rememberTeamMode, rememberTheme } from "./auth";
 import { JiraClient } from "./jira/client";
@@ -84,12 +85,21 @@ async function check(client: JiraClient): Promise<number> {
 async function dashboard(client: JiraClient, screen: Screen): Promise<number> {
   const config = readConfig();
   const workspace = new Workspace(client, { preferredBoard: config?.board, rememberBoard });
+  let storageError = "";
+  const archive =
+    config &&
+    (await ChatArchive.open(ChatArchive.path(client.site, config.email)).catch(() => {
+      storageError = "Could not open saved chats. Check local disk space and permissions.";
+      return undefined;
+    }));
   const board = new Dashboard(workspace, client, macOpener, screen.redraw, {
+    archive,
     agent: EveAgent.create(client),
     connectAgent: async (theme) => ((await connectAgent(screen, theme)) ? EveAgent.create(client) : undefined),
     teamMode: { initial: config?.teamMode, save: rememberTeamMode },
     appearance: { initial: config?.theme, save: rememberTheme },
   });
+  if (storageError) board.agent.chat.storageError = storageError;
   // Scheduled refreshes and retries; the screen redraws only when state changes.
   const timer = setInterval(() => workspace.tick(), 1000);
   try {
