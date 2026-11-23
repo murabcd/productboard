@@ -28,7 +28,17 @@ brew install murabcd/tap/productboard
 ```
 
 The formula includes Bun and installs Node.js for Agent. Update with
-`brew upgrade murabcd/tap/productboard`. Run `productboard --version` to see your
+`productboard upgrade` (or `productboard update`). Like OpenCode, it detects the
+installation method, compares versions, and shows upgrade progress and the result.
+It refreshes Homebrew before checking `murabcd/tap/productboard` for a new release.
+Use `productboard upgrade --help` for options, or `--method brew` (`-m brew`) to
+select Homebrew explicitly. An optional target, such as `productboard upgrade v0.1.3`,
+must match the installed version or the version currently offered by the formula;
+Homebrew does not install arbitrary historical releases.
+You can also run `brew upgrade murabcd/tap/productboard` directly.
+Source checkouts must be updated from their source instead; `--method brew` targets
+the separate Homebrew installation.
+Run `productboard --version` to see your
 installed version, for example `productboard v0.1.3`. See
 [GitHub Releases](https://github.com/murabcd/productboard/releases) for version history.
 

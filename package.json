@@ -15,6 +15,7 @@
     "konsistent": "konsistent"
   },
   "dependencies": {
+    "@clack/prompts": "1.9.0",
     "@opentui/core": "0.8.3",
     "eve": "0.82.0",
     "just-bash": "3.1.0",

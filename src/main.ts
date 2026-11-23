@@ -11,19 +11,24 @@ import { clean } from "./text";
 import { DEFAULT_THEME } from "./theme";
 import { Dashboard } from "./ui/dashboard";
 import { openScreen, type Screen } from "./ui/screen";
+import { upgrade } from "./upgrade";
 
-const USAGE = `Usage: productboard [--login | --agent-login | --check | --version | --help]
+const USAGE = `Usage: productboard [upgrade | update | --login | --agent-login | --check | --version | --help]
 
-  productboard                Open the Inbox or start setup
-  productboard --login        Connect or update your Jira account
-  productboard --agent-login  Connect an Agent provider
-  productboard --check        Check Jira access without opening the dashboard
-  productboard --version      Print the Productboard version`;
+  productboard                  Open the Inbox or start setup
+  productboard upgrade [target]  Update Productboard (alias: update; --method brew)
+  productboard --login          Connect or update your Jira account
+  productboard --agent-login    Connect an Agent provider
+  productboard --check          Check Jira access without opening the dashboard
+  productboard --version        Print the Productboard version`;
 
 const COMMANDS = ["--login", "--agent-login", "--check"] as const;
 type LoginCommand = Exclude<(typeof COMMANDS)[number], "--check">;
 
 async function main(args: string[]): Promise<number> {
+  if (args[0] === "upgrade" || args[0] === "update") {
+    return upgrade(args.slice(1));
+  }
   if (args.includes("--help") || args.includes("-h")) return say(USAGE);
   if (args.includes("--version")) return say(`productboard v${version}`);
   const command = COMMANDS.find((flag) => args.includes(flag));

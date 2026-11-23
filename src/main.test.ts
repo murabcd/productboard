@@ -19,6 +19,7 @@ test("the installed productboard launcher finds Bun on PATH", async () => {
     expect(help.exitCode).toBe(0);
     expect(help.stdout.toString()).toStartWith("Usage: productboard ");
     expect(help.stdout.toString()).toContain("productboard --version");
+    expect(help.stdout.toString()).toContain("productboard upgrade [target]");
 
     const version = Bun.spawnSync([launcher, "--version"], options);
     expect(version.exitCode).toBe(0);
