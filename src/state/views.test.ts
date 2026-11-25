@@ -1,13 +1,13 @@
 import { expect, mock, test } from "bun:test";
+import { ALL_ASSIGNEES } from "../jira/assignee";
 import { initialQuery, PAGE, View } from "../jira/query";
 import { SavedView, SavedViews, type ViewDraft, viewQuery } from "./views";
 
 const draft: ViewDraft = {
   name: "Team overview",
   board: "42",
-  personLabel: "All people",
   breakdown: "status",
-  scope: { view: View.Team, project: "EX", sprintFilter: 27, assignee: "", status: "all" },
+  scope: { view: View.Team, project: "EX", sprintFilter: 27, assignee: ALL_ASSIGNEES, status: "all" },
 };
 
 test("saved scopes reset pagination and round-trip all filters without a local search", () => {
@@ -52,4 +52,42 @@ test("view validation sanitizes names, rejects unsupported scopes and invalid fi
     expect(SavedView.safeParse({ ...draft, id: "x", scope }).success).toBe(false);
   }
   expect(SavedView.safeParse({ ...draft, id: "x", name: " " }).success).toBe(false);
+});
+
+test("old single-person views migrate without losing their identity or display name", () => {
+  for (const id of ["", "alice", "unassigned"]) {
+    const view = SavedView.parse({
+      ...draft,
+      id: "legacy",
+      personLabel: "Alice",
+      scope: { ...draft.scope, assignee: id },
+    });
+    expect(view.scope.assignee).toEqual({ mode: "include", people: id ? [{ id, label: "Alice" }] : [] });
+    expect(view.id).toBe("legacy");
+  }
+});
+
+test("saved exclusions round-trip and only changes to mode or membership mark the view modified", () => {
+  const scope = {
+    ...draft.scope,
+    assignee: {
+      mode: "exclude" as const,
+      people: [
+        { id: "alice", label: "Alice" },
+        { id: "bob", label: "Bob" },
+      ],
+    },
+  };
+  const views = new SavedViews({ save: () => {} });
+  views.save({ ...draft, scope }, "team");
+  views.open("team");
+  const reopened = viewQuery(SavedView.parse(JSON.parse(JSON.stringify(views.current))).scope);
+  expect(reopened.assignee).toEqual(scope.assignee);
+  expect(
+    views.modified(
+      { ...reopened, assignee: { ...scope.assignee, people: [...scope.assignee.people].reverse() } },
+      "42",
+    ),
+  ).toBe(false);
+  expect(views.modified({ ...reopened, assignee: { ...scope.assignee, mode: "include" } }, "42")).toBe(true);
 });

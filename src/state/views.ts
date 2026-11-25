@@ -1,5 +1,6 @@
 /** Locally saved Jira scopes. Pagination belongs to the workspace, never the saved view. */
 import { z } from "zod";
+import { ALL_ASSIGNEES, AssigneeFilter } from "../jira/assignee";
 import { type IssueQuery, PAGE, STATUSES, sameScope, View } from "../jira/query";
 import { clean } from "../text";
 
@@ -15,10 +16,10 @@ export const SavedScope = z.object({
   view: z.union(VIEW_SCOPES.map((view) => z.literal(view))),
   project: z.string(),
   sprintFilter: z.number().int().positive().nullable(),
-  assignee: z.string(),
+  assignee: AssigneeFilter,
   status: z.enum(STATUSES),
 });
-export const SavedView = z.object({
+const ViewRecord = z.object({
   id: z.string().min(1),
   name: z
     .string()
@@ -26,9 +27,24 @@ export const SavedView = z.object({
     .pipe(z.string().min(1).max(45)),
   scope: SavedScope,
   board: z.string(),
-  personLabel: z.string().transform((label) => clean(label)),
   breakdown: z.enum(BREAKDOWNS),
 });
+/** Upgrade existing local single-person views at the preferences boundary. */
+export const SavedView = z.union([
+  ViewRecord,
+  ViewRecord.extend({
+    scope: SavedScope.extend({ assignee: z.string() }),
+    personLabel: z.string().transform((label) => clean(label)),
+  }).transform(({ personLabel, scope, ...view }) => ({
+    ...view,
+    scope: {
+      ...scope,
+      assignee: scope.assignee
+        ? { mode: "include" as const, people: [{ id: scope.assignee, label: personLabel }] }
+        : ALL_ASSIGNEES,
+    },
+  })),
+]);
 export type SavedView = z.infer<typeof SavedView>;
 export type ViewDraft = Omit<SavedView, "id">;
 export interface ViewPreferences {

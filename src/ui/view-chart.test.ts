@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { RGBA } from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
+import { ALL_ASSIGNEES } from "../jira/assignee";
 import { toIssue } from "../jira/parse";
 import { initialQuery, View } from "../jira/query";
 import type { Issue } from "../jira/types";
@@ -104,9 +105,8 @@ test.each(THEME_IDS)("OpenTUI preserves chart colors and compact click targets i
     const saved = d.views.saved.save({
       name: "Chart",
       board: "",
-      personLabel: "All people",
       breakdown: "status",
-      scope: { view: View.Team, project: "", sprintFilter: null, assignee: "", status: "all" },
+      scope: { view: View.Team, project: "", sprintFilter: null, assignee: ALL_ASSIGNEES, status: "all" },
     });
     d.views.open(saved.id);
     const screen = useRenderer(terminal.renderer, async () => {});

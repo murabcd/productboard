@@ -2,6 +2,7 @@
 
 import type { AgentBackend } from "./agent/chat";
 import { type AgentChoice, type ModelRef, promoteRecentModel } from "./auth";
+import type { AssigneeFilter } from "./jira/assignee";
 import type { Snapshot } from "./jira/client";
 import { type RawIssue, toIssue } from "./jira/parse";
 import type { IssueQuery } from "./jira/query";
@@ -93,4 +94,8 @@ export function fakeFetch(
   return Object.assign(async (input: string | URL | Request, init?: RequestInit) => answer(input, init), {
     preconnect: fetch.preconnect,
   });
+}
+
+export function assignees(...ids: string[]): AssigneeFilter {
+  return { mode: "include", people: ids.map((id) => ({ id, label: id })) };
 }

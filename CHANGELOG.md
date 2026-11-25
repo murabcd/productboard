@@ -2,8 +2,9 @@
 
 Release notes for Productboard, newest first.
 
-## v0.1.3 — 2026-11-22 (rebuilt 2026-11-23)
+## v0.1.3 — 2026-11-22 (rebuilt 2026-11-26)
 
+- Include or exclude multiple assignees across charts, saved views, and issue lists. Stage selections before applying them, filter Unassigned separately, and retain existing saved views.
 - Run `productboard upgrade` (alias `update`) to update through Homebrew, with installation detection, version checks, progress, and actionable errors.
 - Save Jira scopes as Views with status, assignee, and open-issue-age breakdowns; open their issues with Enter or preview a group with Space.
 - Reuse recent issue lists, sprint catalogs, and issue details for 60 seconds across navigation, retaining successful data during refreshes.

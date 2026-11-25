@@ -3,9 +3,10 @@ import { type ModelRef, REASONING_LEVELS, type Reasoning } from "../auth";
 import { STATUSES, type StatusFilter, View } from "../jira/query";
 import { type Choice, describeAttachment, SPRINT_STATES, shortSprintName, sprintChoice } from "../jira/types";
 import { THEME_IDS, THEMES } from "../theme";
+import { assigneeLabel, assigneePicker } from "./assignee-picker";
 import { CHAT_PICKERS } from "./chat-pickers";
 import type { Dashboard } from "./dashboard";
-import { assigneeChoices, projectChoices } from "./filter-choices";
+import { projectChoices } from "./filter-choices";
 import { NAVIGATION, navKey } from "./navigation";
 import type { PickerItem, PickerKind, PickerOptions } from "./picker";
 import { VIEW_PICKERS } from "./view-pickers";
@@ -19,7 +20,7 @@ export function filterChips(d: Dashboard): string[] {
   if (sprintFilter !== null) {
     chips.push(shortSprintName(sprintFilterName(d)));
   }
-  if (assignee) chips.push(`Assignee: ${d.personLabel}`);
+  if (assignee.people.length) chips.push(`Assignee: ${assigneeLabel(assignee)}`);
   if (status !== "all") chips.push(`Status: ${STATUS_LABELS[status]}`);
   return chips;
 }
@@ -262,13 +263,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
     },
     empty: ({ workspace }) => catalogStatus(workspace.projectCatalogError, workspace.projectsPending),
   },
-  assignee: {
-    title: "People in loaded issues",
-    items: (d) =>
-      fromChoices(assigneeChoices(d.workspace.issues), d.workspace.query.assignee, (person) =>
-        d.chooseAssignee(person.value, person.label),
-      ),
-  },
+  assignee: assigneePicker(),
   status: {
     title: "Status",
     items: (d) =>
@@ -316,7 +311,7 @@ export const PICKERS: Record<PickerKind, PickerSource> = {
     title: "Filter",
     items: (d) => {
       const { query } = d.workspace;
-      const person = query.view === View.Mine ? "You" : query.assignee ? d.personLabel : "Anyone";
+      const person = query.view === View.Mine ? "You" : assigneeLabel(query.assignee);
       const active = filterChips(d).length;
       const board = d.workspace.boards.find(({ value }) => value === d.workspace.board);
       return [

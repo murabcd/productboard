@@ -1,4 +1,5 @@
 import { expect, mock, test } from "bun:test";
+import { ALL_ASSIGNEES } from "../jira/assignee";
 import { type IssueQuery, initialQuery, View } from "../jira/query";
 import { type SavedView, type ViewDraft, viewQuery } from "../state/views";
 import { Workspace } from "../state/workspace";
@@ -14,9 +15,8 @@ const CREATE: Key = { name: "agent-send-now" };
 const draft: ViewDraft = {
   name: "Team overview",
   board: "42",
-  personLabel: "All people",
   breakdown: "status",
-  scope: { view: View.Team, project: "", sprintFilter: null, assignee: "", status: "all" },
+  scope: { view: View.Team, project: "", sprintFilter: null, assignee: ALL_ASSIGNEES, status: "all" },
 };
 
 function setup(save: (views: readonly SavedView[]) => void = mock(() => {})) {
@@ -93,6 +93,104 @@ test("creation isolates its draft, validates the name, and returns from nested p
   expect(work.query.view).toBe(View.Mine);
   expect(d.views.chart).toBe(true);
   expect(d.views.saved.all).toHaveLength(2);
+  await d.dispose();
+});
+
+test("shared assignee picker stages and cancels multiple exclusions, applies once, and reopens saved selections", async () => {
+  const { d, work, requests } = setup();
+  const rows = issues("EX-1", "EX-2", "EX-3").map((issue, index) => ({
+    ...issue,
+    assigneeId: ["alice", "bob", ""][index] ?? "",
+    assignee: ["Alice", "Bob", "Unassigned"][index] ?? "",
+  }));
+  work.snapshot = { ...snapshot(work.query, []), issues: rows };
+  d.views.open("team");
+  const original = work.query;
+  d.openPicker("assignee");
+  choose(d, "Exclude");
+  choose(d, "Alice");
+  choose(d, "Bob");
+  expect(d.picker?.kind).toBe("assignee");
+  expect(work.query).toBe(original);
+  expect(requests).toHaveLength(0);
+  d.handle(ESC);
+  expect(work.query).toBe(original);
+  d.openPicker("assignee");
+  choose(d, "Exclude");
+  choose(d, "Alice");
+  choose(d, "Bob");
+  expect(d.picker?.query).toBe("Bob");
+  expect(d.picker?.selected?.checked).toBe(true);
+  d.handle(CREATE);
+  expect(d.picker).toBeNull();
+  expect(requests).toHaveLength(1);
+  expect(work.query.assignee).toEqual({
+    mode: "exclude",
+    people: [
+      { id: "alice", label: "Alice" },
+      { id: "bob", label: "Bob" },
+    ],
+  });
+  requests[0]?.result.resolve({ ...snapshot(work.query, []), issues: rows.slice(2) });
+  await settle();
+  d.views.chooseBreakdown("assignee");
+  expect(d.views.buckets.map(({ label, issues }) => [label, issues.length])).toEqual([["Unassigned", 1]]);
+  expect(text(d)).toContain("Exclude Alice, Bob");
+  d.views.saveChanges();
+  d.showView(View.Mine);
+  expect(work.query.assignee.people).toEqual([]);
+  d.views.open("team");
+  expect(work.query.assignee.mode).toBe("exclude");
+  d.openPicker("assignee");
+  choose(d, "Alice"); // Still available after her issues have left the loaded results.
+  expect(d.picker?.selected?.checked).toBe(false);
+  choose(d, "Unassigned");
+  choose(d, "Apply filter");
+  expect(work.query.assignee.people.map(({ id }) => id)).toEqual(["bob", "unassigned"]);
+  d.openPicker("assignee");
+  choose(d, "Clear selection");
+  d.handle(CREATE);
+  expect(work.query.assignee).toEqual(ALL_ASSIGNEES);
+  await d.dispose();
+});
+
+test("new-view assignee filter shares the picker while preserving the workspace and cancelling nested edits", async () => {
+  const { d, work, requests } = setup();
+  const original = work.query;
+  d.views.create();
+  edit(d, "Without unassigned");
+  d.views.chooseScope(View.Mine);
+  d.views.field("assignee");
+  choose(d, "Exclude");
+  choose(d, "Unassigned");
+  d.handle(ESC);
+  expect(d.views.form?.draft.scope.assignee).toEqual(ALL_ASSIGNEES);
+  d.views.field("assignee");
+  choose(d, "Exclude");
+  choose(d, "Unassigned");
+  d.handle(CREATE);
+  expect(d.layer().kind).toBe("view-form");
+  expect(d.views.form?.draft.scope.view).toBe(View.Team);
+  expect(work.query).toBe(original);
+  expect(requests).toHaveLength(0);
+  d.handle(CREATE);
+  expect(d.views.current?.scope.assignee).toEqual({
+    mode: "exclude",
+    people: [{ id: "unassigned", label: "Unassigned" }],
+  });
+  expect(requests).toHaveLength(1);
+  await d.dispose();
+});
+
+test.each([60, 80, 140])("assignee selection and apply hints fit at width %i and minimum height", async (width) => {
+  const { d } = setup();
+  d.resize(width, 18);
+  d.openPicker("assignee");
+  expect(text(d)).toContain("^↵ Apply");
+  choose(d, "Unassigned");
+  expect(text(d)).toContain("✓");
+  d.handle(CREATE);
+  expect(d.workspace.query.assignee.people.map(({ id }) => id)).toEqual(["unassigned"]);
   await d.dispose();
 });
 

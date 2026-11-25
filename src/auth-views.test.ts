@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { View } from "./jira/query";
+import { SavedView } from "./state/views";
 
 test("saved views persist between launches and stay within the signed-in Jira identity", async () => {
   const directory = await mkdtemp(join(tmpdir(), "productboard-views-"));
@@ -42,12 +43,28 @@ test("saved views persist between launches and stay within the signed-in Jira id
     run(`import { rememberViews } from "./src/auth"; rememberViews(${JSON.stringify([view])});`);
     const read = () =>
       JSON.parse(run('import { readConfig } from "./src/auth"; console.log(JSON.stringify(readConfig()));'));
-    expect(read()).toEqual({ ...preferences, views: [view] });
+    const migrated = SavedView.parse(view);
+    expect(read()).toEqual({ ...preferences, views: [migrated] });
     const signIn = (site: string, email: string) =>
       run(`import { saveCredentials } from "./src/auth";
       saveCredentials({ site: ${JSON.stringify(site)}, email: ${JSON.stringify(email)}, token: "test-token" });`);
     signIn(preferences.site, preferences.email);
-    expect(read().views).toEqual([view]);
+    expect(read().views).toEqual([migrated]);
+    const excluded = {
+      ...migrated,
+      scope: {
+        ...migrated.scope,
+        assignee: {
+          mode: "exclude",
+          people: [
+            { id: "other", label: "Other person" },
+            { id: "unassigned", label: "Unassigned" },
+          ],
+        },
+      },
+    };
+    run(`import { rememberViews } from "./src/auth"; rememberViews(${JSON.stringify([excluded])});`);
+    expect(read().views).toEqual([excluded]);
     signIn(preferences.site, "another@example.com");
     expect(read().views).toBeUndefined();
     await writeFile(path, JSON.stringify({ ...preferences, views: [view] }));

@@ -35,7 +35,7 @@ export function pickerDialog(
   const tab = picker.tabName;
   const empty = shown.length === 0;
 
-  const height = 5 + Math.max(1, shown.length) + (empty || tab ? 2 : 0) + 1;
+  const height = 5 + Math.max(1, shown.length) + (empty || tab || picker.hint ? 2 : 0) + 1;
   const frame = dialogPanel(viewport, height, picker.title);
   const { panel: canvas } = frame;
   const inset = DIALOG_INSET;
@@ -49,6 +49,8 @@ export function pickerDialog(
   } else if (tab) {
     canvas.put(footer, inset, "tab", "text");
     canvas.put(footer, inset + 4, `${tab} ${picker.kind}s`, "muted", room - 4);
+  } else if (picker.hint) {
+    canvas.put(footer, inset, picker.hint, "muted", room);
   }
   return frame;
 }
@@ -104,6 +106,7 @@ function drawPickerRows(
     const active = choice.value === selected;
     if (active) canvas.paint(y, 1, width - 2, accentSelection ? "accent" : "selected");
     if (choice.current) canvas.put(y, inset - 1, "●", active && accentSelection ? "onAccent" : "accent");
+    if (choice.checked !== undefined) canvas.put(y, inset - 1, choice.checked ? "✓" : "○", "accent");
     const trailing = width - inset - Math.min(cells(choice.detail), Math.floor(room / 2));
     const detailLeft = fixedColumn ?? trailing;
     canvas.put(y, labelColumn, choice.label, active ? selectedLabel : "text", detailLeft - labelColumn - 2);

@@ -127,6 +127,20 @@ more when available and partial-result warnings retained in the footer.
 Changing filters or breakdown offers **Save changes**, which updates the same
 view. **Ctrl+K → Views** opens all saved views on narrow panes or when the
 sidebar fills up. **Ctrl+K → Delete view** asks before removing a view.
+
+The shared **Assignee** filter works in saved charts, their issue lists, and
+regular issue pages. Press **a**, or open **Filter → Assignee**. Choose
+**Include** or **Exclude**, then use **Enter** or click to toggle multiple
+people. Search finds people in the loaded issues; selected people remain
+available after filtering. **Ctrl+Enter** or **Apply filter** applies the
+selection once; **Esc** cancels. **Clear selection**, then apply, restores all
+people. Unassigned is a separate choice: excluding people keeps unassigned
+issues unless you also exclude **Unassigned**.
+
+Assignee filters run in Jira, so loaded chart counts, percentages, and
+drilldowns use the filtered results. Use **Save changes** to keep the selection
+in a saved view, or set it in **New view → Assignee**. **My issues → Assigned**
+always opens your own issues; applying a person filter there opens **Team issues**.
 Views are stored locally with preferences in
 `~/.config/productboard/config.json`. Signing in with another Jira site or
 email clears the saved views; no Jira data is written.

@@ -2,7 +2,8 @@
 import { View } from "../jira/query";
 import { sprintChoice } from "../jira/types";
 import { BREAKDOWN_NAMES, BREAKDOWNS, VIEW_SCOPES } from "../state/views";
-import { assigneeChoices, projectChoices } from "./filter-choices";
+import { assigneePicker } from "./assignee-picker";
+import { projectChoices } from "./filter-choices";
 import { pageOf } from "./navigation";
 import type { PickerSource } from "./pickers";
 
@@ -83,21 +84,7 @@ export const VIEW_PICKERS = {
         }),
       ),
   },
-  "view-assignee": {
-    title: "People in loaded issues",
-    items: (d) =>
-      assigneeChoices(d.workspace.issues).map((choice) => ({
-        ...choice,
-        current: choice.value === d.views.form?.draft.scope.assignee,
-        run: () => {
-          const form = d.views.form;
-          if (!form) return;
-          if (form.draft.scope.view === View.Mine && choice.value) form.draft.scope.view = View.Team;
-          form.draft.scope.assignee = choice.value;
-          form.draft.personLabel = choice.label;
-        },
-      })),
-  },
+  "view-assignee": assigneePicker(true),
   "view-draft-breakdown": {
     title: "Breakdown",
     items: (d) =>

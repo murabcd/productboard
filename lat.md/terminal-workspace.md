@@ -312,6 +312,18 @@ Jira site or email clears them.
 
 Pagination and local text searches are not saved. A failed preference write leaves the saved records unchanged and reports the error.
 
+[[src/ui/assignee-picker.ts#AssigneeSelection]] holds a separate multi-person
+Include/Exclude draft for the shared Assignee picker on charts, issue pages and
+new-view forms. Enter and clicks toggle choices without changing the scope or
+starting reads. Ctrl+Enter or Apply filter commits once; Escape discards the
+picker draft. Selected accounts remain available after their issues disappear
+from loaded results. Unassigned is independently selectable. Clear selection
+then apply restores everyone. A new-view picker updates only its form draft.
+[[src/ui/picker.ts#PickerItem]] marks draft edits that keep the picker open;
+[[src/ui/dashboard.ts#Dashboard]] shares activation for keyboard and mouse.
+[[src/state/views.ts#SavedView]] upgrades old single-person preferences at the
+read boundary; new records save mode, account IDs and sanitized labels together.
+
 [[src/ui/views.ts#ViewPanel]] owns creation, chart navigation and drilldowns.
 [[src/ui/view-form.ts#ViewForm]] holds a separate draft in the standard 60-column
 [[src/ui/dialog.ts#dialogPanel]] with the native [[src/ui/search-input.ts#SearchInput]]

@@ -2,6 +2,7 @@
 
 import type { ChatArchive } from "../agent/archive";
 import type { AgentBackend } from "../agent/chat";
+import { ALL_ASSIGNEES, type AssigneeFilter } from "../jira/assignee";
 import type { JiraClient } from "../jira/client";
 import { type IssueQuery, STATUSES, scoped, type TeamMode, View, withAssignee, withView } from "../jira/query";
 import { type Attachment, type Issue, isImage } from "../jira/types";
@@ -10,6 +11,7 @@ import { message, type Workspace } from "../state/workspace";
 import { DEFAULT_THEME, type ThemeId } from "../theme";
 import { AgentPanel } from "./agent-panel";
 import { toolPanel } from "./agent-tool";
+import type { AssigneeSelection } from "./assignee-picker";
 import { ContextPicker } from "./context-picker";
 import { type Action, bindings, type Key, keyId, type SearchEdit, type Target } from "./input";
 import { IssueDetails, type IssueRead } from "./issue-details";
@@ -76,7 +78,7 @@ export class Dashboard {
   readonly list: IssueList;
   readonly views: ViewPanel;
   private issueSearch?: IssueSearch;
-  personLabel = "All people";
+  assignees: AssigneeSelection | null = null;
   picker: Picker | null = null;
   modal: Panel | null = null;
   /** A short confirmation or error after open/copy; it clears itself. */
@@ -270,8 +272,9 @@ export class Dashboard {
 
   /** Close the picker and do what the chosen item does, which may open the next one. */
   private pick(item: PickerItem): void {
-    this.closePicker({ finish: true });
+    if (!item.keepOpen) this.closePicker({ finish: true });
     item.run();
+    this.picker?.refresh();
   }
 
   changeQuery(change: Partial<IssueQuery>): void {
@@ -286,10 +289,9 @@ export class Dashboard {
     this.workspace.chooseBoard(board);
   }
 
-  chooseAssignee(assignee: string, label: string): void {
+  chooseAssignee(assignee: AssigneeFilter): void {
     this.views.changedScope();
     this.list.filter("");
-    this.personLabel = label;
     this.workspace.change(withAssignee(this.workspace.query, assignee));
   }
 
@@ -360,9 +362,9 @@ export class Dashboard {
     const { query } = this.workspace;
     this.views.changedScope();
     this.list.filter("");
-    if (!query.project && !query.assignee && query.status === "all" && query.sprintFilter === null) return;
-    this.personLabel = "All people";
-    this.workspace.change(scoped(query, { project: "", assignee: "", status: "all", sprintFilter: null }));
+    if (!query.project && !query.assignee.people.length && query.status === "all" && query.sprintFilter === null)
+      return;
+    this.workspace.change(scoped(query, { project: "", assignee: ALL_ASSIGNEES, status: "all", sprintFilter: null }));
   }
 
   openAgent(): void {
@@ -607,6 +609,11 @@ export class Dashboard {
   }
 
   private handlePicker(picker: Picker, key: Key): void {
+    if (keyId(key) === "agent-send-now" && picker.submit) {
+      this.closePicker({ finish: true });
+      picker.submit();
+      return;
+    }
     const inline = picker === this.composerMenu;
     const selectionKey: Key = inline && keyId(key) === "tab" ? { name: "enter" } : key;
     const picked = picker.handle(selectionKey, inline ? this.composerMenuCapacity : pickerRows(this.height));

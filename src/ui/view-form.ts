@@ -1,7 +1,10 @@
 /** The creation dialog reuses the workspace's native single-line editor and picker controls. */
+
+import { ALL_ASSIGNEES } from "../jira/assignee";
 import { View } from "../jira/query";
 import type { ViewDraft } from "../state/views";
 import { BREAKDOWN_NAMES } from "../state/views";
+import { assigneeLabel } from "./assignee-picker";
 import type { Canvas } from "./canvas";
 import { button } from "./controls";
 import { type DialogFrame, dialogPanel } from "./dialog";
@@ -28,9 +31,8 @@ export class ViewForm {
     this.draft = {
       name: "",
       board,
-      personLabel: "All people",
       breakdown: "status",
-      scope: { view: View.Team, project: "", sprintFilter: null, assignee: "", status: "all" },
+      scope: { view: View.Team, project: "", sprintFilter: null, assignee: ALL_ASSIGNEES, status: "all" },
     };
   }
 
@@ -85,7 +87,7 @@ export function viewFormDialog(
     breakdown: BREAKDOWN_NAMES[draft.breakdown],
     project: draft.scope.project || "All projects",
     sprint,
-    assignee: draft.scope.view === View.Mine ? "You" : draft.personLabel,
+    assignee: draft.scope.view === View.Mine ? "You" : assigneeLabel(draft.scope.assignee),
   };
   VIEW_FIELDS.slice(1).forEach((field, index) => {
     if (field === "name") return;

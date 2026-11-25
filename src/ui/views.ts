@@ -1,4 +1,6 @@
 /** Saved-view interaction stays here; Dashboard routes input and the workspace owns Jira reads. */
+
+import { ALL_ASSIGNEES } from "../jira/assignee";
 import { View } from "../jira/query";
 import {
   BREAKDOWNS,
@@ -70,7 +72,6 @@ export class ViewPanel {
     d.showScope(viewQuery(view.scope), view.board);
     d.list.filter("");
     this.saved.open(id);
-    d.personLabel = view.personLabel;
   }
 
   field(field: ViewField): void {
@@ -113,7 +114,6 @@ export class ViewPanel {
           ...current,
           scope: savedScope(d.workspace.query),
           board: d.workspace.board,
-          personLabel: d.personLabel,
           breakdown: active.breakdown,
         },
         current.id,
@@ -221,8 +221,7 @@ export class ViewPanel {
     const form = this.form;
     if (!form) return;
     if (view === View.Mine) {
-      form.draft.scope.assignee = "";
-      form.draft.personLabel = "All people";
+      form.draft.scope.assignee = ALL_ASSIGNEES;
     }
     form.draft.scope.view = view;
   }

@@ -43,6 +43,15 @@ recently updated issues without applying a workspace view.
 
 The optional sprint filter adds a Jira sprint ID to the current view's query.
 Needs attention applies the project, sprint, assignee, and status filters to its searches.
+[[src/jira/assignee.ts#AssigneeFilter]] represents an Include or Exclude account
+set with display labels. [[src/jira/query.ts#jql]] applies that set to every issue
+read, including attention searches and saved scopes. Unassigned is a separate
+selection. Excluding accounts retains empty assignees unless Unassigned is also
+excluded; mixed selections are grouped before combining with other filters.
+Scope equality compares mode and account membership, ignoring selection order
+and display labels, so caches and late-response checks share the same identity.
+An empty selection means everyone. Opening Assigned clears the person filter;
+applying a nonempty filter there transitions to Team issues.
 With the Done filter, only recent mentions and changes to your issues are
 queried because the other sections show open work.
 

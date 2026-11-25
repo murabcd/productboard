@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { rawComment, rawIssue } from "../testing";
+import { assignees, rawComment, rawIssue } from "../testing";
 import { JiraError } from "./http";
 import { type RawIssue, toComments, toIssue } from "./parse";
 import { initialQuery, View } from "./query";
@@ -247,12 +247,21 @@ describe("Today", () => {
 
   test("project, sprint and assignee filters narrow every search, including mentions", async () => {
     const fake = source([]);
-    await today(fake, { ...query, project: "EX", sprintFilter: 42, assignee: "dev" }, { now: NOW });
+    await today(fake, { ...query, project: "EX", sprintFilter: 42, assignee: assignees("dev") }, { now: NOW });
     expect(fake.searches).toHaveLength(5);
     for (const jql of fake.searches) {
       expect(jql).toContain('project = "EX"');
       expect(jql).toContain("sprint = 42");
       expect(jql).toContain('assignee = "dev"');
+    }
+  });
+
+  test("every attention read applies the same multi-person exclusion with unassigned preserved", async () => {
+    const fake = source([]);
+    await today(fake, { ...query, assignee: { ...assignees("alice", "bob"), mode: "exclude" } }, { now: NOW });
+    expect(fake.searches).toHaveLength(5);
+    for (const jql of fake.searches) {
+      expect(jql).toContain('(assignee NOT IN ("alice", "bob") OR assignee IS EMPTY)');
     }
   });
 

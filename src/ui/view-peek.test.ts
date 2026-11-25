@@ -1,5 +1,6 @@
 import { expect, mock, test } from "bun:test";
 import { createTestRenderer } from "@opentui/core/testing";
+import { ALL_ASSIGNEES } from "../jira/assignee";
 import { initialQuery, View } from "../jira/query";
 import type { Issue } from "../jira/types";
 import { Workspace } from "../state/workspace";
@@ -38,9 +39,8 @@ function setup() {
   );
   const view = d.views.saved.save({
     name: "Delivery",
-    scope: { view: View.Team, project: "", sprintFilter: null, assignee: "", status: "all" },
+    scope: { view: View.Team, project: "", sprintFilter: null, assignee: ALL_ASSIGNEES, status: "all" },
     board: "",
-    personLabel: "All people",
     breakdown: "status",
   });
   d.resize(156, 38);

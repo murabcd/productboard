@@ -39,6 +39,9 @@ export interface PickerItem {
   group?: string;
   /** What is chosen now; marked ● and focused when the list opens. */
   current?: boolean;
+  checked?: boolean;
+  /** Draft edits keep the picker open; normal actions finish it. */
+  keepOpen?: boolean;
   run(): void;
 }
 
@@ -50,6 +53,8 @@ export interface PickerOptions {
   detailLayout?: "trailing" | number;
   placement?: "dialog" | "completion" | "composer";
   onFinish?: () => void;
+  submit?: () => void;
+  hint?: string;
   /** Tab cycles these choice states; "all" shows every choice. */
   tabs?: string[];
   tab?: number;
@@ -66,6 +71,8 @@ export class Picker<Kind extends string = PickerKind> {
   readonly detailLayout: NonNullable<PickerOptions["detailLayout"]>;
   readonly placement: NonNullable<PickerOptions["placement"]>;
   readonly onFinish: PickerOptions["onFinish"];
+  readonly submit: PickerOptions["submit"];
+  readonly hint: PickerOptions["hint"];
   private readonly filterChoices: boolean;
   private readonly keepGroupHeading: boolean;
   private rows: Row[] = [];
@@ -79,6 +86,8 @@ export class Picker<Kind extends string = PickerKind> {
     this.detailLayout = options.detailLayout ?? "trailing";
     this.placement = options.placement ?? "dialog";
     this.onFinish = options.onFinish;
+    this.submit = options.submit;
+    this.hint = options.hint;
     this.filterChoices = options.filterChoices ?? true;
     this.keepGroupHeading = options.keepGroupHeading ?? false;
     this.tabs = options.tabs ?? [];

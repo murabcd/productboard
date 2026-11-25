@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { deferred, fakeFetch, rawComment, rawIssue, settle } from "../testing";
+import { assignees, deferred, fakeFetch, rawComment, rawIssue, settle } from "../testing";
 import { JiraClient } from "./client";
 import { JiraError, JiraHttp } from "./http";
 import { initialQuery, View, withView } from "./query";
@@ -254,7 +254,7 @@ describe("search", () => {
         view: View.Team,
         project: "EX",
         sprintFilter: 36,
-        assignee: "other",
+        assignee: assignees("other"),
         status: "done",
       });
       expect(requests.at(-1)?.body?.jql).toBe(

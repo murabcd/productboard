@@ -270,6 +270,56 @@ describe("OpenTUI shell", () => {
     expect(setup.captureCharFrame()).toMatch(/› EX-2/);
   });
 
+  test("native assignee search keeps multi-selection open, cancels edits and applies with Ctrl+Enter", async () => {
+    const { setup, dashboard } = await start();
+    try {
+      const work = dashboard.workspace;
+      const original = work.query;
+      work.snapshot = {
+        ...snapshot(work.query, []),
+        issues: [
+          toIssue(rawIssue("EX-1", "new", { person: { accountId: "alice", displayName: "Alice" } })),
+          toIssue(rawIssue("EX-2", "new", { person: { accountId: "bob", displayName: "Bob" } })),
+        ],
+      };
+      await setup.mockInput.typeText("a");
+      await setup.renderOnce();
+      await setup.mockInput.typeText("Exclude");
+      setup.mockInput.pressEnter();
+      setup.mockInput.pressEscape();
+      await Bun.sleep(50); // A standalone Escape waits for the terminal sequence timeout.
+      await setup.renderOnce();
+      expect(dashboard.picker).toBeNull();
+      expect(work.query).toBe(original);
+      await setup.mockInput.typeText("a");
+      await setup.mockInput.typeText("Exclude");
+      setup.mockInput.pressEnter();
+      // Native input editing changes only the search, preserving staged choices.
+      for (let i = 0; i < "Exclude".length; i++) setup.mockInput.pressBackspace();
+      await setup.mockInput.typeText("Alice");
+      setup.mockInput.pressEnter();
+      await setup.renderOnce();
+      expect(setup.captureCharFrame()).toContain("✓ Alice");
+      expect(work.query).toBe(original);
+      for (let i = 0; i < "Alice".length; i++) setup.mockInput.pressBackspace();
+      await setup.mockInput.typeText("Bob");
+      setup.mockInput.pressEnter();
+      setup.mockInput.pressKey("\x1b[13;5u");
+      await setup.renderOnce();
+      expect(dashboard.picker).toBeNull();
+      expect(work.query.view).toBe(View.Team);
+      expect(work.query.assignee).toEqual({
+        mode: "exclude",
+        people: [
+          { id: "alice", label: "Alice" },
+          { id: "bob", label: "Bob" },
+        ],
+      });
+    } finally {
+      await dashboard.dispose();
+    }
+  });
+
   test("clicking a row selects it and the wheel moves the selection", async () => {
     const { setup, dashboard } = await start();
     await setup.mockMouse.click(30, 8); // EX-2's row

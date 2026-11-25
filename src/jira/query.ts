@@ -1,4 +1,5 @@
 /** Each view owns its server-side Jira scope. */
+import { ALL_ASSIGNEES, type AssigneeFilter, sameAssignees } from "./assignee";
 
 export const View = {
   Mine: 2,
@@ -28,8 +29,7 @@ export interface IssueQuery {
   readonly view: View;
   readonly sprintFilter: number | null;
   readonly project: string;
-  /** An account ID, "unassigned", or "" for everyone. */
-  readonly assignee: string;
+  readonly assignee: AssigneeFilter;
   readonly status: StatusFilter;
   /** Search view: words to find across Jira, or an issue key. */
   readonly text: string;
@@ -40,7 +40,7 @@ export const initialQuery: IssueQuery = {
   view: View.Mentions,
   sprintFilter: null,
   project: "",
-  assignee: "",
+  assignee: ALL_ASSIGNEES,
   status: "all",
   text: "",
   limit: PAGE,
@@ -54,12 +54,12 @@ export function scoped(query: IssueQuery, changes: ScopeChanges): IssueQuery {
 }
 
 export function withView(query: IssueQuery, view: View): IssueQuery {
-  return scoped(query, { view, assignee: view === View.Mine ? "" : query.assignee });
+  return scoped(query, { view, assignee: view === View.Mine ? ALL_ASSIGNEES : query.assignee });
 }
 
 /** Assigned is always scoped to you; use Team issues to filter by assignee. */
-export function withAssignee(query: IssueQuery, assignee: string): IssueQuery {
-  const view = assignee && query.view === View.Mine ? View.Team : query.view;
+export function withAssignee(query: IssueQuery, assignee: AssigneeFilter): IssueQuery {
+  const view = assignee.people.length && query.view === View.Mine ? View.Team : query.view;
   return scoped(query, { view, assignee });
 }
 
@@ -71,7 +71,7 @@ export function sameScope(a: IssueQuery, b: IssueQuery): boolean {
     a.view === b.view &&
     a.sprintFilter === b.sprintFilter &&
     a.project === b.project &&
-    a.assignee === b.assignee &&
+    sameAssignees(a.assignee, b.assignee) &&
     a.status === b.status &&
     a.text === b.text
   );
@@ -88,12 +88,28 @@ export function jql(query: IssueQuery, ...extra: string[]): string {
   if (query.view === View.Mentions) terms.push(`updated >= -${MENTION_DAYS}d`);
   if (query.view === View.Search) terms.push(textTerm(query.text));
   if (query.project) terms.push(`project = ${JSON.stringify(query.project)}`);
-  if (query.assignee) {
-    terms.push(query.assignee === "unassigned" ? "assignee IS EMPTY" : `assignee = ${JSON.stringify(query.assignee)}`);
-  }
+  const assignee = assigneeTerm(query.assignee);
+  if (assignee) terms.push(assignee);
   if (query.status === "open") terms.push("statusCategory != Done");
   if (query.status === "done") terms.push("statusCategory = Done");
   return terms.length ? `${terms.join(" AND ")} ${UPDATED_ORDER}` : RECENT_ISSUES_JQL;
+}
+
+function assigneeTerm({ mode, people }: AssigneeFilter): string {
+  if (!people.length) return "";
+  const ids = [...new Set(people.map((person) => person.id))];
+  const unassigned = ids.includes("unassigned");
+  const accounts = ids.filter((id) => id !== "unassigned");
+  const empty = mode === "include" ? "assignee IS EMPTY" : "assignee IS NOT EMPTY";
+  if (!accounts.length) return empty;
+  const values = accounts.map((id) => JSON.stringify(id)).join(", ");
+  const match =
+    accounts.length === 1
+      ? `assignee ${mode === "include" ? "=" : "!="} ${values}`
+      : `assignee ${mode === "include" ? "IN" : "NOT IN"} (${values})`;
+  if (mode === "include") return unassigned ? `(${match} OR ${empty})` : match;
+  // Jira's negative comparisons omit empty fields unless explicitly included.
+  return unassigned ? `(${match} AND ${empty})` : `(${match} OR assignee IS EMPTY)`;
 }
 
 const ISSUE_KEY = /^[A-Z][A-Z0-9_]*-\d+$/i;

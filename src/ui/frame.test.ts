@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ALL_ASSIGNEES } from "../jira/assignee";
 import { initialQuery, View } from "../jira/query";
 import { Workspace } from "../state/workspace";
 import { deferred, snapshot } from "../testing";
@@ -87,9 +88,8 @@ describe("issue rows", () => {
     const view = dashboard.views.saved.save({
       name: "Delivery",
       board: "",
-      personLabel: "All people",
       breakdown: "status",
-      scope: { view: View.Team, project: "", sprintFilter: null, assignee: "", status: "all" },
+      scope: { view: View.Team, project: "", sprintFilter: null, assignee: ALL_ASSIGNEES, status: "all" },
     });
     dashboard.resize(width, 24);
     dashboard.views.open(view.id);

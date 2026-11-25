@@ -6,7 +6,7 @@ import { initialQuery, View } from "../jira/query";
 import type { Detail } from "../jira/types";
 import { workflowStage } from "../jira/workflow";
 import { type Source, Workspace } from "../state/workspace";
-import { deferred, fakeAgent, rawComment, settle, snapshot } from "../testing";
+import { assignees, deferred, fakeAgent, rawComment, settle, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
 import { frame } from "./frame";
 import type { Key } from "./input";
@@ -544,7 +544,14 @@ describe("concept layout", () => {
   test("team modes preserve every filter, reset pagination and reject a late response", async () => {
     const { dashboard, work, source } = setup();
     dashboard.showPage(View.Team);
-    work.query = { ...work.query, project: "EX", sprintFilter: 36, assignee: "other", status: "done", limit: 600 };
+    work.query = {
+      ...work.query,
+      project: "EX",
+      sprintFilter: 36,
+      assignee: assignees("other"),
+      status: "done",
+      limit: 600,
+    };
     dashboard.list.filter("EX");
     const attention = deferred<ReturnType<typeof snapshot>>();
     source.snapshot.mockImplementationOnce(() => attention.promise);
@@ -554,7 +561,7 @@ describe("concept layout", () => {
       view: View.Today,
       project: "EX",
       sprintFilter: 36,
-      assignee: "other",
+      assignee: assignees("other"),
       status: "done",
       limit: 200,
     });
@@ -589,7 +596,7 @@ describe("concept layout", () => {
     dashboard.handle({ name: "tab" });
     expect(work.query.view).toBe(View.Today);
     dashboard.showView(View.Mine);
-    dashboard.chooseAssignee("other", "Other person");
+    dashboard.chooseAssignee({ mode: "include", people: [{ id: "other", label: "Other person" }] });
     expect(work.query.view).toBe(View.Team);
     expect(save).toHaveBeenLastCalledWith("all");
     dashboard.showView(View.Mentions);

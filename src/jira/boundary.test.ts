@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { period, shortDate, usDate, usDateTime, when } from "../dates";
-import { rawComment, rawIssue, textDoc } from "../testing";
+import { assignees, rawComment, rawIssue, textDoc } from "../testing";
 import { clean, clip } from "../text";
 import { plainText, toDoc } from "./adf";
+import { ALL_ASSIGNEES } from "./assignee";
 import { decode, RawIssue, toComments, toDetail, toIssue } from "./parse";
 import { initialQuery, jql, View, withAssignee, withView } from "./query";
 import { describeAttachment, sprintDates } from "./types";
@@ -127,13 +128,15 @@ describe("scopes", () => {
       ...initialQuery,
       view: View.Today,
       project: "EX",
-      assignee: 'id" OR project=SECRET',
+      assignee: assignees('id" OR project=SECRET'),
       status: "open",
     });
     expect(query).toContain('project = "EX"');
     expect(query).toContain('assignee = "id\\" OR project=SECRET"');
     expect(query).toContain("statusCategory != Done");
-    expect(jql({ ...initialQuery, view: View.Today, assignee: "unassigned" })).toContain("assignee IS EMPTY");
+    expect(jql({ ...initialQuery, view: View.Today, assignee: assignees("unassigned") })).toContain(
+      "assignee IS EMPTY",
+    );
   });
 
   test("Mentions reads recently updated issues and keeps project filters", () => {
@@ -151,12 +154,12 @@ describe("scopes", () => {
   });
 
   test("Assigned resets the assignee filter; choosing a person there opens Team issues", () => {
-    const team = { ...initialQuery, view: View.Today, assignee: "someone", limit: 600 };
-    expect(withView(team, View.Mine)).toMatchObject({ assignee: "", limit: 200 });
-    expect(withView(team, View.Created).assignee).toBe("someone");
-    expect(withAssignee({ ...initialQuery, view: View.Mine }, "other")).toMatchObject({
+    const team = { ...initialQuery, view: View.Today, assignee: assignees("someone"), limit: 600 };
+    expect(withView(team, View.Mine)).toMatchObject({ assignee: ALL_ASSIGNEES, limit: 200 });
+    expect(withView(team, View.Created).assignee).toEqual(assignees("someone"));
+    expect(withAssignee({ ...initialQuery, view: View.Mine }, assignees("other"))).toMatchObject({
       view: View.Team,
-      assignee: "other",
+      assignee: assignees("other"),
     });
   });
 });

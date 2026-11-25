@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { Snapshot } from "../jira/client";
 import { type IssueQuery, initialQuery, View } from "../jira/query";
 import type { Choice, Sprint } from "../jira/types";
-import { deferred, settle, snapshot } from "../testing";
+import { assignees, deferred, settle, snapshot } from "../testing";
 import { REFRESH_MS, type Source, Workspace } from "./workspace";
 
 function setup() {
@@ -95,12 +95,12 @@ test("pagination and query filters have distinct entries; late responses cannot 
   await answer(["EX-1"], true);
   work.loadMore();
   await answer(["EX-1", "EX-2"]);
-  work.change({ ...a, assignee: "unassigned" });
+  work.change({ ...a, assignee: assignees("unassigned") });
   work.change(a);
   expect(work.issues).toHaveLength(1);
   expect(work.more).toBe(true);
   expect(requests.at(-1)?.signal.aborted).toBe(true);
-  requests.at(-1)?.reply.resolve(snapshot({ ...a, assignee: "unassigned" }, ["EX-OLD"]));
+  requests.at(-1)?.reply.resolve(snapshot({ ...a, assignee: assignees("unassigned") }, ["EX-OLD"]));
   await settle();
   expect(work.issues[0]?.key).toBe("EX-1");
   work.loadMore();
@@ -127,6 +127,29 @@ test("recently used queries survive bounded eviction", async () => {
   expect(requests).toHaveLength(21);
   work.change({ ...a, project: "1" });
   expect(requests).toHaveLength(22);
+});
+
+test("assignee modes have separate cache entries and late included rows cannot replace exclusions", async () => {
+  const { work, requests, a, answer } = setup();
+  const included = { ...a, assignee: assignees("alice", "bob") };
+  const excluded = { ...a, assignee: { ...included.assignee, mode: "exclude" as const } };
+  work.change(included);
+  await answer(["EX-ALICE"]);
+  work.refresh();
+  const late = requests.at(-1);
+  work.change(excluded);
+  expect(late?.signal.aborted).toBe(true);
+  expect(work.issues).toEqual([]);
+  await answer(["EX-OTHER"]);
+  late?.reply.resolve(snapshot(included, ["EX-LATE"]));
+  await settle();
+  expect(work.issues[0]?.key).toBe("EX-OTHER");
+  work.change({ ...included, assignee: assignees("bob", "alice") });
+  expect(work.issues[0]?.key).toBe("EX-ALICE");
+  expect(requests).toHaveLength(3);
+  work.change(excluded);
+  expect(work.issues[0]?.key).toBe("EX-OTHER");
+  expect(requests).toHaveLength(3);
 });
 
 test("board switches and empty sprint pickers reuse recent catalogs, then refresh stale choices", async () => {
