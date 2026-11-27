@@ -3,7 +3,7 @@
 import { NAVIGATION, navKey } from "./navigation";
 
 const section = (title: string, rows: [keys: string, does: string][]): string =>
-  [title, ...rows.map(([keys, does]) => `  ${keys.padEnd(14)}${does}`)].join("\n");
+  [title, ...rows.map(([keys, does]) => `  ${keys.padEnd(14)} ${does}`)].join("\n");
 
 export const HELP = [
   section("Pages", [
@@ -43,7 +43,8 @@ export const HELP = [
     ["Enter", "Open the selected bar’s issues"],
     ["Esc", "Close peek, then return to chart"],
     ["Tab Shift-Tab", "Next / previous creation field"],
-    ["Ctrl-Enter", "Create view"],
+    ["Enter", "Select a field or Create view"],
+    ["Ctrl-Enter", "Create view from any field"],
   ]),
   section("Details", [
     ["↑ ↓  PgUp PgDn", "Scroll"],

@@ -5,7 +5,7 @@ import { BREAKDOWN_NAMES, type Breakdown } from "../state/views";
 import type { Canvas } from "./canvas";
 import { action, buttons, buttonsRight, type Control, controlsWidth } from "./controls";
 import type { Dashboard } from "./dashboard";
-import type { headerRows } from "./layout";
+import { compactLayout, type headerRows } from "./layout";
 import { AGENT, pageOf } from "./navigation";
 import { filterChips } from "./pickers";
 
@@ -100,6 +100,29 @@ export function pageHeader(d: Dashboard): PageHeader {
 
 export function drawHeader(canvas: Canvas, header: PageHeader, rows: ReturnType<typeof headerRows>): void {
   const { width } = canvas;
+  if (compactLayout(width)) {
+    canvas.put(rows.description, 2, header.description, "muted", width - 4);
+    buttons(
+      canvas,
+      rows.toolbar - 1,
+      2,
+      header.tabs.map((tab) => ({
+        ...tab,
+        label: tab.label === "All issues" ? "All" : tab.label === "Needs attention" ? "Attention" : tab.label,
+      })),
+      width - 2,
+    );
+    const actions = header.actions.length > 1 ? [{ label: "More ▾", target: action("commands") }] : header.actions;
+    const right = buttonsRight(canvas, rows.toolbar, width - 2, actions) - 1;
+    buttons(
+      canvas,
+      rows.toolbar,
+      2,
+      header.filters.filter((control) => control.target),
+      right,
+    );
+    return;
+  }
   canvas.put(rows.description, 2, header.description, "muted", width - 4);
   const right = header.actions.length ? buttonsRight(canvas, rows.toolbar, width - 2, header.actions) - 2 : width - 2;
   const tabsAbove =

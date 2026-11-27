@@ -92,6 +92,17 @@ and Inbox, My issues, and Team issues. Sidebar icons use Nerd Font glyphs.
 and the command palette. On narrow panes, the same order appears as tabs
 below the title bar.
 
+The workspace supports panes from 32 columns × 18 rows. Below 60 columns,
+the page dropdown opens the command palette in place of navigation tabs.
+Issue metadata and summaries occupy separate rows; the issue-list projection
+counts both for scrolling and paging. Resizing preserves the selected issue.
+Full details wrap the summary, and compact footers give sync warnings their
+own row. Desktop panes retain the existing columns and navigation.
+Compact toolbars use the command palette for overflow actions, including
+saved-view breakdowns and returning to a chart. The shortcut guide wraps its
+explanations. View creation includes a focusable Create view control activated
+with Enter, alongside the existing Ctrl+Enter shortcut.
+
 [[src/ui/header.ts#pageHeader]] supplies the title for the row shared with the
 app name and command palette shortcut. [[src/ui/header.ts#drawHeader]] draws
 the description and toolbar below, including tabs, filters, and page actions.

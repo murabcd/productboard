@@ -77,6 +77,10 @@ export class ViewPanel {
   field(field: ViewField): void {
     if (!this.form) return;
     this.form.field = field;
+    if (field === "create") {
+      this.saveForm();
+      return;
+    }
     if (field !== "name") this.dashboard.openPicker(field === "breakdown" ? "view-draft-breakdown" : `view-${field}`);
   }
 

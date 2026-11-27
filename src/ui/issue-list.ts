@@ -63,11 +63,13 @@ interface IssueRow {
   issue: Issue;
   group: string;
   row: number;
+  line: number;
 }
 
 type ListRow = IssueRow | { label: string; count: number; icon: string; style: Style; folded: boolean };
 
 interface Projection {
+  rowHeight: number;
   source: Workspace["snapshot"];
   view: View;
   folded: ReadonlySet<string>;
@@ -78,6 +80,7 @@ interface Projection {
 }
 
 export class IssueList {
+  rowHeight: 1 | 2 = 1;
   private folded: ReadonlySet<string> = new Set();
   private projection: Projection | undefined;
   private cursor = 0;
@@ -113,7 +116,12 @@ export class IssueList {
     const view = work.query.view;
     const { mode: grouping, text: search, folded } = this;
     const previous = this.projection;
-    if (previous?.source === source && previous.view === view && previous.folded === folded) {
+    if (
+      previous?.source === source &&
+      previous.view === view &&
+      previous.folded === folded &&
+      previous.rowHeight === this.rowHeight
+    ) {
       return previous;
     }
 
@@ -132,14 +140,14 @@ export class IssueList {
       listed.push(...members);
       if (closed) continue;
       for (const issue of members) {
-        const entry = { issue, group: label, row: rows.length };
-        rows.push(entry);
+        const entry = { issue, group: label, row: rows.length, line: 0 };
+        for (let line = 0; line < this.rowHeight; line++) rows.push({ ...entry, line });
         issues.push(entry);
       }
     }
     const index = issues.findIndex(({ issue }) => issue.key === selectedKey);
     this.cursor = index >= 0 ? index : Math.max(0, Math.min(this.cursor, issues.length - 1));
-    this.projection = { source, view, folded, rows, issues, listed };
+    this.projection = { source, view, folded, rows, issues, listed, rowHeight: this.rowHeight };
     return this.projection;
   }
 
@@ -151,6 +159,7 @@ export class IssueList {
     const { rows, issues, listed } = this.project();
     const selected = issues[this.cursor];
     this.offset = rowOffset(this.offset, selected?.row ?? 0, rows.length, capacity);
+    if (selected) this.offset = Math.max(this.offset, selected.row + this.rowHeight - capacity);
     return {
       rows: rows.slice(this.offset, this.offset + capacity),
       count: issues.length,

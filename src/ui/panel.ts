@@ -12,7 +12,11 @@ export type Panel =
 
 const panel = (title: string, body: DocBlock[]): Panel => ({ kind: "text", title, body, scroll: 0 });
 
-export const helpPanel = (): Panel => panel("Keyboard shortcuts", [{ kind: "pre", text: HELP }]);
+export const helpPanel = (): Panel =>
+  panel(
+    "Keyboard shortcuts",
+    HELP.split("\n\n").map((text) => textBlock(text)),
+  );
 
 export function sprintPanel(sprint: Sprint): Panel {
   const dates = `${usDate(sprint.start) || "No start date"} → ${usDate(sprint.end) || "No end date"}`;

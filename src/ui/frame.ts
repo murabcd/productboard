@@ -7,7 +7,7 @@ import { describeAttachment, type Issue, shortSprintName } from "../jira/types";
 import { cells } from "../text";
 import { drawAgent } from "./agent";
 import { Canvas, type Style } from "./canvas";
-import { action, buttons, type Control } from "./controls";
+import { action, button, buttons, buttonsRight, type Control } from "./controls";
 import type { Dashboard, Layer } from "./dashboard";
 import { drawComposerMenu, pickerDialog } from "./dialog";
 import { layout, layoutCached } from "./document";
@@ -16,6 +16,7 @@ import type { Target } from "./input";
 import {
   BODY_TOP,
   chartTop,
+  compactLayout,
   FOOTER_ROWS,
   headerRows,
   issueListLayout,
@@ -40,7 +41,7 @@ export function frame(d: Dashboard): Canvas {
   const layer = d.layer();
   const canvas = new Canvas(width, height);
   if (layer.kind === "too-small") {
-    canvas.put(1, 1, `PRODUCTBOARD · make this pane at least ${MIN_WIDTH} × ${MIN_HEIGHT}`, "warning");
+    canvas.put(1, 1, `Minimum ${MIN_WIDTH} × ${MIN_HEIGHT} · resize pane`, "warning");
     canvas.put(3, 1, "q quit", "text");
     return canvas;
   }
@@ -85,8 +86,21 @@ function drawTopBar(canvas: Canvas, d: Dashboard, sidebar: number, header: PageH
   canvas.put(0, right, shortcut, "muted");
   canvas.mark(0, right, cells(shortcut), action("commands"));
   const titleStart = sidebar ? sidebar + 2 : boardStart + cells(board) + 3;
-  canvas.put(0, titleStart, header.title, "title", right - 2 - titleStart);
+  if (!compactLayout(width)) canvas.put(0, titleStart, header.title, "title", right - 2 - titleStart);
   if (sidebar) return;
+
+  if (compactLayout(width)) {
+    buttonsRight(canvas, 1, width - 2, [{ label: "Views", target: action("saved-views") }]);
+    button(canvas, 1, 2, {
+      label: `${currentPage(d.workspace.query.view, d.agent.tab).name} ▾`,
+      target: action("commands"),
+    });
+    if (d.views.active) {
+      canvas.put(2, 2, " ".repeat(width - 4), "text");
+      canvas.put(2, 2, header.title, "title", width - 4);
+    }
+    return;
+  }
 
   const here = currentPage(d.workspace.query.view, d.agent.tab);
   buttons(
@@ -230,13 +244,17 @@ function drawFooter(
   const size = (list: Hint[]) =>
     list.reduce((sum, [key, label]) => sum + cells(key) + (label ? cells(label) + 1 : 0) + 3, -3);
   // Errors and partial-result warnings take room before optional shortcuts.
-  const notice = style === "error" || style === "warning" ? Math.min(cells(status) + 3, width - 4 - cells(count)) : 0;
+  const compact = compactLayout(d.width);
+  if (compact && status) canvas.put(y - 1, 2, status, style, width - 4);
+  const notice =
+    !compact && (style === "error" || style === "warning") ? Math.min(cells(status) + 3, width - 4 - cells(count)) : 0;
   // Drop hints from the left of the list when the pane is too narrow.
   let shown = hints;
   while (shown.length && size(shown) > width - 4 - cells(count) - 3 - notice) shown = shown.slice(1);
   const room = width - 4 - (shown.length ? size(shown) + 3 : 0);
   canvas.put(y, 2, count, "muted", room);
-  if (status && cells(count) + 5 < room) canvas.put(y, 2 + cells(count) + 3, status, style, room - cells(count) - 3);
+  if (!compact && status && cells(count) + 5 < room)
+    canvas.put(y, 2 + cells(count) + 3, status, style, room - cells(count) - 3);
   let x = width - 2 - size(shown);
   for (const [key, label, target] of shown) {
     canvas.put(y, x, key, "text");
@@ -250,6 +268,7 @@ function drawFooter(
 function drawList(canvas: Canvas, d: Dashboard): void {
   const { height } = canvas;
   const work = d.workspace;
+  const compact = compactLayout(d.width);
   const peek = d.peek;
   const drawer = peekLayout(canvas.width);
   const width = peek ? drawer.left : canvas.width;
@@ -270,7 +289,8 @@ function drawList(canvas: Canvas, d: Dashboard): void {
   if (shownIssues.length) {
     const y = top - 1;
     let x = columns.right;
-    canvas.put(y, columns.title, "Issue", "muted");
+    canvas.put(y, compact ? 4 : columns.title, "Issue", "muted");
+    if (compact) x = width - 5;
     for (const [name, size] of [
       ["Activity", columns.reason],
       ["Assignee", columns.person],
@@ -300,10 +320,19 @@ function drawList(canvas: Canvas, d: Dashboard): void {
     const quiet: Style = active ? "selection" : "muted";
     if (active) {
       canvas.put(y, 1, " ".repeat(width - 2), "selection");
-      canvas.put(y, 2, "›", "selectedBold");
-    } else if (icons) {
+      if (!row.line) canvas.put(y, 2, "›", "selectedBold");
+    } else if (icons && !row.line) {
       const [icon, style] = statusIcon(issue);
       canvas.put(y, 2, icon, style);
+    }
+    if (compact) {
+      if (row.line) drawSummary(canvas, y, 4, issue.summary, width - 6, active);
+      else {
+        canvas.put(y, 4, issue.key, quiet, Math.min(16, width - 14));
+        const [mark, style] = priorityMark(issue.priority);
+        canvas.put(y, width - 5, mark, active ? "selection" : style);
+      }
+      return;
     }
     canvas.put(y, 4, issue.key, quiet, columns.key);
     drawSummary(canvas, y, columns.title, issue.summary, columns.titleWidth, active);
@@ -324,10 +353,15 @@ function drawList(canvas: Canvas, d: Dashboard): void {
   let count = `${shown} ${shown === 1 ? "issue" : "issues"}`;
   if (shown !== total) count = `${shown} of ${total} issues`;
   if (work.query.view === View.Mentions && work.current) count += ` · read ${work.snapshot?.scanned ?? 0}`;
-  let hints: Hint[] = [["?", "Shortcuts", action("help")]];
+  let hints: Hint[] = compact
+    ? [
+        ["↵", "Open", action("details")],
+        ["?", "Keys", action("help")],
+      ]
+    : [["?", "Shortcuts", action("help")]];
   if (d.peekFits()) hints.unshift(["Space", d.peekOpen ? "Close peek" : "Peek", action("peek")]);
   if (peek) hints.unshift(["⇧↑↓", "Scroll peek"]);
-  if (work.more) hints.unshift(["n", `Load ${PAGE} more`, action("load-more")]);
+  if (work.more) hints.unshift(["n", compact ? "More" : `Load ${PAGE} more`, action("load-more")]);
   if (box?.editing) hints = [];
   drawFooter(canvas, d, count, hints);
 }
@@ -407,13 +441,19 @@ function drawModal(canvas: Canvas, d: Dashboard, panel: Panel): void {
     const { issue } = panel;
     const { state } = panel.read;
     canvas.put(BODY_TOP - 3, 2, "Issue details", "muted");
-    canvas.put(BODY_TOP - 2, 2, issue.summary, "title", width - 4);
-    canvas.put(BODY_TOP - 1, 2, `${issue.key} · ${issue.status} · ${issue.assignee}`, "accent", width - 4);
+    if (compactLayout(d.width)) {
+      canvas.put(BODY_TOP - 2, 2, `${issue.key} · ${issue.status}`, "accent", width - 4);
+      canvas.put(BODY_TOP - 1, 2, issue.assignee, "muted", width - 4);
+    } else {
+      canvas.put(BODY_TOP - 2, 2, issue.summary, "title", width - 4);
+      canvas.put(BODY_TOP - 1, 2, `${issue.key} · ${issue.status} · ${issue.assignee}`, "accent", width - 4);
+    }
     lines = state.data ? layoutCached(detailBlocks(state.data), textWidth) : [];
     if (state.kind === "loading" && !state.data)
       lines = layout([textBlock("Loading details and comments…", "muted")], textWidth);
     if (state.kind === "error")
       lines = [...layout([textBlock(`Could not load details: ${state.message}`, "error")], textWidth), [], ...lines];
+    if (compactLayout(d.width)) lines = [...layout([textBlock(issue.summary, "strong")], textWidth), [], ...lines];
   } else {
     canvas.put(BODY_TOP - 3, 2, panel.title, "title", width - 4);
     lines = layoutCached(panel.body, textWidth);
@@ -432,6 +472,7 @@ function drawModal(canvas: Canvas, d: Dashboard, panel: Panel): void {
   const attachments = d.attachments.length;
   if (attachments) hints.push(["i", `${attachments} attachments`]);
   if (panel.kind === "issue") hints.push(["o", "Open in Jira"], ["y", "Copy link"]);
+  if (compactLayout(d.width)) hints.push(["esc", "Back", { kind: "dismiss" }]);
   const position = lines.length > size ? `${Math.round((last / lines.length) * 100)}%` : "";
   drawFooter(canvas, d, position, hints);
 }
@@ -463,5 +504,6 @@ function drawPreview(canvas: Canvas, d: Dashboard, preview: Preview): void {
   const hints: Hint[] = [];
   if (preview.images.length > 1) hints.push(["←→", "Previous / next"]);
   hints.push(["o", "Open in browser"]);
+  if (compactLayout(d.width)) hints.push(["esc", "Back", { kind: "dismiss" }]);
   drawFooter(canvas, d, `Image ${preview.index + 1} of ${preview.images.length}`, hints);
 }

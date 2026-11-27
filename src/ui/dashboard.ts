@@ -18,6 +18,7 @@ import { IssueDetails, type IssueRead } from "./issue-details";
 import { IssueList } from "./issue-list";
 import {
   agentLayout,
+  compactLayout,
   composerMenuRows,
   listRows,
   MIN_HEIGHT,
@@ -130,6 +131,7 @@ export class Dashboard {
     const peekFit = this.peekFits();
     this.width = width;
     this.height = height;
+    this.list.rowHeight = compactLayout(width) ? 2 : 1;
     if (peekFit !== this.peekFits()) this.syncPeek();
   }
 
@@ -719,7 +721,9 @@ export class Dashboard {
       }
       case "peek":
       case "dialog":
+        return;
       case "dismiss":
+        this.handle({ name: "escape" });
         return;
     }
   }

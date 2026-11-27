@@ -4,6 +4,7 @@ import { ALL_ASSIGNEES } from "../jira/assignee";
 import { View } from "../jira/query";
 import type { ViewDraft } from "../state/views";
 import { BREAKDOWN_NAMES } from "../state/views";
+import { clip } from "../text";
 import { assigneeLabel } from "./assignee-picker";
 import type { Canvas } from "./canvas";
 import { button } from "./controls";
@@ -11,9 +12,9 @@ import { type DialogFrame, dialogPanel } from "./dialog";
 import { type Key, keyId, type SearchEdit } from "./input";
 import { pageOf } from "./navigation";
 
-export const VIEW_FIELDS = ["name", "scope", "breakdown", "project", "sprint", "assignee"] as const;
+export const VIEW_FIELDS = ["name", "scope", "breakdown", "project", "sprint", "assignee", "create"] as const;
 export type ViewField = (typeof VIEW_FIELDS)[number];
-export type ViewChoiceField = Exclude<ViewField, "name">;
+export type ViewChoiceField = Exclude<ViewField, "name" | "create">;
 const FIELD_NAMES: Record<ViewChoiceField, string> = {
   scope: "Issues from",
   breakdown: "Breakdown",
@@ -53,13 +54,13 @@ export class ViewForm {
   handle(key: Key): "cancel" | "save" | ViewChoiceField | undefined {
     const id = keyId(key);
     if (id === "escape" || id === "ctrl-c") return "cancel";
-    if (id === "agent-send-now") return "save";
+    if (id === "agent-send-now" || (id === "enter" && this.field === "create")) return "save";
     if (id === "tab" || id === "up" || id === "down") {
       const step = id === "up" || ("name" in key && key.shift) ? -1 : 1;
       this.field =
         VIEW_FIELDS[(VIEW_FIELDS.indexOf(this.field) + step + VIEW_FIELDS.length) % VIEW_FIELDS.length] ?? "name";
     }
-    if (id === "enter" && this.field !== "name") return this.field;
+    if (id === "enter" && this.field !== "name" && this.field !== "create") return this.field;
   }
 }
 
@@ -70,6 +71,7 @@ export function viewFormDialog(
 ): DialogFrame {
   const frame = dialogPanel(viewport, form.error ? 17 : 15, "New view");
   const { panel } = frame;
+  const compact = panel.width < 58;
   panel.search(
     3,
     3,
@@ -90,16 +92,28 @@ export function viewFormDialog(
     assignee: draft.scope.view === View.Mine ? "You" : assigneeLabel(draft.scope.assignee),
   };
   VIEW_FIELDS.slice(1).forEach((field, index) => {
-    if (field === "name") return;
+    if (field === "name" || field === "create") return;
     const y = 5 + index;
-    panel.put(y, 3, FIELD_NAMES[field], "muted");
-    button(panel, y, 16, {
-      label: `${values[field]} ▾`,
+    panel.put(y, 3, compact && field === "scope" ? "Scope" : FIELD_NAMES[field], "muted");
+    const column = compact ? 13 : 16;
+    button(panel, y, column, {
+      label: `${clip(values[field], panel.width - column - 6)} ▾`,
       target: { kind: "view-field", field },
       tab: form.field === field ? "selected" : "unselected",
     });
   });
   if (form.error) panel.put(11, 3, form.error, "error", panel.width - 6);
-  panel.put(panel.height - 2, 3, "tab Next   esc Cancel   ^↵ Create view", "muted", panel.width - 6);
+  button(panel, panel.height - 4, 3, {
+    label: "Create view",
+    target: { kind: "view-field", field: "create" },
+    tab: form.field === "create" ? "selected" : "unselected",
+  });
+  panel.put(
+    panel.height - 2,
+    3,
+    compact ? "tab Next  ↵ Select" : "tab Next   ↵ Select   ^↵ Create view",
+    "muted",
+    panel.width - 6,
+  );
   return frame;
 }

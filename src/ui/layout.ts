@@ -2,8 +2,10 @@
  * body. The last row is the footer.
  * Key handling pages by these same sizes, so a page matches what is on screen. */
 
-export const MIN_WIDTH = 60;
+export const MIN_WIDTH = 32;
 export const MIN_HEIGHT = 18;
+/** Phone panes stack issue metadata and summaries instead of squeezing columns. */
+export const compactLayout = (width: number): boolean => width < 60;
 /** Wide panes get the navigation sidebar; narrow ones put views in the top bar. */
 export const sidebarWidth = (width: number): number => (width >= 96 ? 20 : 0);
 export function headerRows(width: number) {

@@ -77,6 +77,127 @@ async function clickSidebar(setup: TestRendererSetup, name: string): Promise<voi
 }
 
 describe("OpenTUI shell", () => {
+  test.each([
+    [32, 18],
+    [48, 24],
+    [48, 39],
+  ])("mobile saved-view navigation works with a %i × %i viewport", async (width, height) => {
+    const { setup, dashboard } = await start(width);
+    setup.resize(width, height);
+    dashboard.runAction("new-view");
+    await setup.renderOnce();
+    await setup.mockInput.typeText("Phone workflow");
+    setup.mockInput.pressTab();
+    setup.mockInput.pressEnter();
+    await setup.mockInput.typeText("My issues");
+    setup.mockInput.pressEnter();
+    for (let i = 0; i < 5; i++) setup.mockInput.pressTab();
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Phone workflow");
+    expect(setup.captureCharFrame().split("\n")[2]?.trim()).toBe("Phone workflow");
+    expect(setup.captureCharFrame()).toContain("Open 2");
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("Change breakdown");
+    setup.mockInput.pressEnter();
+    await setup.mockInput.typeText("Assignee");
+    setup.mockInput.pressEnter();
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.views.chart).toBe(false);
+    expect(setup.captureCharFrame()).toContain("EX-1");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.modal?.kind).toBe("issue");
+    setup.mockInput.pressKey("q");
+    expect(dashboard.modal).toBeNull();
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("Back to chart");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.views.chart).toBe(true);
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("Change breakdown");
+    setup.mockInput.pressEnter();
+    await setup.mockInput.typeText("Open issue age");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.views.active?.breakdown).toBe("age");
+    expect(setup.captureCharFrame()).toContain("Unknown age");
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("Go to Agent");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.layer().kind).toBe("agent");
+    setup.mockInput.pressKey("k", { ctrl: true });
+    await setup.mockInput.typeText("Go to My issues");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.views.active).toBeUndefined();
+    expect(dashboard.workspace.query.view).toBe(View.Mine);
+  });
+
+  test.each([32, 48])("a phone can create a view using Tab and Enter at width %i", async (width) => {
+    const { setup, dashboard } = await start(width);
+    setup.resize(width, 24);
+    dashboard.runAction("new-view");
+    await setup.renderOnce();
+    await setup.mockInput.typeText("Phone delivery");
+    for (let i = 0; i < 6; i++) setup.mockInput.pressTab();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Create view");
+    setup.mockInput.pressEnter();
+    expect(dashboard.views.form).toBeNull();
+    expect(dashboard.views.current?.name).toBe("Phone delivery");
+    expect(dashboard.views.chart).toBe(true);
+  });
+
+  test("phone taps, page commands, search and full details survive resizing", async () => {
+    const { setup, dashboard } = await start(48, {
+      reads: { detail: async () => ({ facts: [], description: [], comments: [], attachments: [] }) },
+    });
+    setup.resize(48, 39);
+    const summary = "Improve checkout accessibility for customers using assistive technology";
+    const issue = dashboard.workspace.snapshot?.issues[0];
+    if (!issue) throw new Error("Expected a phone issue fixture");
+    issue.summary = summary;
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("My issues ▾");
+    let rows = setup.captureCharFrame().split("\n");
+    const keyRow = rows.findIndex((row) => row.includes("EX-1"));
+    expect(keyRow).toBeGreaterThan(4);
+    expect(rows[keyRow + 1]).toContain("Improve checkout");
+    await setup.mockMouse.click(5, keyRow + 1);
+    await settle();
+    await setup.renderOnce();
+    expect(dashboard.modal?.kind).toBe("issue");
+    expect(setup.captureCharFrame()).toContain("assistive technology");
+    expect(setup.captureCharFrame()).toContain("esc Back");
+    const back = setup.captureCharFrame().split("\n")[38]?.indexOf("esc") ?? -1;
+    await setup.mockMouse.click(back, 38);
+    expect(dashboard.modal).toBeNull();
+    await setup.mockMouse.click(6, 1);
+    await setup.renderOnce();
+    expect(dashboard.picker?.kind).toBe("commands");
+    await setup.mockInput.typeText("Go to Team");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Team issues ▾");
+    setup.mockInput.pressKey("4");
+    setup.mockInput.pressKey("/");
+    await setup.mockInput.typeText("EX-1");
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    expect(dashboard.list.search).toBe("EX-1");
+    expect(setup.captureCharFrame()).toContain("1 of 2 issues");
+    setup.resize(120, 30);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("PRODUCTBOARD");
+    expect(dashboard.list.selected?.key).toBe("EX-1");
+    rows = setup.captureCharFrame().split("\n");
+    expect(rows.some((row) => row.includes("EX-1") && row.includes("Improve checkout"))).toBe(true);
+  });
+
   test("connection prompts mask pasted keys and allow retry after rejection", async () => {
     setup = await createTestRenderer({ width: 100, height: 30 });
     const open = mock(async () => {});
@@ -420,8 +541,8 @@ describe("OpenTUI shell", () => {
     expect(dashboard.list.search).toBe("EX-2");
   });
 
-  test("the last tab stays visible and clickable at the minimum pane width", async () => {
-    const { setup, dashboard } = await start(MIN_WIDTH);
+  test("the last navigation tab stays clickable at the minimum table width", async () => {
+    const { setup, dashboard } = await start(60);
     await setup.mockInput.typeText("3");
     expect(dashboard.workspace.query.view).toBe(View.Mentions);
     await setup.renderOnce();
@@ -431,38 +552,41 @@ describe("OpenTUI shell", () => {
     expect(dashboard.workspace.query.view).toBe(View.Team);
   });
 
-  test("team tabs and filters stay clickable at minimum width and page navigation restores the mode", async () => {
-    const { setup, dashboard } = await start(MIN_WIDTH);
-    dashboard.workspace.query = { ...dashboard.workspace.query, status: "done" };
-    await setup.mockInput.typeText("5");
-    await setup.renderOnce();
-    let rows = setup.captureCharFrame().split("\n");
-    expect(rows[3]).toContain("All issues");
-    const attention = rows[3]?.indexOf("Needs attention") ?? -1;
-    expect(attention).toBeGreaterThan(0);
-    await setup.mockMouse.click(attention + 1, 3);
-    expect(dashboard.workspace.query.view).toBe(View.Today);
-    await setup.renderOnce();
-    rows = setup.captureCharFrame().split("\n");
-    const filter = rows[4]?.indexOf("Filter") ?? -1;
-    expect(filter).toBeGreaterThan(0);
-    await setup.mockMouse.click(filter + 1, 4);
-    expect(dashboard.picker?.kind).toBe("filter");
-    setup.mockInput.pressEscape();
-    await Bun.sleep(50); // A standalone Escape waits for the terminal sequence timeout.
-    await setup.renderOnce();
-    expect(dashboard.picker).toBeNull();
-    await setup.mockInput.typeText("3");
-    expect(dashboard.workspace.query.view).toBe(View.Mentions);
-    await setup.mockInput.typeText("5");
-    expect(dashboard.workspace.query.view).toBe(View.Today);
-    await setup.mockInput.pressArrow("left");
-    expect(dashboard.workspace.query.view).toBe(View.Team);
-  });
+  test.each([32, 48, 60])(
+    "team tabs and filters stay clickable at width %i and navigation restores the mode",
+    async (width) => {
+      const { setup, dashboard } = await start(width);
+      dashboard.workspace.query = { ...dashboard.workspace.query, status: "done" };
+      await setup.mockInput.typeText("5");
+      await setup.renderOnce();
+      let rows = setup.captureCharFrame().split("\n");
+      expect(rows[3]).toContain(width < 60 ? "All" : "All issues");
+      const attention = rows[3]?.indexOf(width < 60 ? "Attention" : "Needs attention") ?? -1;
+      expect(attention).toBeGreaterThan(0);
+      await setup.mockMouse.click(attention + 1, 3);
+      expect(dashboard.workspace.query.view).toBe(View.Today);
+      await setup.renderOnce();
+      rows = setup.captureCharFrame().split("\n");
+      const filter = rows[4]?.indexOf("Filter") ?? -1;
+      expect(filter).toBeGreaterThan(0);
+      await setup.mockMouse.click(filter + 1, 4);
+      expect(dashboard.picker?.kind).toBe("filter");
+      setup.mockInput.pressEscape();
+      await Bun.sleep(50); // A standalone Escape waits for the terminal sequence timeout.
+      await setup.renderOnce();
+      expect(dashboard.picker).toBeNull();
+      await setup.mockInput.typeText("3");
+      expect(dashboard.workspace.query.view).toBe(View.Mentions);
+      await setup.mockInput.typeText("5");
+      expect(dashboard.workspace.query.view).toBe(View.Today);
+      await setup.mockInput.pressArrow("left");
+      expect(dashboard.workspace.query.view).toBe(View.Team);
+    },
+  );
 
-  test("i previews a single image directly and Escape hides it", async () => {
+  test.each([32, 48, 100])("image previews remain usable with a Back action at width %i", async (width) => {
     const image = { id: "1", filename: "dot.png", mimeType: "image/png", size: 70, author: "D", created: "" };
-    const { setup } = await start(100, {
+    const { setup } = await start(width, {
       reads: {
         detail: async () => ({ attachments: [image], description: [], comments: [], facts: [] }),
         attachment: async () => PNG,
@@ -477,9 +601,13 @@ describe("OpenTUI shell", () => {
     const view = setup.renderer.root.getRenderable("dashboard");
     const shown = view?.getRenderable("preview");
     expect(shown?.visible).toBe(true);
-    expect([shown?.x, shown?.y]).toEqual([22, 8]);
+    expect([shown?.x, shown?.y]).toEqual([width === 100 ? 22 : 2, 8]);
     expect(setup.captureCharFrame()).toContain("dot.png");
-    setup.mockInput.pressEscape();
+    if (width < 60) {
+      const back = setup.captureCharFrame().split("\n")[29]?.indexOf("esc Back") ?? -1;
+      expect(back).toBeGreaterThan(0);
+      await setup.mockMouse.click(back, 29);
+    } else setup.mockInput.pressEscape();
     await Bun.sleep(30);
     await setup.renderOnce();
     expect(shown?.visible).toBe(false);

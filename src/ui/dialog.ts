@@ -108,7 +108,12 @@ function drawPickerRows(
     if (choice.current) canvas.put(y, inset - 1, "●", active && accentSelection ? "onAccent" : "accent");
     if (choice.checked !== undefined) canvas.put(y, inset - 1, choice.checked ? "✓" : "○", "accent");
     const trailing = width - inset - Math.min(cells(choice.detail), Math.floor(room / 2));
-    const detailLeft = fixedColumn ?? trailing;
+    const detailLeft =
+      width < 58
+        ? fixedColumn === undefined
+          ? Math.max(labelColumn + Math.floor(room * 0.65), trailing)
+          : Math.min(fixedColumn, labelColumn + Math.floor(room * 0.45))
+        : (fixedColumn ?? trailing);
     canvas.put(y, labelColumn, choice.label, active ? selectedLabel : "text", detailLeft - labelColumn - 2);
     canvas.put(y, detailLeft, choice.detail, active ? selectedDetail : "muted", width - inset - detailLeft);
     canvas.mark(y, 1, width - 2, { kind: "choice", value: choice.value });

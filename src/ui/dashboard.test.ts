@@ -962,6 +962,6 @@ describe("frame", () => {
 
   test("a small pane asks to be resized", () => {
     const { dashboard } = setup();
-    expect(draw(dashboard, 50, 10).text(1)).toContain("at least 60 × 18");
+    expect(draw(dashboard, 50, 10).text(1)).toContain("Minimum 32 × 18");
   });
 });

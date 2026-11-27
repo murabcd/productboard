@@ -172,6 +172,8 @@ function commandItems(d: Dashboard): PickerItem[] {
     item("New view", "^N", () => d.views.create(), act),
     ...(d.views.current
       ? [
+          item("Change breakdown", "[ ]", () => d.openPicker("view-breakdown"), act),
+          ...(!d.views.chart ? [item("Back to chart", "Esc", () => d.views.back(), act)] : []),
           ...(d.views.saved.modified(d.workspace.query, d.workspace.board)
             ? [item("Save view changes", "", () => d.views.saveChanges(), act)]
             : []),
@@ -217,6 +219,7 @@ function commandItems(d: Dashboard): PickerItem[] {
     item("Open an issue Agent mentioned", "^O", () => d.openPicker("cited"), act),
     item("Search all of Jira", "f", () => d.startFind(), act),
     item("Refresh", "r", () => d.runAction("refresh"), act),
+    ...(d.workspace.more ? [item("Load more issues", "n", () => d.runAction("load-more"), act)] : []),
     item("Keyboard shortcuts", "?", () => d.runAction("help"), act),
   ];
 }

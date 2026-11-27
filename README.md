@@ -100,6 +100,15 @@ The dashboard opens in Inbox. Press `1` for Search, `2` for Agent,
 `3` for Inbox, `4` for My issues, and `5` for Team issues.
 Use a Nerd Font in your terminal to display the sidebar icons.
 
+Phone terminals are supported from 32 columns × 18 rows. Below 60 columns,
+issues use two rows: key and priority above the summary. Tap the page name's
+dropdown or use **Ctrl+K** to switch pages; **Views** opens saved views.
+Tap the selected issue again or press **Enter** for its full details, then
+**Esc** to return. Wider terminals keep the table layout.
+Use **↑ / ↓** or **j / k** to move, **PgUp / PgDn** to page, **/** to filter
+loaded issues, and **?** for the wrapping shortcut guide. **More** and
+**Ctrl+K** keep actions available when toolbar controls do not fit.
+
 To switch themes, press `Ctrl+K`, choose **Change theme**, then select **Vercel
 Light**, **Vercel Dark**, or **Default**. The choice is saved for the next
 launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/geist/terminal).
@@ -109,7 +118,8 @@ launch. The Vercel themes use the [Geist Terminal palettes](https://vercel.com/g
 Choose **+ New** under **Views**, use **Ctrl+N** on an issue page, or choose
 **New view** from **Ctrl+K**. Name the view and choose its issue scope,
 project, sprint, assignee, and breakdown. **Tab / Shift+Tab** moves between
-fields, **Enter** opens a picker, **Ctrl+Enter** creates the view, and **Esc**
+fields, **Enter** opens a picker or activates **Create view**, **Ctrl+Enter**
+creates the view from any field, and **Esc**
 cancels. Draft choices leave the current page unchanged.
 
 Saved views offer **Status**, **Assignee**, and **Open issue age** breakdowns.

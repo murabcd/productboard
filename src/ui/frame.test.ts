@@ -4,7 +4,9 @@ import { initialQuery, View } from "../jira/query";
 import { Workspace } from "../state/workspace";
 import { deferred, snapshot } from "../testing";
 import { Dashboard } from "./dashboard";
+import { layout } from "./document";
 import { frame } from "./frame";
+import { helpPanel } from "./panel";
 
 function teamFocus(issues: number) {
   const never = () => deferred<never>().promise;
@@ -26,6 +28,81 @@ function teamFocus(issues: number) {
 }
 
 describe("issue rows", () => {
+  test.each([32, 48])("phone sprint actions stay reachable through More at width %i", (width) => {
+    const d = teamFocus(3);
+    d.workspace.query = { ...initialQuery, view: View.Team, sprintFilter: 7 };
+    d.workspace.sprints = [{ id: 7, name: "Sprint 7", state: "active", start: "", end: "", goal: "Ship" }];
+    d.resize(width, 24);
+    const canvas = frame(d);
+    const column = canvas.text(4).indexOf("More");
+    expect(column).toBeGreaterThan(0);
+    d.click(canvas.targetAt(column, 4));
+    expect(d.picker?.kind).toBe("commands");
+    d.picker?.setQuery("Display options");
+    d.handle({ name: "enter" });
+    expect(d.picker?.kind).toBe("display");
+    d.openPicker("commands");
+    d.picker?.setQuery("Sprint brief");
+    d.handle({ name: "enter" });
+    expect(d.modal?.kind).toBe("text");
+  });
+
+  test("phone shortcut explanations wrap instead of losing navigation instructions", () => {
+    const help = helpPanel();
+    if (help.kind !== "text") throw new Error("Expected text help");
+    const text = layout(help.body, 27)
+      .map((line) => line.map((run) => run.text).join(""))
+      .join(" ");
+    expect(text).toContain("Group by status / assignee");
+    expect(text).toContain("Search all of Jira");
+  });
+
+  test.each([32, 48])("filtered phone charts keep their breakdown available at width %i", (width) => {
+    const d = teamFocus(3);
+    d.workspace.query = { ...initialQuery, view: View.Team };
+    const view = d.views.saved.save({
+      name: "Delivery",
+      board: "",
+      breakdown: "status",
+      scope: { ...d.workspace.query, view: View.Team },
+    });
+    d.views.open(view.id);
+    d.workspace.query = { ...d.workspace.query, project: "Example project with a long name", status: "open" };
+    d.resize(width, 24);
+    d.openPicker("commands");
+    d.picker?.setQuery("Change breakdown");
+    expect(d.picker?.selected?.label).toBe("Change breakdown");
+    d.handle({ name: "enter" });
+    expect(d.picker?.kind).toBe("view-breakdown");
+  });
+
+  test.each([32, 40, 48, 59])("phone rows keep issue identity and summary visible at width %i", (width) => {
+    const dashboard = teamFocus(30);
+    dashboard.resize(width, 39);
+    const canvas = frame(dashboard);
+    const text = Array.from({ length: canvas.height }, (_, row) => canvas.text(row)).join("\n");
+    expect(text).not.toContain("make this pane");
+    expect(text).toContain("Team issues ▾");
+    const keyRow = text.split("\n").findIndex((row) => row.includes("EX-1"));
+    expect(keyRow).toBeGreaterThan(4);
+    expect(canvas.text(keyRow + 1)).toContain("Рабочая задача");
+    expect(canvas.targetAt(5, keyRow + 1)).toEqual({ kind: "issue", key: "EX-1" });
+    dashboard.handle({ name: "pagedown" });
+    const selected = dashboard.list.selected?.key;
+    expect(selected).not.toBe("EX-1");
+    dashboard.handle({ name: "end" });
+    const last = frame(dashboard);
+    const lastKeyRow = Array.from({ length: last.height }, (_, row) => last.text(row)).findIndex((row) =>
+      row.includes("EX-30"),
+    );
+    expect(lastKeyRow).toBeGreaterThan(4);
+    expect(last.text(lastKeyRow + 1)).toContain("Рабочая задача");
+    expect(lastKeyRow + 1).toBeLessThan(37);
+    dashboard.resize(138, 39);
+    expect(dashboard.list.selected?.key).toBe("EX-30");
+    expect(frame(dashboard).text(0)).toContain("PRODUCTBOARD");
+  });
+
   test("partial attention results keep their rows and show the missing data sources", () => {
     const dashboard = teamFocus(1);
     if (dashboard.workspace.snapshot) dashboard.workspace.snapshot.warnings = ["Flagged issues unavailable"];

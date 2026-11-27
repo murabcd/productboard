@@ -2,7 +2,10 @@
 
 Release notes for Productboard, newest first.
 
-## v0.1.3 — 2026-11-22 (rebuilt 2026-11-26)
+## v0.1.3 — 2026-11-22 (rebuilt 2026-11-27)
+
+- Use Productboard in terminal panes from 32 columns × 18 rows, with stacked issue rows below 60 columns and the existing table and sidebar on wider panes. Keep selection while resizing and page through the rows actually shown.
+- Switch pages through the compact page menu, reach overflow actions and saved-view breakdowns through commands, and read wrapped issue titles and shortcut explanations. Create views with Tab and Enter, and return from image previews with Back.
 
 - Include or exclude multiple assignees across charts, saved views, and issue lists. Stage selections before applying them, filter Unassigned separately, and retain existing saved views.
 - Run `productboard upgrade` (alias `update`) to update through Homebrew, with installation detection, version checks, progress, and actionable errors.
